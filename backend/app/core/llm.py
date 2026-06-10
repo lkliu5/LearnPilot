@@ -33,6 +33,21 @@ ABILITY_DIMENSIONS: list[str] = [
 # mock 基线能力值（接口文档 4.1/4.4 示例：85/72/68/45/30/20）
 _MOCK_BASELINE: list[int] = [85, 72, 68, 45, 30, 20]
 
+# 讲义资源页难度档（接口文档 8.2 备注：入门|初级|高级，与路径难度档不同）
+LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "高级"]
+
+# mock 讲义的 RAG 来源（接口文档 8.2 sources；type∈教材|论文|文档|课程，confidence 0-1）。
+# B5 接入真实 RAG 后由检索命中切片回填，此处为确定性占位。
+_LECTURE_SOURCES: list[dict[str, Any]] = [
+    {"title": "《深度学习》(花书) 相关章节", "type": "教材", "confidence": 0.92},
+    {"title": "Stanford CS231n / CS224n 公开课讲义", "type": "课程", "confidence": 0.88},
+    {"title": "领域权威综述与官方技术文档", "type": "文档", "confidence": 0.83},
+]
+
+# mock 幻觉率（接口文档 8.2 示例 0.021，前端显示「<5%」）。
+# B5 替换为 15.3 逐句接地校验口径（未接地句数/总句数）；mock 阶段确定性返回。
+_LECTURE_HALLUCINATION_RATE: float = 0.021
+
 # 关键词 → 维度索引，用于在 mock 中「读到」材料文本时小幅抬升对应维度，
 # 体现解析的可解释性；未命中则用基线值（不编造、不随机）。
 _KEYWORD_TO_DIM: dict[str, int] = {
@@ -129,6 +144,71 @@ class LLMClient:
             {"text": "，建议作为后续学习路径的优先强化方向。"},
         ]
         return [para1, para2]
+
+    def generate_lecture(
+        self, kp_id: str, kp_name: str, difficulty: str, description: str = ""
+    ) -> dict[str, Any]:
+        """生成自适应讲义（接口文档 8.2）。返回 markdown + sources + hallucinationRate。
+
+        mock 口径：按难度档（入门/初级/高级）确定性产出三种讲述风格的 Markdown
+        （初级/高级含 ```python 代码块```），sources/hallucinationRate 为占位常量。
+        B5 替换为「RAG 检索 → 生成 Agent → 审核 Agent」，方法签名不变，sources 由
+        真实命中切片回填、hallucinationRate 按 15.3 逐句接地口径计算。
+        """
+        self._ensure_supported()
+        return {
+            "markdown": self._lecture_markdown(kp_name, difficulty, description),
+            "sources": [dict(s) for s in _LECTURE_SOURCES],
+            "hallucinationRate": _LECTURE_HALLUCINATION_RATE,
+        }
+
+    @staticmethod
+    def _lecture_markdown(name: str, difficulty: str, description: str) -> str:
+        """按难度档生成讲义 Markdown（确定性 mock）。"""
+        desc = description or f"{name}是本知识点的核心内容。"
+        code_block = (
+            "```python\n"
+            "import numpy as np\n\n"
+            "def forward(x, w, b):\n"
+            "    z = np.dot(x, w) + b      # 加权求和 + 偏置\n"
+            "    return np.maximum(0, z)   # ReLU 激活\n\n"
+            "print(forward(np.array([0.5, 0.8]), np.array([0.4, 0.7]), 0.1))\n"
+            "```"
+        )
+        if difficulty == "入门":
+            return (
+                f"# {name}（入门版）\n\n"
+                f"> 本讲义由**领域知识生成 Agent**按「入门」难度生成——用最直白的比喻，少公式。\n\n"
+                f"## 一、先建立直觉\n\n{desc}\n\n"
+                f"不必纠结公式：先把握「{name}」要解决什么问题、大致怎么做。\n\n"
+                f"## 二、一句话理解\n\n"
+                f"**{name}**的核心，是用一套可学习的规则，把输入逐步变换为更有用的表示。\n\n"
+                f"> 小结：先有直觉，下一步看「初级版」了解具体计算与代码。"
+            )
+        if difficulty == "高级":
+            return (
+                f"# {name}（高级版）\n\n"
+                f"> 本讲义由**领域知识生成 Agent**按「高级」难度生成——侧重数学形式化与工程细节。\n\n"
+                f"## 一、问题形式化\n\n{desc}\n\n"
+                f"将{name}抽象为参数化映射 \\(f_\\theta\\)，以损失 \\(L\\) 为目标，"
+                f"经梯度 \\(\\partial L/\\partial \\theta\\) 迭代优化。\n\n"
+                f"## 二、关键实现\n\n{code_block}\n\n"
+                f"## 三、工程权衡\n\n"
+                f"- 数值稳定性：注意归一化与初始化对收敛的影响。\n"
+                f"- 计算/显存：在精度与吞吐间按部署约束取舍。\n\n"
+                f"> 小结：掌握形式化与实现细节后，可结合「测验」检验理解深度。"
+            )
+        # 默认「初级」
+        return (
+            f"# {name}（初级版）\n\n"
+            f"> 本讲义由**领域知识生成 Agent**适配为「初级」难度，并经**内容审核 Agent** RAG 交叉校验（幻觉率 <5%）。\n\n"
+            f"## 一、核心概念\n\n{desc}\n\n"
+            f"## 二、动手理解\n\n{code_block}\n\n"
+            f"## 三、要点回顾\n\n"
+            f"- 抓住「{name}」的输入、变换与输出三段式。\n"
+            f"- 通过代码与示例建立可复现的认知。\n\n"
+            f"> 小结：完成本节后建议进入「测验」巩固，或切到「高级版」深入。"
+        )
 
 
 _client: LLMClient | None = None
