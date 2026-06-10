@@ -1,10 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { CURRENT_KP_ID } from '../data/knowledgePoints'
+import { USE_REAL_API } from '../services/api'
+import { checkKp, getMastery, passKp } from '../services/mastery'
 
 /**
  * 知识点掌握度状态：完成的唯一判定 = 通过分阶测试（在资源页 quiz 处置位 passed）。
  * 学习路径 / 知识图谱 / 学情概览 都从这里派生，保证"通过后只更新一次、多处同步"。
+ *
+ * 联调（USE_REAL_API）下后端 GET /mastery 为权威源，localStorage 退化为缓存：
+ * 登录 / 进入资源页时 load() 拉取覆盖；goCheck / markPassed 本地乐观更新的同时
+ * 把写操作同步到后端（POST /mastery/{id}/check|pass）。
  */
 export type KPStatus = 'learning' | 'pending-check' | 'passed'
 
@@ -14,6 +20,8 @@ interface MasteryState {
   goCheck: (id: string) => void
   /** 测试通过：→ 已通过（幂等，仅首次置位算新掌握）*/
   markPassed: (id: string) => void
+  /** 联调：从后端拉取掌握度全集覆盖本地缓存 */
+  load: () => Promise<void>
   reset: () => void
 }
 
@@ -24,12 +32,29 @@ export const useMastery = create<MasteryState>()(
   persist(
     (set) => ({
       status: initial(),
-      goCheck: (id) =>
-        set((s) =>
-          s.status[id] === 'passed' ? s : { status: { ...s.status, [id]: 'pending-check' } }
-        ),
-      markPassed: (id) =>
-        set((s) => (s.status[id] === 'passed' ? s : { status: { ...s.status, [id]: 'passed' } })),
+      goCheck: (id) => {
+        set((s) => (s.status[id] === 'passed' ? s : { status: { ...s.status, [id]: 'pending-check' } }))
+        if (USE_REAL_API) {
+          checkKp(id)
+            .then((r) => set((s) => ({ status: { ...s.status, [id]: r.status } })))
+            .catch((e) => console.error('[mastery] check 同步失败', e))
+        }
+      },
+      markPassed: (id) => {
+        set((s) => (s.status[id] === 'passed' ? s : { status: { ...s.status, [id]: 'passed' } }))
+        if (USE_REAL_API) {
+          passKp(id).catch((e) => console.error('[mastery] pass 同步失败', e))
+        }
+      },
+      load: async () => {
+        if (!USE_REAL_API) return
+        try {
+          const { status } = await getMastery()
+          set({ status })
+        } catch (e) {
+          console.error('[mastery] 加载掌握度失败', e)
+        }
+      },
       reset: () => set({ status: initial() }),
     }),
     { name: 'zx-mastery' }

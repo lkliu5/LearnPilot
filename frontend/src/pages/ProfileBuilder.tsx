@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import CountUp from '../components/CountUp'
 import PageHeader from '../components/PageHeader'
@@ -8,7 +8,9 @@ import { revealItem } from '../components/Reveal'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
 import type { JobMarket } from '../services/jobMarket'
-import { generateNarrative, type SourceRef } from '../services/profileNarrative'
+import { generateNarrative, type Narrative, type SourceRef } from '../services/profileNarrative'
+import { USE_REAL_API } from '../services/api'
+import { generateNarrativeApi, parseProfile } from '../services/profile'
 import './ProfileBuilder.css'
 
 /* 雷达 6 维：与岗位画像 radar 字段对齐，作为「当前能力 vs 岗位要求」对标的统一坐标系 */
@@ -97,8 +99,8 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
   const completeDiagnosis = useJourney((s) => s.completeDiagnosis)
   const [step, setStep] = useState<Step>('collect')
 
-  /* Step1 采集状态 */
-  const [files, setFiles] = useState<{ name: string; kind: 'doc' | 'image' }[]>([])
+  /* Step1 采集状态（raw 为真实 File，仅联调上传用，不参与 UI 渲染）*/
+  const [files, setFiles] = useState<{ name: string; kind: 'doc' | 'image'; raw?: File }[]>([])
   const [description, setDescription] = useState('')
   const [targetJob, setTargetJob] = useState<JobMarket | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -119,6 +121,7 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     const next = Array.from(list).map((f) => ({
       name: f.name,
       kind: /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name) ? ('image' as const) : ('doc' as const),
+      raw: f,
     }))
     setFiles((prev) => [...prev, ...next])
   }
@@ -126,6 +129,27 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
   /* 智能解析：进入解析动画 → 产出结构化画像 → 确认页 */
   const runParse = () => {
     setStep('parsing')
+    if (USE_REAL_API) {
+      // 联调：上传真实材料给 POST /profile/parse，映射为可编辑 draft
+      const raws = files.map((f) => f.raw).filter((f): f is File => !!f)
+      parseProfile(raws, description)
+        .then((p) => {
+          setDraft({
+            education: { value: p.education.value, source: p.education.source as Source },
+            major: { value: p.major.value, source: p.major.source as Source },
+            goal: { value: p.goal.value, source: p.goal.source as Source },
+            skills: p.skills.map((s) => ({ name: s.name, level: s.level, source: s.source as Source })),
+          })
+          setStep('confirm')
+        })
+        .catch((e) => {
+          // 解析失败兜底为 mock，保证演示不中断（错误已记录）
+          console.error('[profile] parse 失败，回退 mock', e)
+          setDraft(mockParse({ resume: hasDoc, image: hasImage, text: description.trim().length > 0 }))
+          setStep('confirm')
+        })
+      return
+    }
     setTimeout(() => {
       setDraft(mockParse({ resume: hasDoc, image: hasImage, text: description.trim().length > 0 }))
       setStep('confirm')
@@ -180,11 +204,40 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     if (description.trim()) m.push({ id: 'desc', label: '文字描述', kind: 'text' })
     return m
   }, [files, description])
-  const narrative = useMemo(
+  /* mock 叙述：前端模板合成（grounding）；联调时由后端 /profile/narrative 覆盖 */
+  const localNarrative = useMemo(
     () => (draft ? generateNarrative(draft, materials, targetJob) : null),
     [draft, materials, targetJob]
   )
-  const activeSourceLabel = materials.find((m) => m.id === activeSource)?.label
+  const [apiNarrative, setApiNarrative] = useState<Narrative | null>(null)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    if (!draft || materials.length === 0) {
+      setApiNarrative(null)
+      return
+    }
+    let cancelled = false
+    generateNarrativeApi(
+      { education: draft.education, major: draft.major, goal: draft.goal, skills: draft.skills },
+      materials,
+      targetJob ? { name: targetJob.name, radar: targetJob.radar } : null
+    )
+      .then((n) => {
+        if (!cancelled) setApiNarrative(n)
+      })
+      .catch((e) => {
+        console.error('[profile] narrative 生成失败', e)
+        if (!cancelled) setApiNarrative(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draft, materials, targetJob])
+  const narrative = USE_REAL_API ? apiNarrative : localNarrative
+  /* 回看来源标签：优先取叙述自带 sources（联调时来源 id 由后端给出），回退本地 materials */
+  const activeSourceLabel =
+    narrative?.sources.find((s) => s.id === activeSource)?.label ??
+    materials.find((m) => m.id === activeSource)?.label
 
   const finish = () => {
     completeDiagnosis(targetJob ? { targetJobName: targetJob.name, matchPct } : undefined)

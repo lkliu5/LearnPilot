@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Silk from '@/components/Silk/Silk'
+import { USE_REAL_API } from '../services/api'
+import { login } from '../services/auth'
+import { useJourney } from '../store/journey'
+import { useMastery } from '../store/mastery'
 import './Login.css'
 
 interface LoginProps {
@@ -45,12 +49,24 @@ export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false)
   const theme = useThemeName()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
     setLoading(true)
-    // 模拟鉴权（前端演示），1s 后进入系统
-    setTimeout(onLogin, 1000)
+    // mock 模式：模拟鉴权（前端演示），1s 后进入系统（行为与联调前一致）
+    if (!USE_REAL_API) {
+      setTimeout(onLogin, 1000)
+      return
+    }
+    // 联调模式：真实登录 → 落 token → 拉取旅程 / 掌握度权威态 → 进入系统
+    try {
+      await login(username.trim(), password)
+      await Promise.all([useJourney.getState().loadJourney(), useMastery.getState().load()])
+      onLogin()
+    } catch (err) {
+      setLoading(false)
+      window.alert('登录失败：' + (err instanceof Error ? err.message : '请检查用户名或密码'))
+    }
   }
 
   return (

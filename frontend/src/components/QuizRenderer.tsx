@@ -25,8 +25,16 @@ const typeLabel: Record<QuizQuestion['question_type'], string> = {
 
 interface QuizRendererProps {
   questions: QuizQuestion[]
-  /** 上报错题（错题驱动再生成）；submitted=true 表示真实提交（非重做清空）*/
-  onSubmitResult?: (wrong: QuizQuestion[], submitted?: boolean) => void
+  /**
+   * 上报错题（错题驱动再生成）；submitted=true 表示真实提交（非重做清空）。
+   * 第三参 answers 为本次作答全集（question_id → 选项），供联调提交给后端判分；
+   * mock 模式可忽略，组件本地判分行为不变。
+   */
+  onSubmitResult?: (
+    wrong: QuizQuestion[],
+    submitted?: boolean,
+    answers?: Record<string, string | string[]>
+  ) => void
 }
 
 export default function QuizRenderer({ questions, onSubmitResult }: QuizRendererProps) {
@@ -131,7 +139,7 @@ export default function QuizRenderer({ questions, onSubmitResult }: QuizRenderer
           disabled={answeredCount < questions.length}
           onClick={() => {
             setSubmitted(true)
-            onSubmitResult?.(questions.filter((q) => !isCorrect(q)), true)
+            onSubmitResult?.(questions.filter((q) => !isCorrect(q)), true, answers)
           }}
         >
           {answeredCount < questions.length ? `还有 ${questions.length - answeredCount} 题未作答` : '提交答案'}

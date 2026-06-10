@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import QuizRenderer, { type QuizQuestion } from '../components/QuizRenderer'
@@ -8,6 +8,8 @@ import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import { USE_REAL_API } from '../services/api'
+import { getLecture, getQuiz, submitQuiz } from '../services/resource'
 import type { PageType } from '../App'
 import './LearningResource.css'
 
@@ -248,23 +250,70 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
   const [trustOpen, setTrustOpen] = useState(false)
 
+  /* 联调数据源（mock 模式下不使用，保持现有常量驱动）：
+     questions 来自 GET /quiz/{kp}；lectureMap 缓存各难度档 markdown */
+  const [questions, setQuestions] = useState<QuizQuestion[]>(quizQuestions)
+  const [lectureMap, setLectureMap] = useState<Record<string, string>>({})
+
   /* 知识点闭环状态：完成以"通过分阶测试(≥60%)"为唯一判定 */
   const kpStatus = useMastery((s) => s.status[CURRENT_KP_ID] ?? 'learning')
   const goCheck = useMastery((s) => s.goCheck)
   const markPassed = useMastery((s) => s.markPassed)
+  const loadMastery = useMastery((s) => s.load)
   const kpName = kpById(CURRENT_KP_ID)?.name ?? '当前知识点'
 
-  const handleQuizResult = (wrong: QuizQuestion[], submitted?: boolean) => {
+  /* 联调初始化：拉取后端测验题 + 当前难度讲义 + 刷新掌握度（mock 模式跳过）*/
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    loadMastery()
+    getQuiz(CURRENT_KP_ID)
+      .then((d) => setQuestions(d.questions))
+      .catch((e) => console.error('[resource] 加载测验题失败', e))
+    getLecture(CURRENT_KP_ID, level)
+      .then((d) => setLectureMap((m) => ({ ...m, [level]: d.markdown })))
+      .catch((e) => console.error('[resource] 加载讲义失败', e))
+    // 仅挂载时执行一次（level 初值为「初级」）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /* 当前展示的讲义内容：联调取后端缓存，mock 取本地三档常量 */
+  const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : lectureByLevel[level]
+
+  const handleQuizResult = (
+    wrong: QuizQuestion[],
+    submitted?: boolean,
+    answers?: Record<string, string | string[]>
+  ) => {
     setWrongQs(wrong)
-    if (submitted && (quizQuestions.length - wrong.length) / quizQuestions.length >= 0.6) {
+    if (!submitted) return
+    if (USE_REAL_API) {
+      // 提交作答给后端判分；≥60 后端联动置 passed，再拉取掌握度刷新徽章
+      submitQuiz(CURRENT_KP_ID, answers ?? {})
+        .then(() => loadMastery())
+        .catch((e) => console.error('[resource] 提交测验失败', e))
+    } else if ((questions.length - wrong.length) / questions.length >= 0.6) {
       markPassed(CURRENT_KP_ID)
     }
   }
 
-  /* 难度自适应：切换难度 → 模拟 Agent 实时再生成讲义 */
+  /* 难度自适应：切换难度 → Agent 实时再生成讲义（mock 模拟 1.1s；联调请求后端）*/
   const changeLevel = (lv: (typeof LEVELS)[number]) => {
     if (lv === level || regenerating) return
     setRegenerating(true)
+    if (USE_REAL_API) {
+      getLecture(CURRENT_KP_ID, lv)
+        .then((d) => {
+          setLectureMap((m) => ({ ...m, [lv]: d.markdown }))
+          setLevel(lv)
+          setRegenerating(false)
+        })
+        .catch((e) => {
+          console.error('[resource] 切换难度重生成失败', e)
+          setLevel(lv)
+          setRegenerating(false)
+        })
+      return
+    }
     window.setTimeout(() => {
       setLevel(lv)
       setRegenerating(false)
@@ -363,7 +412,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             <SourceTrace />
 
             <div className="lecture-body">
-              <MarkdownRenderer content={lectureByLevel[level]} />
+              <MarkdownRenderer content={activeLecture} />
               <AnimatePresence>
                 {regenerating && (
                   <motion.div
@@ -411,7 +460,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
         {tab === 'quiz' && (
           <>
-            <QuizRenderer questions={quizQuestions} onSubmitResult={handleQuizResult} />
+            <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
             {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
           </>
         )}
