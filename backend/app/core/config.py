@@ -14,6 +14,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # 允许 model_cache_dir / model_xxx 等字段名（默认 model_ 为 pydantic 保护命名空间）
+        protected_namespaces=(),
     )
 
     # 应用元信息
@@ -33,6 +35,23 @@ class Settings(BaseSettings):
     jwt_secret: str = "zhixue-dev-secret-change-in-prod"
     jwt_algorithm: str = "HS256"
     jwt_expire_seconds: int = 7200  # 登录响应 expiresIn 与之一致
+
+    # RAG 管道（B3）：本地模型 + Chroma 持久化，均带默认值（无网络/无模型也降级可跑）
+    # 向量库 / 模型缓存目录（相对 backend/ 工作目录）
+    chroma_dir: str = "./data/chroma"
+    model_cache_dir: str = "./data/models"
+    # 本地模型名（sentence-transformers 自动下载到 model_cache_dir；加载失败自动降级）
+    embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
+    reranker_model_name: str = "BAAI/bge-reranker-base"
+    # 降级哈希嵌入维度（embedding 模型不可用时启用，保证全链路可跑）
+    embedding_fallback_dim: int = 256
+    # 切片参数（需求文档 4.3.1）
+    chunk_size: int = 512
+    chunk_overlap: int = 64
+    # 混合检索 RRF 权重（需求文档 4.3.2）
+    rrf_dense_weight: float = 0.7
+    rrf_sparse_weight: float = 0.3
+    rrf_k: int = 60
 
     @field_validator("cors_origins", mode="before")
     @classmethod
