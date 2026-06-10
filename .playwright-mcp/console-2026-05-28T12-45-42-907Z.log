@@ -1,0 +1,2 @@
+[    2041ms] [ERROR] Failed to load resource: net::ERR_PROXY_CONNECTION_FAILED @ https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap:0
+[    2076ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/chunk-PJEEZAML.js?v=6c79b727:21550

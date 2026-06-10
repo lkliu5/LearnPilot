@@ -1,0 +1,41 @@
+[      90ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:21550
+[ 1011446ms] ReferenceError: pinRef is not defined
+    at Landing (http://localhost:3000/src/pages/Landing.tsx?t=1780288473066:215:73)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19137:13)
+[ 1011449ms] ReferenceError: pinRef is not defined
+    at Landing (http://localhost:3000/src/pages/Landing.tsx?t=1780288473066:215:73)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19137:13)
+[ 1011454ms] [ERROR] The above error occurred in the <Landing> component:
+
+    at Landing (http://localhost:3000/src/pages/Landing.tsx?t=1780288473066:31:35)
+    at App (http://localhost:3000/src/App.tsx?t=1780287407684:31:29)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:14031
+[ 1011457ms] ReferenceError: pinRef is not defined
+    at Landing (http://localhost:3000/src/pages/Landing.tsx?t=1780288473066:215:73)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:15914:22)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19753:22)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19137:13)
+    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:19116:15)
+    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:18736:28)
+    at performSyncWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bf06cd65:18879:28)

@@ -1,0 +1,5 @@
+# B0 骨架最小依赖集（后续阶段按需追加 Chroma / SQLite / bge / LangGraph 等）
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-dotenv

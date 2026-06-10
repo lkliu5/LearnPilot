@@ -1,0 +1,4 @@
+[    2051ms] [ERROR] Failed to load resource: net::ERR_PROXY_CONNECTION_FAILED @ https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap:0
+[    2079ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3005/node_modules/.vite/deps/chunk-PJEEZAML.js?v=708a195a:21550
+[  683745ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3005/@vite/client:559
+[  683767ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3005/:0

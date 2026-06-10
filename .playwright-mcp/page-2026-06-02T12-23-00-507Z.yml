@@ -1,0 +1,163 @@
+- generic [ref=e122]:
+  - complementary [ref=e127]:
+    - generic [ref=e128]:
+      - generic [ref=e129]:
+        - img [ref=e131]
+        - generic [ref=e140]:
+          - generic [ref=e141]: 智学中枢
+          - generic [ref=e142]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e143] [cursor=pointer]:
+        - img [ref=e144]
+    - navigation [ref=e146]:
+      - button "学情概览 学习状态总览" [ref=e147] [cursor=pointer]:
+        - img [ref=e149]
+        - generic [ref=e154]:
+          - generic [ref=e155]: 学情概览
+          - generic [ref=e156]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e159] [cursor=pointer]:
+        - img [ref=e161]
+        - generic [ref=e164]:
+          - generic [ref=e165]: 画像诊断
+          - generic [ref=e166]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e167] [cursor=pointer]:
+        - img [ref=e169]
+        - generic [ref=e173]:
+          - generic [ref=e174]: 学习路径
+          - generic [ref=e175]: 个性化导航
+      - button "学习资源 AI讲义·测试题" [ref=e176] [cursor=pointer]:
+        - img [ref=e178]
+        - generic [ref=e181]:
+          - generic [ref=e182]: 学习资源
+          - generic [ref=e183]: AI讲义·测试题
+      - button "Agent工作流 AI协同可视化" [ref=e184] [cursor=pointer]:
+        - img [ref=e186]
+        - generic [ref=e191]:
+          - generic [ref=e192]: Agent工作流
+          - generic [ref=e193]: AI协同可视化
+      - button "设计系统 视觉规范展示" [ref=e194] [cursor=pointer]:
+        - img [ref=e196]
+        - generic [ref=e201]:
+          - generic [ref=e202]: 设计系统
+          - generic [ref=e203]: 视觉规范展示
+      - button "知识图谱 Beta 可视化拓扑" [ref=e204] [cursor=pointer]:
+        - img [ref=e206]
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - text: 知识图谱
+            - generic [ref=e214]: Beta
+          - generic [ref=e215]: 可视化拓扑
+    - generic [ref=e216] [cursor=pointer]:
+      - generic [ref=e218]: 学
+      - generic [ref=e220]:
+        - generic [ref=e221]: 学习者_001
+        - generic [ref=e222]: 中级 · AI领域
+      - img [ref=e223]
+  - main [ref=e225]:
+    - generic [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - heading "个性化学习资源" [level=1] [ref=e509]
+          - paragraph [ref=e510]: AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应
+        - generic [ref=e511]:
+          - generic [ref=e512]:
+            - generic [ref=e513]: 神经网络基础
+            - generic [ref=e514]: 当前知识点
+          - generic [ref=e515]:
+            - generic [ref=e516]: 初级
+            - generic [ref=e517]: 适配难度
+          - generic [ref=e518]:
+            - generic [ref=e519]: "12"
+            - generic [ref=e520]: RAG 引用文档
+          - generic [ref=e521]:
+            - generic [ref=e522]: ✓ 已校验
+            - generic [ref=e523]: 幻觉率 < 5%
+      - generic [ref=e524]:
+        - button "📖 定制讲义" [ref=e525] [cursor=pointer]
+        - button "🎬 讲解视频" [ref=e526] [cursor=pointer]
+        - button "🧠 思维导图" [ref=e527] [cursor=pointer]
+        - button "💻 代码实操" [ref=e528] [cursor=pointer]
+        - button "📊 知识图解" [ref=e529] [cursor=pointer]
+        - button "🔗 资源推荐" [ref=e530] [cursor=pointer]
+        - button "✍️ 分阶测试" [ref=e531] [cursor=pointer]
+      - generic [ref=e533]:
+        - generic [ref=e534]:
+          - generic [ref=e535]: 🔗
+          - generic [ref=e536]:
+            - generic [ref=e537]: AI 已为你精选 4 个优质外部资源
+            - generic [ref=e538]: 资源聚合 Agent 检索 · 审核 Agent 按相关性 + 来源可信度评分排序
+        - generic [ref=e606]:
+          - generic [ref=e607]:
+            - generic [ref=e608]: 3Blue1Brown：神经网络是什么？
+            - button "✕ 关闭" [ref=e609] [cursor=pointer]
+          - iframe [ref=e610]:
+            - generic [ref=f23e3]:
+              - strong [ref=f23e4]: www.youtube.com
+              - text: 意外终止了连接。
+        - generic [ref=e539]:
+          - generic [ref=e540]:
+            - generic [ref=e541]:
+              - generic [ref=e542]: 🎬 视频
+              - generic [ref=e543]: 19:13
+            - heading "3Blue1Brown：神经网络是什么？" [level=4] [ref=e544]
+            - generic [ref=e545]: YouTube · 3Blue1Brown
+            - paragraph [ref=e546]: 💡 可视化讲解神经元与权重，直观契合你当前「神经网络基础」知识点。
+            - generic [ref=e547]:
+              - generic [ref=e548]:
+                - text: 相关性
+                - text: "98"
+              - generic [ref=e551]:
+                - text: 可信度
+                - text: "97"
+            - generic [ref=e554]:
+              - button "▶ 内嵌观看" [active] [ref=e555] [cursor=pointer]
+              - link "↗ 原站打开" [ref=e556] [cursor=pointer]:
+                - /url: https://www.youtube.com/watch?v=aircAruvnKk
+          - generic [ref=e557]:
+            - generic [ref=e558]:
+              - generic [ref=e559]: 🎓 课程
+              - generic [ref=e560]: 系列
+            - heading "CS231n：卷积神经网络（Stanford）" [level=4] [ref=e561]
+            - generic [ref=e562]: Stanford 公开课
+            - paragraph [ref=e563]: 💡 权威课程，从神经网络基础平滑过渡到 CNN，匹配你的下一步学习路径。
+            - generic [ref=e564]:
+              - generic [ref=e565]:
+                - text: 相关性
+                - text: "92"
+              - generic [ref=e568]:
+                - text: 可信度
+                - text: "96"
+            - link "↗ 原站打开" [ref=e572] [cursor=pointer]:
+              - /url: https://cs231n.github.io/
+          - generic [ref=e573]:
+            - generic [ref=e574]:
+              - generic [ref=e575]: 📄 论文
+              - generic [ref=e576]: 15 页
+            - heading "Attention Is All You Need" [level=4] [ref=e577]
+            - generic [ref=e578]: arXiv:1706.03762
+            - paragraph [ref=e579]: 💡 Transformer 奠基论文，作为你「待提升领域」的进阶拓展读物。
+            - generic [ref=e580]:
+              - generic [ref=e581]:
+                - text: 相关性
+                - text: "78"
+              - generic [ref=e584]:
+                - text: 可信度
+                - text: "99"
+            - link "↗ 原站打开" [ref=e588] [cursor=pointer]:
+              - /url: https://arxiv.org/abs/1706.03762
+          - generic [ref=e589]:
+            - generic [ref=e590]:
+              - generic [ref=e591]: 📘 文档
+              - generic [ref=e592]: 实操
+            - heading "PyTorch 官方教程 · 构建神经网络" [level=4] [ref=e593]
+            - generic [ref=e594]: pytorch.org
+            - paragraph [ref=e595]: 💡 官方动手教程，把讲义中的前向传播落到 nn.Module 代码实践。
+            - generic [ref=e596]:
+              - generic [ref=e597]:
+                - text: 相关性
+                - text: "90"
+              - generic [ref=e600]:
+                - text: 可信度
+                - text: "95"
+            - link "↗ 原站打开" [ref=e604] [cursor=pointer]:
+              - /url: https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html
+        - paragraph [ref=e605]: 演示数据为 AI 精选示例；生产环境由后端聚合 Agent 调用 YouTube / B站 / arXiv / 慕课等 API，经审核 Agent 过滤低质与不相关资源。

@@ -1,0 +1,120 @@
+- generic [ref=e76]:
+  - complementary [ref=e81]:
+    - generic [ref=e82]:
+      - generic [ref=e83]:
+        - img [ref=e85]
+        - generic [ref=e94]:
+          - generic [ref=e95]: 智学中枢
+          - generic [ref=e96]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e97] [cursor=pointer]:
+        - img [ref=e98]
+    - navigation [ref=e100]:
+      - button "学情概览 学习状态总览" [ref=e101] [cursor=pointer]:
+        - img [ref=e103]
+        - generic [ref=e108]:
+          - generic [ref=e109]: 学情概览
+          - generic [ref=e110]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e111] [cursor=pointer]:
+        - img [ref=e113]
+        - generic [ref=e116]:
+          - generic [ref=e117]: 画像诊断
+          - generic [ref=e118]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e119] [cursor=pointer]:
+        - img [ref=e121]
+        - generic [ref=e125]:
+          - generic [ref=e126]: 学习路径
+          - generic [ref=e127]: 个性化导航
+      - button "学习资源 AI讲义·测试题" [ref=e128] [cursor=pointer]:
+        - img [ref=e130]
+        - generic [ref=e133]:
+          - generic [ref=e134]: 学习资源
+          - generic [ref=e135]: AI讲义·测试题
+      - button "Agent工作流 AI协同可视化" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e145]:
+          - generic [ref=e146]: Agent工作流
+          - generic [ref=e147]: AI协同可视化
+      - button "设计系统 视觉规范展示" [ref=e148] [cursor=pointer]:
+        - img [ref=e150]
+        - generic [ref=e155]:
+          - generic [ref=e156]: 设计系统
+          - generic [ref=e157]: 视觉规范展示
+      - generic [ref=e158]:
+        - img [ref=e160]
+        - generic [ref=e166]:
+          - generic [ref=e167]:
+            - text: 知识图谱
+            - generic [ref=e168]: Beta
+          - generic [ref=e169]: 可视化拓扑
+    - generic [ref=e170] [cursor=pointer]:
+      - generic [ref=e172]: 学
+      - generic [ref=e174]:
+        - generic [ref=e175]: 学习者_001
+        - generic [ref=e176]: 中级 · AI领域
+      - img [ref=e177]
+  - main [ref=e179]:
+    - generic [ref=e181]:
+      - generic [ref=e182]:
+        - generic [ref=e183]:
+          - heading "个性化学习资源" [level=1] [ref=e184]
+          - paragraph [ref=e185]: AI 为你定制的讲义与分阶测试 · 难度自适应
+        - generic [ref=e186]:
+          - generic [ref=e187]:
+            - generic [ref=e188]: 神经网络基础
+            - generic [ref=e189]: 当前知识点
+          - generic [ref=e190]:
+            - generic [ref=e191]: 初级
+            - generic [ref=e192]: 适配难度
+          - generic [ref=e193]:
+            - generic [ref=e194]: "12"
+            - generic [ref=e195]: RAG 引用文档
+          - generic [ref=e196]:
+            - generic [ref=e197]: ✓ 已校验
+            - generic [ref=e198]: 幻觉率 < 5%
+      - generic [ref=e199]:
+        - button "📖 定制讲义" [ref=e200] [cursor=pointer]
+        - button "✍️ 分阶测试" [active] [ref=e201] [cursor=pointer]
+      - generic [ref=e243]:
+        - generic [ref=e244]:
+          - generic [ref=e245]:
+            - generic [ref=e246]: 单选
+            - heading "1. 一个神经元的运算顺序是？" [level=3] [ref=e247]
+          - generic [ref=e248]:
+            - generic [ref=e249] [cursor=pointer]:
+              - radio "激活函数 → 加权求和 → 加偏置" [ref=e250]
+              - generic [ref=e251]: 激活函数 → 加权求和 → 加偏置
+            - generic [ref=e252] [cursor=pointer]:
+              - radio "加权求和 → 加偏置 → 激活函数" [ref=e253]
+              - generic [ref=e254]: 加权求和 → 加偏置 → 激活函数
+            - generic [ref=e255] [cursor=pointer]:
+              - radio "加偏置 → 激活函数 → 加权求和" [ref=e256]
+              - generic [ref=e257]: 加偏置 → 激活函数 → 加权求和
+        - generic [ref=e258]:
+          - generic [ref=e259]:
+            - generic [ref=e260]: 多选
+            - heading "2. 以下哪些是常见的激活函数？（多选）" [level=3] [ref=e261]
+          - generic [ref=e262]:
+            - generic [ref=e263] [cursor=pointer]:
+              - checkbox "ReLU" [ref=e264]
+              - generic [ref=e265]: ReLU
+            - generic [ref=e266] [cursor=pointer]:
+              - checkbox "Sigmoid" [ref=e267]
+              - generic [ref=e268]: Sigmoid
+            - generic [ref=e269] [cursor=pointer]:
+              - checkbox "Gradient" [ref=e270]
+              - generic [ref=e271]: Gradient
+            - generic [ref=e272] [cursor=pointer]:
+              - checkbox "Tanh" [ref=e273]
+              - generic [ref=e274]: Tanh
+        - generic [ref=e275]:
+          - generic [ref=e276]:
+            - generic [ref=e277]: 判断
+            - heading "3. ReLU 激活函数有助于缓解梯度消失问题。" [level=3] [ref=e278]
+          - generic [ref=e279]:
+            - generic [ref=e280] [cursor=pointer]:
+              - radio "正确" [ref=e281]
+              - generic [ref=e282]: 正确
+            - generic [ref=e283] [cursor=pointer]:
+              - radio "错误" [ref=e284]
+              - generic [ref=e285]: 错误
+        - button "还有 3 题未作答" [disabled] [ref=e286]

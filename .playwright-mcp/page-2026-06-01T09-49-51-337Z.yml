@@ -1,0 +1,39 @@
+- generic [ref=e45]:
+  - generic [ref=e51]:
+    - generic [ref=e52]:
+      - generic: AI
+      - generic [ref=e53]: 智学中枢 · 智能学习中枢
+      - img [ref=e56]
+      - heading "诊断学情。 生成每一课。" [level=1] [ref=e65]:
+        - text: 诊断学情。
+        - text: 生成每一课。
+      - paragraph [ref=e66]: AI Learning Operating System
+      - list [ref=e67]:
+        - listitem [ref=e68]:
+          - generic [ref=e69]: ◆
+          - text: 多智能体协同 · 学情诊断
+        - listitem [ref=e70]:
+          - generic [ref=e71]: ◇
+          - text: RAG 检索增强 · 抑制幻觉
+        - listitem [ref=e72]:
+          - generic [ref=e73]: ◈
+          - text: 个性化学习路径动态规划
+    - generic [ref=e74]:
+      - heading "欢迎回来" [level=2] [ref=e75]
+      - paragraph [ref=e76]: 登录以进入你的个性化学习空间
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - generic [ref=e79]: 用户名
+          - textbox "用户名" [ref=e80]: 学习者_001
+        - generic [ref=e81]:
+          - generic [ref=e82]: 密码
+          - textbox "密码" [ref=e83]: ••••••••
+        - generic [ref=e84]:
+          - generic [ref=e85] [cursor=pointer]:
+            - checkbox "记住我" [checked] [ref=e86]
+            - text: 记住我
+          - link "忘记密码？" [ref=e87] [cursor=pointer]:
+            - /url: "#"
+        - button "进入系统" [ref=e88] [cursor=pointer]
+        - paragraph [ref=e89]: 演示模式 · 任意账号密码均可进入
+  - paragraph [ref=e90]: 软件杯 · 领域知识个性化资源生成和多智能体系统

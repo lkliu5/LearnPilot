@@ -1,0 +1,232 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - complementary [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - img [ref=e12]
+          - generic [ref=e21]:
+            - generic [ref=e22]: 智学中枢
+            - generic [ref=e23]: AI Learning Platform
+        - button "折叠侧边栏" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+      - navigation [ref=e27]:
+        - button "学情概览 学习状态总览" [ref=e28] [cursor=pointer]:
+          - img [ref=e30]
+          - generic [ref=e35]:
+            - generic [ref=e36]: 学情概览
+            - generic [ref=e37]: 学习状态总览
+        - button "画像诊断 知识能力评估" [ref=e40] [cursor=pointer]:
+          - img [ref=e42]
+          - generic [ref=e45]:
+            - generic [ref=e46]: 画像诊断
+            - generic [ref=e47]: 知识能力评估
+        - button "学习路径 个性化导航" [ref=e48] [cursor=pointer]:
+          - img [ref=e50]
+          - generic [ref=e54]:
+            - generic [ref=e55]: 学习路径
+            - generic [ref=e56]: 个性化导航
+        - button "学习资源 AI讲义·测试题" [ref=e57] [cursor=pointer]:
+          - img [ref=e59]
+          - generic [ref=e62]:
+            - generic [ref=e63]: 学习资源
+            - generic [ref=e64]: AI讲义·测试题
+        - button "Agent工作流 AI协同可视化" [ref=e65] [cursor=pointer]:
+          - img [ref=e67]
+          - generic [ref=e72]:
+            - generic [ref=e73]: Agent工作流
+            - generic [ref=e74]: AI协同可视化
+        - button "设计系统 视觉规范展示" [ref=e75] [cursor=pointer]:
+          - img [ref=e77]
+          - generic [ref=e82]:
+            - generic [ref=e83]: 设计系统
+            - generic [ref=e84]: 视觉规范展示
+        - button "知识图谱 Beta 可视化拓扑" [ref=e85] [cursor=pointer]:
+          - img [ref=e87]
+          - generic [ref=e93]:
+            - generic [ref=e94]:
+              - text: 知识图谱
+              - generic [ref=e95]: Beta
+            - generic [ref=e96]: 可视化拓扑
+      - generic [ref=e97] [cursor=pointer]:
+        - generic [ref=e99]: 学
+        - generic [ref=e101]:
+          - generic [ref=e102]: 学习者_001
+          - generic [ref=e103]: 中级 · AI领域
+        - img [ref=e104]
+    - main [ref=e106]:
+      - generic [ref=e108]:
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - paragraph [ref=e111]:
+              - generic [ref=e112]: 你
+              - generic [ref=e113]: 好
+              - generic [ref=e114]: ，
+              - generic [ref=e115]: 学
+              - generic [ref=e116]: 习
+              - generic [ref=e117]: 者
+              - generic [ref=e118]: _
+              - generic [ref=e119]: "0"
+              - generic [ref=e120]: "0"
+              - generic [ref=e121]: "1"
+              - generic [ref=e123]: 👋
+            - paragraph [ref=e124]:
+              - text: 您的AI学习旅程已开启，当前处于
+              - strong [ref=e125]: 中级
+              - text: 水平
+            - generic [ref=e126]:
+              - generic [ref=e127]: 超过了 68% 的同级学习者
+              - img [ref=e128]
+          - generic [ref=e132]:
+            - img [ref=e134]
+            - generic [ref=e142]:
+              - generic [ref=e143]: "72.5"
+              - generic [ref=e144]: 综合能力评分
+          - generic [ref=e145]:
+            - generic [ref=e146]:
+              - generic [ref=e147]: 15:09
+              - generic [ref=e148]: 2026年6月4日 星期四 · 上海
+            - generic [ref=e149]:
+              - img [ref=e151]
+              - generic [ref=e155]:
+                - generic [ref=e156]: 22°C
+                - generic [ref=e157]: 晴
+            - paragraph [ref=e158]: 今天天气晴朗，去图书馆刷题效率更高哦！📚
+        - generic [ref=e159]:
+          - generic [ref=e160]:
+            - generic [ref=e161]:
+              - img [ref=e163]
+              - img [ref=e165]
+            - generic [ref=e168]:
+              - generic [ref=e169]: 65%
+              - generic [ref=e170]: 知识图谱覆盖
+          - generic [ref=e171]:
+            - generic [ref=e172]:
+              - img [ref=e174]
+              - img [ref=e176]
+            - generic [ref=e179]:
+              - generic [ref=e180]: "3"
+              - generic [ref=e181]: 优势知识点
+          - generic [ref=e182]:
+            - generic [ref=e183]:
+              - img [ref=e185]
+              - img [ref=e188]
+            - generic [ref=e191]:
+              - generic [ref=e192]: "3"
+              - generic [ref=e193]: 知识盲区
+          - generic [ref=e194]:
+            - generic [ref=e195]:
+              - img [ref=e197]
+              - img [ref=e200]
+            - generic [ref=e203]:
+              - generic [ref=e204]: "12"
+              - generic [ref=e205]: 已学资源
+        - generic [ref=e206]:
+          - generic [ref=e208]:
+            - heading "知识掌握雷达图" [level=3] [ref=e209]
+            - generic [ref=e210]: 实时更新
+          - generic [ref=e215]:
+            - heading "能力分析" [level=3] [ref=e217]
+            - generic [ref=e220]:
+              - generic [ref=e221]:
+                - generic [ref=e222]: 优势领域
+                - generic [ref=e224]:
+                  - generic [ref=e225]: 数据预处理
+                  - generic [ref=e226]: 特征工程
+                  - generic [ref=e227]: 模型评估
+              - generic [ref=e228]:
+                - generic [ref=e229]: 待提升领域
+                - generic [ref=e231]:
+                  - generic [ref=e232]: Transformer架构
+                  - generic [ref=e233]: 注意力机制
+                  - generic [ref=e234]: 模型优化
+        - generic [ref=e253]:
+          - generic [ref=e254]:
+            - generic [ref=e255]:
+              - heading "推荐学习路径" [level=3] [ref=e256]
+              - button "查看全部 →" [ref=e257] [cursor=pointer]
+            - generic [ref=e259]:
+              - generic [ref=e260] [cursor=pointer]:
+                - generic [ref=e266]: "1"
+                - generic [ref=e268]:
+                  - generic [ref=e269]:
+                    - heading "神经网络基础" [level=4] [ref=e270]
+                    - generic [ref=e271]: 初级
+                  - generic [ref=e273]:
+                    - img [ref=e274]
+                    - text: 已完成
+                  - button "复习巩固" [ref=e276]
+              - generic [ref=e277] [cursor=pointer]:
+                - generic [ref=e283]: "2"
+                - generic [ref=e285]:
+                  - generic [ref=e286]:
+                    - heading "注意力机制原理" [level=4] [ref=e287]
+                    - generic [ref=e288]: 中级
+                  - generic [ref=e290]:
+                    - img [ref=e291]
+                    - text: 进行中 45%
+                  - button "继续学习" [ref=e297]
+              - generic [ref=e298] [cursor=pointer]:
+                - generic [ref=e301]: "3"
+                - generic [ref=e302]:
+                  - generic [ref=e303]:
+                    - heading "Transformer架构详解" [level=4] [ref=e304]
+                    - generic [ref=e305]: 高级
+                  - generic [ref=e307]: 待学习
+                  - button "开始学习" [ref=e308]
+          - generic [ref=e309]:
+            - generic [ref=e310]:
+              - heading "推荐动态" [level=3] [ref=e311]
+              - generic [ref=e312]: AI
+            - generic [ref=e314]:
+              - img [ref=e316]
+              - paragraph [ref=e318]:
+                - text: 基于你的画像诊断，建议加强
+                - strong [ref=e319]: "'神经网络基础'"
+                - text: 、
+                - strong [ref=e320]: "'大模型微调'"
+                - text: 等核心组件
+              - generic [ref=e321]:
+                - generic [ref=e322]:
+                  - generic [ref=e324]: 注意力机制原理
+                  - generic [ref=e325]: 45%
+                - generic [ref=e326]:
+                  - generic [ref=e328]: 大模型微调前沿
+                  - generic [ref=e329]: 20%
+        - generic [ref=e330]:
+          - generic [ref=e331]:
+            - generic [ref=e332]:
+              - heading "Agent状态" [level=3] [ref=e333]
+              - generic [ref=e334]: 3 Active
+            - generic [ref=e336]:
+              - generic [ref=e337] [cursor=pointer]:
+                - generic [ref=e340]:
+                  - generic [ref=e341]: 学情诊断Agent
+                  - generic [ref=e342]: 画像生成完成
+                - generic [ref=e343]: 完成
+              - generic [ref=e344] [cursor=pointer]:
+                - generic [ref=e349]:
+                  - generic [ref=e350]: 领域知识生成Agent
+                  - generic [ref=e351]: 正在生成学习资源...
+                - generic [ref=e352]: 运行中
+              - generic [ref=e353] [cursor=pointer]:
+                - generic [ref=e356]:
+                  - generic [ref=e357]: 内容审核校验Agent
+                  - generic [ref=e358]: 等待校验任务
+                - generic [ref=e359]: 待命
+          - generic [ref=e360]:
+            - heading "互动面板" [level=3] [ref=e362]
+            - generic [ref=e364]:
+              - generic [ref=e365]:
+                - img [ref=e367]
+                - generic [ref=e370]:
+                  - generic [ref=e371]: 学情诊断Agent
+                  - paragraph [ref=e372]: 我已完成你的诊断，点击复习巩固。
+                  - button "Review Now" [ref=e373] [cursor=pointer]
+              - generic [ref=e375]:
+                - img [ref=e377]
+                - generic [ref=e380]:
+                  - generic [ref=e381]: 内容审核校验Agent
+                  - paragraph [ref=e382]: 校验通过，幻觉率 2.1%。
+                  - button "查看报告" [ref=e383] [cursor=pointer]
+  - button "切换界面配色风格" [active] [ref=e384] [cursor=pointer]:
+    - generic [ref=e386]: 清新青春

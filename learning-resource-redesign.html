@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习资源页 · 重新设计</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@400;500;600&family=Noto+Serif+SC:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EFE9DD; --surface:#FBF6EC; --surface-2:#E6DDC9;
+    --ink:#2B2A28; --ink-soft:#6B6557; --ink-faint:#9A917E;
+    --primary:#2F4858; --primary-d:#213643;
+    --accent:#B5572E; --line:#DDD2BC;
+    --ok:#4F8A6A; --ok-bg:#E6F0E8; --ok-line:#C3DCCB;
+    --shadow:rgba(43,42,40,0.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Sora','Noto Sans SC',sans-serif;
+    background:var(--bg); color:var(--ink);
+    padding:30px; -webkit-font-smoothing:antialiased;
+  }
+  .canvas{max-width:1180px;margin:0 auto;}
+  .stamp{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px;}
+
+  /* ===== Header ===== */
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:24px;}
+  .title-wrap{display:flex;gap:14px;}
+  .bar-accent{width:5px;border-radius:4px;background:var(--primary);align-self:stretch;}
+  .h1{font-family:'Fraunces','Noto Serif SC',serif;font-size:30px;font-weight:600;line-height:1.1;}
+  .h1 em{font-style:normal;color:var(--primary);}
+  .sub{color:var(--ink-soft);font-size:14px;margin-top:8px;}
+
+  /* 可信度标识（核心卖点）*/
+  .trust{
+    background:var(--ok-bg);border:1.5px solid var(--ok-line);border-radius:14px;
+    padding:12px 16px;cursor:pointer;min-width:230px;transition:all .25s ease;
+  }
+  .trust:hover{box-shadow:0 6px 18px rgba(79,138,106,.18);}
+  .trust-top{display:flex;align-items:center;gap:9px;}
+  .trust-top .ico{width:22px;height:22px;color:var(--ok);flex:none;}
+  .trust-title{font-weight:700;color:var(--ok);font-size:15px;}
+  .trust-meta{font-size:12px;color:var(--ink-soft);margin-top:5px;padding-left:31px;display:flex;align-items:center;gap:5px;}
+  .trust-detail{
+    overflow:hidden;max-height:0;opacity:0;transition:all .35s ease;
+    font-size:13px;line-height:1.65;color:var(--ink-soft);
+  }
+  .trust.open .trust-detail{max-height:200px;opacity:1;margin-top:10px;padding-top:10px;border-top:1px solid var(--ok-line);}
+  .trust.open .chev{transform:rotate(180deg);}
+  .chev{transition:transform .3s ease;display:inline-block;}
+
+  /* ===== Context bar（状态+难度，一行）===== */
+  .context{
+    display:flex;align-items:center;gap:0;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:12px 20px;margin-bottom:20px;box-shadow:0 2px 8px var(--shadow);
+  }
+  .ctx-item{display:flex;align-items:center;gap:8px;font-size:14px;}
+  .ctx-item .lab{color:var(--ink-faint);font-size:12px;}
+  .ctx-item .val{font-weight:600;}
+  .ctx-sep{width:1px;height:22px;background:var(--line);margin:0 18px;}
+  .dot-live{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(181,87,46,.15);}
+  .seg{display:inline-flex;background:var(--surface-2);border-radius:9px;padding:3px;}
+  .seg button{
+    border:none;background:transparent;font-family:inherit;font-size:13px;
+    padding:5px 14px;border-radius:7px;cursor:pointer;color:var(--ink-soft);transition:all .2s;
+  }
+  .seg button.on{background:var(--primary);color:#fff;font-weight:600;}
+  .ctx-spacer{flex:1;}
+
+  /* ===== 资源形态 tab（一行，分组细分隔）===== */
+  .tabs-label{font-size:12px;color:var(--ink-faint);letter-spacing:.05em;margin-bottom:10px;}
+  .tabbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:22px;}
+  .tab{
+    display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:11px;
+    padding:10px 16px;font-size:14px;font-weight:500;cursor:pointer;color:var(--ink);
+    transition:all .2s ease;
+  }
+  .tab:hover{border-color:var(--primary);}
+  .tab.on{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 6px 16px var(--shadow);}
+  .tab .em{font-size:15px;}
+  .grp-sep{width:1px;height:26px;background:var(--line);margin:0 6px;}
+  .grp-tag{font-size:11px;color:var(--ink-faint);align-self:center;margin-right:2px;}
+
+  /* ===== 主内容区（讲义=主体）===== */
+  .content{
+    background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    box-shadow:0 8px 26px var(--shadow);overflow:hidden;
+  }
+  .rag-strip{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--surface-2);padding:11px 22px;font-size:13px;color:var(--ink-soft);
+    border-bottom:1px solid var(--line);
+  }
+  .rag-left{display:flex;align-items:center;gap:9px;}
+  .rag-left .ico{width:17px;height:17px;color:var(--ok);}
+  .rag-src{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;}
+  .article{padding:30px 34px 8px;}
+  .art-title{font-family:'Fraunces','Noto Serif SC',serif;font-size:24px;font-weight:600;margin-bottom:18px;}
+  .art-h{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;margin:22px 0 12px;}
+  .art-h .vbar{width:4px;height:18px;background:var(--primary);border-radius:3px;}
+  .article p{font-size:15px;line-height:1.85;color:#3c3a36;margin-bottom:12px;}
+  .article .hl{color:var(--primary-d);font-weight:600;}
+  .fade{height:54px;background:linear-gradient(transparent,var(--surface));margin-top:-54px;position:relative;}
+
+  /* ===== 底部 CTA（唯一下一步）===== */
+  .nextbar{
+    display:flex;align-items:center;justify-content:space-between;gap:20px;
+    padding:20px 34px;border-top:1px solid var(--line);background:var(--surface);
+  }
+  .next-info .nt{font-weight:600;font-size:15px;}
+  .next-info .ns{font-size:13px;color:var(--ink-soft);margin-top:3px;}
+  .cta{
+    display:inline-flex;align-items:center;gap:9px;
+    background:var(--primary);color:#fff;border:none;font-family:inherit;font-size:15px;font-weight:600;
+    padding:14px 26px;border-radius:12px;cursor:pointer;transition:all .25s ease;flex:none;
+    box-shadow:0 8px 20px var(--shadow);
+  }
+  .cta:hover{background:var(--primary-d);transform:translateY(-2px);}
+
+  .note{margin-top:26px;font-size:13px;color:var(--ink-faint);line-height:1.7;border-top:1px dashed var(--line);padding-top:16px;}
+  .note b{color:var(--ink-soft);}
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="stamp">学习资源页 · 重新设计（墨纸主题）</div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title-wrap">
+      <div class="bar-accent"></div>
+      <div>
+        <div class="h1">个性化<em>学习资源</em></div>
+        <div class="sub">AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应</div>
+      </div>
+    </div>
+    <div class="trust" id="trust" onclick="this.classList.toggle('open')">
+      <div class="trust-top">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span class="trust-title">已校验 · 幻觉率 &lt; 5%</span>
+      </div>
+      <div class="trust-meta">可信度 · 点击查看校验机制 <span class="chev">▾</span></div>
+      <div class="trust-detail">
+        领域知识生成 Agent 产出内容后，由内容审核 Agent 基于 RAG 知识库逐条核对术语与事实，发现幻觉即打回重生成（最多 3 轮），最终压至 &lt; 5%，确保讲义可信、可溯源。
+      </div>
+    </div>
+  </div>
+
+  <!-- Context bar -->
+  <div class="context">
+    <div class="ctx-item"><span class="lab">当前知识点</span><span class="val">神经网络基础</span></div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item"><span class="dot-live"></span><span class="val">学习中</span></div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item">
+      <span class="lab">难度</span>
+      <span class="seg"><button>入门</button><button class="on">初级</button><button>高级</button></span>
+    </div>
+    <div class="ctx-spacer"></div>
+    <div class="ctx-item"><span class="lab">RAG 引用</span><span class="val">12 篇文档</span></div>
+  </div>
+
+  <!-- 资源形态 tab -->
+  <div class="tabs-label">资源形态</div>
+  <div class="tabbar">
+    <span class="grp-tag">学习内容</span>
+    <div class="tab on"><span class="em">📘</span>定制讲义</div>
+    <div class="tab"><span class="em">🎬</span>讲解视频</div>
+    <div class="tab"><span class="em">🧠</span>思维导图</div>
+    <div class="tab"><span class="em">📊</span>知识图解</div>
+    <span class="grp-sep"></span>
+    <span class="grp-tag">练习检验</span>
+    <div class="tab"><span class="em">💻</span>代码实操</div>
+    <div class="tab"><span class="em">✍️</span>分阶测试</div>
+    <span class="grp-sep"></span>
+    <span class="grp-tag">辅助拓展</span>
+    <div class="tab"><span class="em">🔗</span>资源推荐</div>
+    <div class="tab"><span class="em">💬</span>导学对话</div>
+  </div>
+
+  <!-- 主内容区 -->
+  <div class="content">
+    <div class="rag-strip">
+      <div class="rag-left">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4z"/></svg>
+        RAG 溯源 · 多智能体已交叉校验
+      </div>
+      <div class="rag-src">5 篇来源 ▾</div>
+    </div>
+    <div class="article">
+      <div class="art-title">神经网络基础</div>
+      <div class="art-h"><span class="vbar"></span>一、什么是神经网络</div>
+      <p>神经网络是一种受生物神经系统启发的计算模型，由大量<span class="hl">神经元</span>相互连接构成，通过调整连接权重来学习数据中的规律。</p>
+      <p>一个神经元完成三步运算：对输入做<span class="hl">加权求和</span>，加上<span class="hl">偏置</span>，再经过<span class="hl">激活函数</span>输出。多个神经元分层堆叠，便构成了能够拟合复杂函数的网络。</p>
+      <div class="art-h"><span class="vbar"></span>二、前向传播与反向传播</div>
+      <p>前向传播将输入逐层变换得到预测；反向传播则根据误差，自输出层向输入层逐层回传梯度，更新权重，使网络逐步逼近目标。</p>
+    </div>
+    <div class="fade"></div>
+
+    <!-- 唯一下一步 -->
+    <div class="nextbar">
+      <div class="next-info">
+        <div class="nt">已学完本节内容？</div>
+        <div class="ns">完成「分阶测试」检验后，本知识点将标记为已掌握，并同步更新学习路径与知识图谱。</div>
+      </div>
+      <button class="cta">去检验：分阶测试 →</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>这版做了什么：</b> ① 标题右侧把「幻觉率校验」单独做成可信度标识，长说明收进点击展开，不再常驻占一整条；
+    ② 状态徽章 + 难度切换合并成一行 Context 条；③ 资源 tab 压成一行、分组用细竖线分隔、文字不折行；
+    ④ 讲义正文成为页面主体（最大面积）；⑤ RAG 溯源缩成内容区顶部一个小信任条；
+    ⑥ 底部补一个唯一的「去检验」下一步，串起「学→测→更新」闭环。
+  </div>
+</div>
+</body>
+</html>

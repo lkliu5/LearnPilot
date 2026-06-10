@@ -1,0 +1,21 @@
+[    3857ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3007/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[   51829ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3007/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:746
+[  333723ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3007/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:721
+[45682030ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3007/@vite/client:559
+[46596077ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3007/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[46664910ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3007/@vite/client:559
+[46670078ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/AgentStatusCard.tsx:0
+[46670079ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/pages/AgentWorkflow.css:0
+[46670079ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/ParticleVortex.tsx:0
+[46670080ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/GhostCursor/GhostCursor.jsx:0
+[46670080ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/pages/Landing.css:0
+[46670080ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/Silk/Silk.jsx:0
+[46670082ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/pages/Login.css:0
+[46670082ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/charts/RadarChart.tsx:0
+[46670082ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/components/GuideCard.tsx:0
+[46670082ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/hooks/useScrollReveal.ts:0
+[46670082ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3007/src/pages/Dashboard.css:0
+[47939633ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3007/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[47950433ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3007/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[47955219ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3007/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:746
+[47960123ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3007/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:721

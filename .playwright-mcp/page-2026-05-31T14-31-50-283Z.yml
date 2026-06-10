@@ -1,0 +1,134 @@
+- generic [ref=e3]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - img [ref=e12]
+        - generic [ref=e21]:
+          - generic [ref=e22]: 智学中枢
+          - generic [ref=e23]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+    - navigation [ref=e27]:
+      - button "学情概览 学习状态总览" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - generic [ref=e35]:
+          - generic [ref=e36]: 学情概览
+          - generic [ref=e37]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e40] [cursor=pointer]:
+        - img [ref=e42]
+        - generic [ref=e45]:
+          - generic [ref=e46]: 画像诊断
+          - generic [ref=e47]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e48] [cursor=pointer]:
+        - img [ref=e50]
+        - generic [ref=e54]:
+          - generic [ref=e55]: 学习路径
+          - generic [ref=e56]: 个性化导航
+      - button "Agent工作流 AI协同可视化" [active] [ref=e57] [cursor=pointer]:
+        - img [ref=e59]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Agent工作流
+          - generic [ref=e66]: AI协同可视化
+      - generic [ref=e67]:
+        - img [ref=e69]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - text: 知识图谱
+            - generic [ref=e77]: Beta
+          - generic [ref=e78]: 可视化拓扑
+    - generic [ref=e79] [cursor=pointer]:
+      - generic [ref=e81]: 学
+      - generic [ref=e83]:
+        - generic [ref=e84]: 学习者_001
+        - generic [ref=e85]: 中级 · AI领域
+      - img [ref=e86]
+  - main [ref=e88]:
+    - generic [ref=e1081]:
+      - generic [ref=e1082]:
+        - generic [ref=e1083]:
+          - heading "个性化学习路径" [level=1] [ref=e1084]
+          - paragraph [ref=e1085]: 基于您的学情诊断，为您量身定制的学习路线
+        - generic [ref=e1086]:
+          - generic [ref=e1087]:
+            - generic [ref=e1088]: "2"
+            - generic [ref=e1089]: 已完成
+          - generic [ref=e1090]:
+            - generic [ref=e1091]: "1"
+            - generic [ref=e1092]: 进行中
+          - generic [ref=e1093]:
+            - generic [ref=e1094]: 44%
+            - generic [ref=e1095]: 总进度
+      - generic [ref=e1096]:
+        - button "时间线视图" [ref=e1097] [cursor=pointer]:
+          - img [ref=e1098]
+          - text: 时间线视图
+        - button "卡片视图" [ref=e1102] [cursor=pointer]:
+          - img [ref=e1103]
+          - text: 卡片视图
+      - generic [ref=e1109]:
+        - generic [ref=e1110]:
+          - generic [ref=e1111] [cursor=pointer]:
+            - img [ref=e1113]
+            - generic [ref=e1115]:
+              - generic [ref=e1116]:
+                - heading "机器学习基础" [level=3] [ref=e1117]
+                - generic [ref=e1118]: 入门
+              - paragraph [ref=e1119]: 掌握机器学习的基本概念、监督学习与非监督学习的区别
+              - generic [ref=e1120]: 已完成
+          - generic [ref=e1121] [cursor=pointer]:
+            - img [ref=e1123]
+            - generic [ref=e1125]:
+              - generic [ref=e1126]:
+                - heading "神经网络基础" [level=3] [ref=e1127]
+                - generic [ref=e1128]: 初级
+              - paragraph [ref=e1129]: 理解神经元、激活函数、前向传播与反向传播原理
+              - generic [ref=e1130]: 已完成
+          - generic [ref=e1134] [cursor=pointer]:
+            - generic [ref=e1135]:
+              - heading "深度学习原理" [level=3] [ref=e1136]
+              - generic [ref=e1137]: 中级
+            - paragraph [ref=e1138]: 深入学习深度神经网络的训练技巧与优化方法
+            - generic [ref=e1140]: 65%
+            - generic [ref=e1141]: 进行中
+          - generic [ref=e1142] [cursor=pointer]:
+            - generic [ref=e1144]: "4"
+            - generic [ref=e1145]:
+              - generic [ref=e1146]:
+                - heading "CNN架构" [level=3] [ref=e1147]
+                - generic [ref=e1148]: 中级
+              - paragraph [ref=e1149]: 掌握卷积神经网络的核心原理与图像处理应用
+              - generic [ref=e1150]: 待学习
+          - generic [ref=e1151] [cursor=pointer]:
+            - generic [ref=e1153]: "5"
+            - generic [ref=e1154]:
+              - generic [ref=e1155]:
+                - heading "Transformer架构" [level=3] [ref=e1156]
+                - generic [ref=e1157]: 高级
+              - paragraph [ref=e1158]: 理解自注意力机制与Transformer的核心创新
+              - generic [ref=e1159]: 待学习
+          - generic [ref=e1160] [cursor=pointer]:
+            - generic [ref=e1162]: "6"
+            - generic [ref=e1163]:
+              - generic [ref=e1164]:
+                - heading "大模型微调技术" [level=3] [ref=e1165]
+                - generic [ref=e1166]: 精通
+              - paragraph [ref=e1167]: 学习LoRA、P-Tuning等高效微调方法
+              - generic [ref=e1168]: 待学习
+        - generic [ref=e1169]:
+          - heading "学习里程碑" [level=3] [ref=e1170]
+          - generic [ref=e1171]:
+            - generic [ref=e1172]:
+              - img [ref=e1174]
+              - generic [ref=e1176]:
+                - generic [ref=e1177]: 机器学习入门
+                - generic [ref=e1178]: 2026-05-15
+            - generic [ref=e1179]:
+              - img [ref=e1181]
+              - generic [ref=e1183]:
+                - generic [ref=e1184]: 神经网络实践
+                - generic [ref=e1185]: 2026-05-20
+            - generic [ref=e1186]:
+              - img [ref=e1188]
+              - generic [ref=e1191]:
+                - generic [ref=e1192]: 深度学习进阶
+                - generic [ref=e1193]: 预计 2026-06-10

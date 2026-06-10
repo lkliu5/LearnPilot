@@ -1,0 +1,535 @@
+/* Agent Workflow Page Styles */
+
+.workflow-page {
+  padding: var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header */
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-xl);
+  margin-bottom: var(--space-lg);
+}
+
+.workflow-header__title h1,
+.workflow-header__title .title-blur {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: var(--space-xs);
+}
+
+.workflow-header__title p {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.workflow-header__controls {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.workflow-btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.workflow-btn--primary {
+  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
+  color: white;
+  border: none;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+}
+
+.workflow-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4), 0 0 20px rgba(37, 99, 235, 0.2);
+}
+
+.workflow-btn--secondary {
+  background: transparent;
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+}
+
+.workflow-btn--secondary:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+}
+
+.workflow-btn--disabled {
+  background: var(--gray-300);
+  color: var(--gray-500);
+  border: none;
+  cursor: not-allowed;
+}
+
+/* Phase Indicator */
+.workflow-phase {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workflow-phase__steps {
+  display: flex;
+  gap: var(--space-xl);
+}
+
+.workflow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.workflow-step__marker {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  transition: all var(--transition-normal);
+}
+
+.workflow-step__marker svg {
+  width: 16px;
+  height: 16px;
+  color: white;
+}
+
+.workflow-step--active .workflow-step__marker {
+  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.45);
+}
+
+.workflow-step--completed .workflow-step__marker {
+  background: var(--success-400);
+  border-color: var(--success-400);
+}
+
+.workflow-step__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-500);
+}
+
+.workflow-step--active .workflow-step__label {
+  color: var(--primary-600);
+}
+
+.workflow-step--completed .workflow-step__label {
+  color: var(--success-500);
+}
+
+.workflow-phase__current {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-800);
+}
+
+/* Content Layout */
+.workflow-content {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-lg);
+  min-height: 600px;
+}
+
+/* Visualization */
+.workflow-visualization {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: var(--space-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.agent-network {
+  position: relative;
+  height: 100%;
+  min-height: 500px;
+}
+
+/* Agent Nodes */
+.agent-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-glass);
+  transition: all var(--transition-fast);
+}
+
+.agent-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glass-hover);
+}
+
+.agent-node--orchestrator {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, var(--primary-50), white);
+  border-color: var(--primary-200);
+  z-index: 10;
+}
+
+.agent-node--orchestrator:hover {
+  transform: translate(-50%, -50%) translateY(-2px);
+}
+
+.agent-node--diagnosis {
+  top: 15%;
+  left: 15%;
+}
+
+.agent-node--generation {
+  top: 15%;
+  right: 15%;
+}
+
+.agent-node--critic {
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.agent-node--critic:hover {
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.agent-node--rag {
+  right: 10%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(135deg, var(--purple-50), rgba(255, 255, 255, 0.8));
+  border-color: var(--purple-200);
+}
+
+.agent-node--rag:hover {
+  transform: translateY(-50%) translateY(-2px);
+}
+
+/* Node Status States */
+.agent-node--running {
+  border-color: var(--primary-400);
+  box-shadow: 0 0 24px rgba(37, 99, 235, 0.22);
+}
+
+/* 运行态 - 外圈 ping 波纹 */
+.agent-node--running::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--primary-400);
+  opacity: 0;
+  animation: node-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes node-ping {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+
+.agent-node--success {
+  border-color: var(--success-400);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.15);
+}
+
+.agent-node--error {
+  border-color: #f87171;
+}
+
+/* Node Inner Elements */
+.agent-node__icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  border-radius: var(--radius-md);
+  color: var(--gray-600);
+}
+
+.agent-node--orchestrator .agent-node__icon {
+  background: var(--primary-100);
+  color: var(--primary-600);
+}
+
+.agent-node--rag .agent-node__icon {
+  background: var(--purple-100);
+  color: var(--purple-600);
+}
+
+.agent-node__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.agent-node__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+}
+
+.agent-node__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.agent-node__emoji {
+  font-size: 1.25rem;
+}
+
+.agent-node__name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  text-align: center;
+}
+
+.agent-node__action {
+  font-size: 0.6875rem;
+  color: var(--gray-500);
+  text-align: center;
+  max-width: 120px;
+}
+
+/* Status Dot */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+}
+
+.status-dot--idle {
+  background: var(--gray-400);
+}
+
+.status-dot--running {
+  background: var(--primary-500);
+  animation: pulse 1.5s infinite;
+}
+
+.status-dot--success {
+  background: var(--success-400);
+}
+
+.status-dot--error {
+  background: #f87171;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Network Lines */
+.network-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.network-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* 连接线 - 蓝紫渐变曲线 + 发光（坐标由真实节点测量）*/
+.network-line {
+  stroke: url(#flow-grad);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0.4;
+  filter: url(#line-glow);
+  transition: opacity var(--transition-normal);
+}
+
+/* 运行态 - 连线提亮，由 GSAP MotionPath 粒子承载流动感 */
+.network-svg--active .network-line {
+  opacity: 0.85;
+}
+
+/* GSAP MotionPath 消息粒子 */
+.msg-dot {
+  fill: #ffffff;
+  opacity: 0;
+  filter: drop-shadow(0 0 5px #60a5fa) drop-shadow(0 0 9px #818cf8);
+}
+
+/* Message Particle Animation */
+.message-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--primary-500);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 10px var(--primary-400);
+}
+
+.message-particle--rag {
+  background: var(--purple-500);
+  box-shadow: 0 0 10px var(--purple-400);
+}
+
+/* Sidebar */
+.workflow-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.sidebar-section {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: var(--space-md);
+}
+
+.sidebar-section h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: var(--space-sm);
+}
+
+.agent-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Message Log */
+.message-log {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.message-log-empty {
+  text-align: center;
+  padding: var(--space-md);
+  color: var(--gray-400);
+  font-size: 0.8125rem;
+}
+
+.message-item {
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  font-size: 0.75rem;
+}
+
+.message-item--request {
+  border-left: 2px solid var(--primary-400);
+}
+
+.message-item--response {
+  border-left: 2px solid var(--success-400);
+}
+
+.message-item--error {
+  border-left: 2px solid #f87171;
+}
+
+.message-item__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: 2px;
+}
+
+.message-item__from,
+.message-item__to {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.message-item__arrow {
+  width: 12px;
+  height: 12px;
+  color: var(--gray-400);
+}
+
+.message-item__content {
+  color: var(--gray-600);
+}
+
+/* Workflow Stats */
+.workflow-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+}
+
+.workflow-stat {
+  text-align: center;
+  padding: var(--space-sm);
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+}
+
+.workflow-stat__value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, var(--primary-600), var(--purple-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.workflow-stat__label {
+  display: block;
+  font-size: 0.625rem;
+  color: var(--gray-500);
+  margin-top: 2px;
+}

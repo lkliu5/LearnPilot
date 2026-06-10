@@ -1,0 +1,326 @@
+- generic [ref=e3]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - img [ref=e12]
+        - generic [ref=e21]:
+          - generic [ref=e22]: 智学中枢
+          - generic [ref=e23]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+    - navigation [ref=e27]:
+      - button "学情概览 学习状态总览" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - generic [ref=e35]:
+          - generic [ref=e36]: 学情概览
+          - generic [ref=e37]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e40] [cursor=pointer]:
+        - img [ref=e42]
+        - generic [ref=e45]:
+          - generic [ref=e46]: 画像诊断
+          - generic [ref=e47]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e48] [cursor=pointer]:
+        - img [ref=e50]
+        - generic [ref=e54]:
+          - generic [ref=e55]: 学习路径
+          - generic [ref=e56]: 个性化导航
+      - button "Agent工作流 AI协同可视化" [ref=e57] [cursor=pointer]:
+        - img [ref=e59]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Agent工作流
+          - generic [ref=e66]: AI协同可视化
+      - generic [ref=e67]:
+        - img [ref=e69]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - text: 知识图谱
+            - generic [ref=e77]: Beta
+          - generic [ref=e78]: 可视化拓扑
+    - generic [ref=e79] [cursor=pointer]:
+      - generic [ref=e81]: 学
+      - generic [ref=e83]:
+        - generic [ref=e84]: 学习者_001
+        - generic [ref=e85]: 中级 · AI领域
+      - img [ref=e86]
+  - main [ref=e88]:
+    - generic [ref=e90]:
+      - generic [ref=e91]:
+        - generic [ref=e92]:
+          - heading "你好，学习者_001 👋" [level=2] [ref=e93]
+          - paragraph [ref=e94]:
+            - text: 您的AI学习旅程已开启，当前处于
+            - strong [ref=e95]: 中级
+            - text: 水平
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - img [ref=e99]
+            - generic [ref=e107]:
+              - generic [ref=e108]: "72.5"
+              - generic [ref=e109]: 综合能力评分
+          - generic [ref=e110]:
+            - generic [ref=e111]: 超过了 68% 的同级学习者
+            - img [ref=e112]
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - img [ref=e119]
+            - img [ref=e121]
+          - generic [ref=e124]:
+            - generic [ref=e125]: 65%
+            - generic [ref=e126]: 知识图谱覆盖
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - img [ref=e130]
+            - img [ref=e132]
+          - generic [ref=e135]:
+            - generic [ref=e136]: "3"
+            - generic [ref=e137]: 优势知识点
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - img [ref=e141]
+            - img [ref=e144]
+          - generic [ref=e147]:
+            - generic [ref=e148]: "3"
+            - generic [ref=e149]: 知识盲区
+        - generic [ref=e150]:
+          - generic [ref=e151]:
+            - img [ref=e153]
+            - img [ref=e156]
+          - generic [ref=e159]:
+            - generic [ref=e160]: "12"
+            - generic [ref=e161]: 已学资源
+      - generic [ref=e162]:
+        - generic [ref=e164]:
+          - heading "知识掌握雷达图" [level=3] [ref=e165]
+          - generic [ref=e166]: 实时更新
+        - generic [ref=e171]:
+          - heading "能力分析" [level=3] [ref=e173]
+          - generic [ref=e176]:
+            - generic [ref=e177]:
+              - generic [ref=e178]: 优势领域
+              - generic [ref=e180]:
+                - generic [ref=e181]: 数据预处理
+                - generic [ref=e182]: 特征工程
+                - generic [ref=e183]: 模型评估
+            - generic [ref=e184]:
+              - generic [ref=e185]: 待提升领域
+              - generic [ref=e187]:
+                - generic [ref=e188]: Transformer架构
+                - generic [ref=e189]: 注意力机制
+                - generic [ref=e190]: 模型优化
+        - generic [ref=e209]:
+          - generic [ref=e210]:
+            - heading "推荐学习路径" [level=3] [ref=e211]
+            - button "查看全部 →" [ref=e212] [cursor=pointer]
+          - generic [ref=e214]:
+            - generic [ref=e215] [cursor=pointer]:
+              - generic [ref=e217]: "1"
+              - generic [ref=e219]:
+                - generic [ref=e220]:
+                  - heading "神经网络基础" [level=4] [ref=e221]
+                  - generic [ref=e222]: 初级
+                - generic [ref=e224]:
+                  - img [ref=e225]
+                  - text: 已完成
+                - button "复习巩固" [ref=e227]
+            - generic [ref=e228] [cursor=pointer]:
+              - generic [ref=e230]: "2"
+              - generic [ref=e232]:
+                - generic [ref=e233]:
+                  - heading "注意力机制原理" [level=4] [ref=e234]
+                  - generic [ref=e235]: 中级
+                - generic [ref=e237]:
+                  - img [ref=e238]
+                  - text: 进行中 45%
+                - button "继续学习" [ref=e244]
+            - generic [ref=e245] [cursor=pointer]:
+              - generic [ref=e247]: "3"
+              - generic [ref=e248]:
+                - generic [ref=e249]:
+                  - heading "Transformer架构详解" [level=4] [ref=e250]
+                  - generic [ref=e251]: 高级
+                - generic [ref=e253]: 待学习
+                - button "开始学习" [ref=e254]
+        - generic [ref=e255]:
+          - heading "Agent状态" [level=3] [ref=e257]
+          - generic [ref=e259]:
+            - generic [ref=e260] [cursor=pointer]:
+              - generic [ref=e262]:
+                - generic [ref=e263]: 学情诊断Agent
+                - generic [ref=e264]: 画像生成完成
+              - generic [ref=e265]: 待命
+            - generic [ref=e266] [cursor=pointer]:
+              - generic [ref=e268]:
+                - generic [ref=e269]: 领域知识生成Agent
+                - generic [ref=e270]: 资源生成完成
+              - generic [ref=e271]: 待命
+            - generic [ref=e272] [cursor=pointer]:
+              - generic [ref=e274]:
+                - generic [ref=e275]: 内容审核校验Agent
+                - generic [ref=e276]: 校验通过
+              - generic [ref=e277]: 待命
+      - generic [ref=e278]:
+        - generic [ref=e279]:
+          - heading "设计系统" [level=3] [ref=e280]
+          - generic [ref=e281]: Design System
+        - generic [ref=e283]:
+          - generic [ref=e284]:
+            - heading "色彩系统" [level=4] [ref=e285]
+            - generic [ref=e286]:
+              - generic [ref=e287]:
+                - generic [ref=e288]: 蓝色系
+                - generic [ref=e289]:
+                  - 'generic "50: #eff6ff" [ref=e290]':
+                    - generic [ref=e292]: "50"
+                  - 'generic "100: #dbeafe" [ref=e293]':
+                    - generic [ref=e295]: "100"
+                  - 'generic "200: #bfdbfe" [ref=e296]':
+                    - generic [ref=e298]: "200"
+                  - 'generic "300: #93c5fd" [ref=e299]':
+                    - generic [ref=e301]: "300"
+                  - 'generic "400: #60a5fa" [ref=e302]':
+                    - generic [ref=e304]: "400"
+                  - 'generic "500: #2563eb" [ref=e305]':
+                    - generic [ref=e307]: "500"
+                  - 'generic "600: #1d4ed8" [ref=e308]':
+                    - generic [ref=e310]: "600"
+                  - 'generic "700: #1e40af" [ref=e311]':
+                    - generic [ref=e313]: "700"
+              - generic [ref=e314]:
+                - generic [ref=e315]: 绿色系
+                - generic [ref=e316]:
+                  - 'generic "50: #ecfdf5" [ref=e317]':
+                    - generic [ref=e319]: "50"
+                  - 'generic "100: #d1fae5" [ref=e320]':
+                    - generic [ref=e322]: "100"
+                  - 'generic "200: #a7f3d0" [ref=e323]':
+                    - generic [ref=e325]: "200"
+                  - 'generic "300: #6ee7b7" [ref=e326]':
+                    - generic [ref=e328]: "300"
+                  - 'generic "400: #34d399" [ref=e329]':
+                    - generic [ref=e331]: "400"
+                  - 'generic "500: #10b981" [ref=e332]':
+                    - generic [ref=e334]: "500"
+                  - 'generic "600: #059669" [ref=e335]':
+                    - generic [ref=e337]: "600"
+                  - 'generic "700: #047857" [ref=e338]':
+                    - generic [ref=e340]: "700"
+              - generic [ref=e341]:
+                - generic [ref=e342]: 琥珀色系
+                - generic [ref=e343]:
+                  - 'generic "50: #fffbeb" [ref=e344]':
+                    - generic [ref=e346]: "50"
+                  - 'generic "100: #fef3c7" [ref=e347]':
+                    - generic [ref=e349]: "100"
+                  - 'generic "200: #fde68a" [ref=e350]':
+                    - generic [ref=e352]: "200"
+                  - 'generic "300: #fcd34d" [ref=e353]':
+                    - generic [ref=e355]: "300"
+                  - 'generic "400: #fbbf24" [ref=e356]':
+                    - generic [ref=e358]: "400"
+                  - 'generic "500: #f59e0b" [ref=e359]':
+                    - generic [ref=e361]: "500"
+                  - 'generic "600: #d97706" [ref=e362]':
+                    - generic [ref=e364]: "600"
+                  - 'generic "700: #b45309" [ref=e365]':
+                    - generic [ref=e367]: "700"
+              - generic [ref=e368]:
+                - generic [ref=e369]: 灰色系
+                - generic [ref=e370]:
+                  - 'generic "50: #f8fafc" [ref=e371]':
+                    - generic [ref=e373]: "50"
+                  - 'generic "100: #f1f5f9" [ref=e374]':
+                    - generic [ref=e376]: "100"
+                  - 'generic "200: #e2e8f0" [ref=e377]':
+                    - generic [ref=e379]: "200"
+                  - 'generic "300: #cbd5e1" [ref=e380]':
+                    - generic [ref=e382]: "300"
+                  - 'generic "400: #94a3b8" [ref=e383]':
+                    - generic [ref=e385]: "400"
+                  - 'generic "500: #64748b" [ref=e386]':
+                    - generic [ref=e388]: "500"
+                  - 'generic "600: #475569" [ref=e389]':
+                    - generic [ref=e391]: "600"
+                  - 'generic "700: #334155" [ref=e392]':
+                    - generic [ref=e394]: "700"
+              - generic [ref=e395]:
+                - generic [ref=e396]: 紫色系
+                - generic [ref=e397]:
+                  - 'generic "50: #f5f3ff" [ref=e398]':
+                    - generic [ref=e400]: "50"
+                  - 'generic "100: #ede9fe" [ref=e401]':
+                    - generic [ref=e403]: "100"
+                  - 'generic "200: #ddd6fe" [ref=e404]':
+                    - generic [ref=e406]: "200"
+                  - 'generic "300: #c4b5fd" [ref=e407]':
+                    - generic [ref=e409]: "300"
+                  - 'generic "400: #a78bfa" [ref=e410]':
+                    - generic [ref=e412]: "400"
+                  - 'generic "500: #7c3aed" [ref=e413]':
+                    - generic [ref=e415]: "500"
+                  - 'generic "600: #6d28d9" [ref=e416]':
+                    - generic [ref=e418]: "600"
+          - generic [ref=e419]:
+            - heading "排版规范" [level=4] [ref=e420]
+            - generic [ref=e421]:
+              - generic [ref=e422]:
+                - generic [ref=e423]: Aa
+                - generic [ref=e424]:
+                  - generic [ref=e425]: text-3xl
+                  - generic [ref=e426]: 32px / 700
+              - generic [ref=e427]:
+                - generic [ref=e428]: Aa
+                - generic [ref=e429]:
+                  - generic [ref=e430]: text-2xl
+                  - generic [ref=e431]: 24px / 700
+              - generic [ref=e432]:
+                - generic [ref=e433]: Aa
+                - generic [ref=e434]:
+                  - generic [ref=e435]: text-xl
+                  - generic [ref=e436]: 20px / 600
+              - generic [ref=e437]:
+                - generic [ref=e438]: Aa
+                - generic [ref=e439]:
+                  - generic [ref=e440]: text-lg
+                  - generic [ref=e441]: 18px / 600
+              - generic [ref=e442]:
+                - generic [ref=e443]: Aa
+                - generic [ref=e444]:
+                  - generic [ref=e445]: text-base
+                  - generic [ref=e446]: 16px / 500
+              - generic [ref=e447]:
+                - generic [ref=e448]: Aa
+                - generic [ref=e449]:
+                  - generic [ref=e450]: text-sm
+                  - generic [ref=e451]: 14px / 500
+              - generic [ref=e452]:
+                - generic [ref=e453]: Aa
+                - generic [ref=e454]:
+                  - generic [ref=e455]: text-xs
+                  - generic [ref=e456]: 12px / 500
+          - generic [ref=e457]:
+            - heading "组件示例" [level=4] [ref=e458]
+            - generic [ref=e459]:
+              - generic [ref=e460]:
+                - generic [ref=e461]: Glass Card
+                - generic [ref=e462]:
+                  - generic [ref=e463]: ✦
+                  - generic [ref=e464]:
+                    - generic [ref=e465]: 知识模块
+                    - generic [ref=e466]: 玻璃拟态卡片效果
+              - generic [ref=e467]:
+                - generic [ref=e468]: Progress Bar
+                - generic [ref=e472]: 72%
+              - generic [ref=e473]:
+                - generic [ref=e474]: Buttons
+                - generic [ref=e475]:
+                  - button "主要按钮" [ref=e476] [cursor=pointer]
+                  - button "次要按钮" [ref=e477] [cursor=pointer]
+              - generic [ref=e478]:
+                - generic [ref=e479]: Badges
+                - generic [ref=e480]:
+                  - generic [ref=e481]: 入门
+                  - generic [ref=e482]: 初级
+                  - generic [ref=e483]: 中级
+                  - generic [ref=e484]: 高级
+                  - generic [ref=e485]: 精通

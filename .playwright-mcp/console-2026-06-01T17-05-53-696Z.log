@@ -1,0 +1,15 @@
+[     780ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=a5bf6e6c:21550
+[  146435ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:746
+[  149952ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:721
+[29473670ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
+[29480565ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3000/:0
+[29484589ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=a5bf6e6c:21550
+[30393780ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
+[30397837ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=a5bf6e6c:21550
+[30682048ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
+[30684086ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=a5bf6e6c:21550
+[30692453ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:746
+[30693795ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:721
+[30933901ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=a5bf6e6c:21550
+[30949346ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:746
+[30953262ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/node_modules/.vite/deps/chunk-RYENMGDB.js?v=a5bf6e6c:721

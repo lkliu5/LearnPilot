@@ -1,0 +1,161 @@
+[     239ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:21550
+[  448447ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:21550
+[  715116ms] [ERROR] Warning: React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+%s Dashboard 1. useState                   useState
+2. useEffect                  useEffect
+3. useRef                     useRef
+4. useRef                     useRef
+5. useRef                     useRef
+6. useRef                     useRef
+7. useLayoutEffect            useRef
+ 
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250693860:41:27)
+    at div
+    at MotionComponent (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:945:40)
+    at PresenceChild (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:121:24)
+    at AnimatePresence (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:210:26)
+    at main
+    at div
+    at App (http://localhost:3000/src/App.tsx?t=1780249940739:29:41) @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:520
+[  715118ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11678:21)
+    at updateEffectImpl (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12074:22)
+    at updateLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12118:18)
+    at Object.useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12718:22)
+    at useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=3084f4cc:1086:29)
+    at useGSAP (http://localhost:3000/node_modules/.vite/deps/@gsap_react.js?v=3084f4cc:35:3)
+    at useCountUp (http://localhost:3000/src/hooks/useCountUp.ts?t=1780250693860:7:3)
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250693860:61:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at updateFunctionComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14582:28)
+[  715119ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11678:21)
+    at updateEffectImpl (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12074:22)
+    at updateLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12118:18)
+    at Object.useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12718:22)
+    at useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=3084f4cc:1086:29)
+    at useGSAP (http://localhost:3000/node_modules/.vite/deps/@gsap_react.js?v=3084f4cc:35:3)
+    at useCountUp (http://localhost:3000/src/hooks/useCountUp.ts?t=1780250693860:7:3)
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250693860:61:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at updateFunctionComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14582:28)
+[  715134ms] [ERROR] The above error occurred in the <Dashboard> component:
+
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250693860:41:27)
+    at div
+    at MotionComponent (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:945:40)
+    at PresenceChild (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:121:24)
+    at AnimatePresence (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:210:26)
+    at main
+    at div
+    at App (http://localhost:3000/src/App.tsx?t=1780249940739:29:41)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14031
+[  715134ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11678:21)
+    at updateEffectImpl (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12074:22)
+    at updateLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12118:18)
+    at Object.useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:12718:22)
+    at useLayoutEffect (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=3084f4cc:1086:29)
+    at useGSAP (http://localhost:3000/node_modules/.vite/deps/@gsap_react.js?v=3084f4cc:35:3)
+    at useCountUp (http://localhost:3000/src/hooks/useCountUp.ts?t=1780250693860:7:3)
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250693860:61:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at updateFunctionComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14582:28)
+[  783719ms] ReferenceError: useCountUp is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250762369:60:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+[  783729ms] ReferenceError: useCountUp is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250762369:60:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+[  783729ms] [ERROR] The above error occurred in the <Dashboard> component:
+
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250762369:40:27)
+    at div
+    at MotionComponent (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:945:40)
+    at PresenceChild (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:121:24)
+    at AnimatePresence (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:210:26)
+    at main
+    at div
+    at App (http://localhost:3000/src/App.tsx?t=1780249940739:29:41)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14031
+[  783731ms] ReferenceError: useCountUp is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250762369:60:20)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19753:22)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19116:15)
+    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:18736:28)
+    at performSyncWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:18879:28)
+[  815703ms] ReferenceError: scoreRef is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250794384:314:90)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+[  815710ms] ReferenceError: scoreRef is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250794384:314:90)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+[  815710ms] [ERROR] The above error occurred in the <Dashboard> component:
+
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250794384:40:27)
+    at div
+    at MotionComponent (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:945:40)
+    at PresenceChild (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:121:24)
+    at AnimatePresence (http://localhost:3000/node_modules/.vite/deps/framer-motion.js?v=3084f4cc:210:26)
+    at main
+    at div
+    at App (http://localhost:3000/src/App.tsx?t=1780249940739:29:41)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14031
+[  815711ms] ReferenceError: scoreRef is not defined
+    at Dashboard (http://localhost:3000/src/pages/Dashboard.tsx?t=1780250794384:314:90)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:15914:22)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19753:22)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19137:13)
+    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:19116:15)
+    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:18736:28)
+    at performSyncWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=3084f4cc:18879:28)

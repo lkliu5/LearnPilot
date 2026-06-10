@@ -1,0 +1,463 @@
+import { useState, lazy, Suspense } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import MarkdownRenderer from '../components/MarkdownRenderer'
+import QuizRenderer, { type QuizQuestion } from '../components/QuizRenderer'
+import SourceTrace from '../components/SourceTrace'
+import WeakPointReinforce from '../components/WeakPointReinforce'
+import PageHeader from '../components/PageHeader'
+import { RevealGroup, RevealItem } from '../components/Reveal'
+import { useMastery, STATUS_LABEL } from '../store/mastery'
+import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import type { PageType } from '../App'
+import './LearningResource.css'
+
+/* 重型多模态组件按需懒加载（打开对应 Tab 才加载，保持页面轻量）*/
+const MindMap = lazy(() => import('../components/MindMap'))
+const CodeSandbox = lazy(() => import('../components/CodeSandbox'))
+const MermaidDiagram = lazy(() => import('../components/MermaidDiagram'))
+const VideoLecture = lazy(() => import('../components/VideoLecture'))
+const ResourceAggregator = lazy(() => import('../components/ResourceAggregator'))
+const SocraticTutor = lazy(() => import('../components/SocraticTutor'))
+
+/* 模拟"领域知识生成 Agent"为当前学习者生成的个性化讲义（基于画像，难度自适应）*/
+const lectureContent = `# 神经网络基础
+
+> 本讲义由**领域知识生成 Agent**基于你的学情画像生成，难度已适配为「初级」，并经**内容审核 Agent** RAG 交叉校验（幻觉率 < 5%）。
+
+## 一、什么是神经网络
+
+神经网络（Neural Network）是一种受生物神经系统启发的计算模型。它由大量**神经元（Neuron）**相互连接构成，通过调整连接权重来学习数据中的规律。
+
+一个神经元完成三步运算：
+
+1. 对输入做**加权求和**
+2. 加上**偏置（bias）**
+3. 经过**激活函数**输出
+
+## 二、前向传播
+
+前向传播是数据从输入层流向输出层的过程。对单个神经元：
+
+\`\`\`python
+import numpy as np
+
+def neuron(inputs, weights, bias):
+    # 1. 加权求和 + 偏置
+    z = np.dot(inputs, weights) + bias
+    # 2. ReLU 激活
+    return np.maximum(0, z)
+
+x = np.array([0.5, 0.8, 0.2])
+w = np.array([0.4, 0.7, 0.1])
+print(neuron(x, w, bias=0.1))  # -> 0.88
+\`\`\`
+
+## 三、常见激活函数
+
+- **ReLU**：\`max(0, x)\`，计算快、缓解梯度消失，最常用
+- **Sigmoid**：将输出压缩到 (0, 1)，适合二分类输出层
+- **Tanh**：输出范围 (-1, 1)，零均值，收敛通常快于 Sigmoid
+
+## 四、反向传播与学习
+
+网络通过**反向传播（Backpropagation）**计算损失对每个权重的梯度，再用**梯度下降**更新权重：
+
+\`w ← w − η · ∂L/∂w\`
+
+其中 \`η\` 是学习率（learning rate）。多轮迭代后，网络逐步逼近最优参数。
+
+> **小结**：神经元 → 前向传播 → 激活 → 反向传播更新权重，构成了神经网络学习的完整闭环。下一步建议学习「深度学习原理」。`
+
+/* 难度自适应：同一知识点的「入门 / 初级 / 高级」三档讲义（演示 Agent 实时再生成）*/
+const lectureByLevel: Record<string, string> = {
+  入门: `# 神经网络基础（入门版）
+
+> 本讲义由**领域知识生成 Agent**按「入门」难度为你重新生成——用最直白的比喻，少公式。
+
+## 一、把神经元想成一个「打分员」
+
+想象一个评委给选手打分：他听到几个信息（输入），每个信息**重要程度不同**（权重），把它们综合起来给个分数，分数太低就当作 0（激活）。这就是一个**神经元**。
+
+## 二、三步走
+
+1. 把每个输入 × 它的重要程度，加起来（**加权求和**）
+2. 再加一个「基础分」（**偏置**）
+3. 太小的就归零，留下有用的（**激活函数 ReLU**）
+
+## 三、很多神经元连起来
+
+一个评委不够，就请很多评委分层投票——这就是**神经网络**。它通过不断调整「重要程度」，越打越准。
+
+> **一句话**：神经网络 = 一群会自我调整的打分员。下一步可以看「初级版」了解具体计算。`,
+
+  初级: lectureContent,
+
+  高级: `# 神经网络基础（高级版）
+
+> 本讲义由**领域知识生成 Agent**按「高级」难度生成——侧重数学形式化与工程细节。
+
+## 一、神经元的数学形式
+
+第 \`l\` 层第 \`j\` 个神经元：
+
+\`\`\`
+z_j^(l) = Σ_i w_ji^(l) · a_i^(l-1) + b_j^(l)
+a_j^(l) = σ(z_j^(l))
+\`\`\`
+
+其中 \`σ\` 为激活函数，\`a^(0) = x\` 为输入。
+
+## 二、前向传播（向量化）
+
+整层以矩阵形式一次计算，效率远高于逐神经元：
+
+\`\`\`python
+Z = W @ A_prev + b      # W:(n_l, n_{l-1})
+A = relu(Z)
+\`\`\`
+
+## 三、反向传播与梯度
+
+链式法则逐层回传误差 \`δ\`：
+
+\`\`\`
+δ^(L) = ∇_a L ⊙ σ'(z^(L))
+δ^(l) = (W^(l+1)ᵀ δ^(l+1)) ⊙ σ'(z^(l))
+∂L/∂W^(l) = δ^(l) (a^(l-1))ᵀ
+\`\`\`
+
+## 四、工程要点
+
+- **初始化**：He 初始化配 ReLU，避免梯度消失/爆炸
+- **优化器**：Adam 自适应学习率，收敛快于朴素 SGD
+- **正则化**：Dropout、BatchNorm、权重衰减抑制过拟合
+
+> **小结**：掌握向量化前向 + 链式反向 + 初始化/优化/正则三件套，即可手写一个可训练的 MLP。下一步建议「深度学习原理 / CNN」。`,
+}
+
+const LEVELS = ['入门', '初级', '高级'] as const
+
+const quizQuestions: QuizQuestion[] = [
+  {
+    question_id: 'q1',
+    question_type: 'single',
+    question_text: '一个神经元的运算顺序是？',
+    options: [
+      { option_id: 'a', option_text: '激活函数 → 加权求和 → 加偏置' },
+      { option_id: 'b', option_text: '加权求和 → 加偏置 → 激活函数' },
+      { option_id: 'c', option_text: '加偏置 → 激活函数 → 加权求和' },
+    ],
+    correct_answer: 'b',
+    explanation: '神经元先对输入加权求和，再加上偏置，最后通过激活函数得到输出。',
+  },
+  {
+    question_id: 'q2',
+    question_type: 'multiple',
+    question_text: '以下哪些是常见的激活函数？（多选）',
+    options: [
+      { option_id: 'a', option_text: 'ReLU' },
+      { option_id: 'b', option_text: 'Sigmoid' },
+      { option_id: 'c', option_text: 'Gradient' },
+      { option_id: 'd', option_text: 'Tanh' },
+    ],
+    correct_answer: ['a', 'b', 'd'],
+    explanation: 'ReLU、Sigmoid、Tanh 都是常见激活函数；Gradient（梯度）是反向传播中的概念，不是激活函数。',
+  },
+  {
+    question_id: 'q3',
+    question_type: 'boolean',
+    question_text: 'ReLU 激活函数有助于缓解梯度消失问题。',
+    options: [
+      { option_id: 'true', option_text: '正确' },
+      { option_id: 'false', option_text: '错误' },
+    ],
+    correct_answer: 'true',
+    explanation: 'ReLU 在正区间梯度恒为 1，相比 Sigmoid 能有效缓解深层网络的梯度消失问题。',
+  },
+]
+
+/* 思维导图大纲（由生成 Agent 从讲义结构化得到）*/
+const mindmapMarkdown = `# 神经网络基础
+## 神经元
+### 加权求和 Σ w·x
+### 加偏置 +b
+### 激活函数
+#### ReLU
+#### Sigmoid
+#### Tanh
+## 前向传播
+### 输入层 → 隐藏层 → 输出层
+## 反向传播
+### 计算梯度
+### 梯度下降
+### 学习率 η
+## 进阶方向
+### CNN
+### RNN
+### Transformer
+`
+
+/* 知识图解（神经元前向 / 反向流程）*/
+const mermaidChart = `flowchart LR
+  X["输入 x"] --> S(["加权求和<br/>Σ w·x"])
+  W["权重 w"] --> S
+  S --> B(["加偏置<br/>+ b"])
+  B --> A{{"激活函数<br/>ReLU"}}
+  A --> O["输出 a"]
+  O -. 反向传播更新 .-> W
+`
+
+/* Tab 按语义分三组：学习内容 / 练习检验 / 辅助拓展 */
+const TAB_GROUPS = [
+  {
+    name: '学习内容',
+    tone: 'primary',
+    tabs: [
+      { id: 'lecture', emoji: '📖', label: '定制讲义' },
+      { id: 'video', emoji: '🎬', label: '讲解视频' },
+      { id: 'mindmap', emoji: '🧠', label: '思维导图' },
+      { id: 'diagram', emoji: '📊', label: '知识图解' },
+    ],
+  },
+  {
+    name: '练习检验',
+    tone: 'accent',
+    tabs: [
+      { id: 'code', emoji: '💻', label: '代码实操' },
+      { id: 'quiz', emoji: '✍️', label: '分阶测试' },
+    ],
+  },
+  {
+    name: '辅助拓展',
+    tone: 'muted',
+    tabs: [
+      { id: 'external', emoji: '🔗', label: '资源推荐' },
+      { id: 'tutor', emoji: '💬', label: '导学对话' },
+    ],
+  },
+] as const
+
+type Tab = (typeof TAB_GROUPS)[number]['tabs'][number]['id']
+
+const Loading = () => <div className="resource-loading">资源加载中…</div>
+
+export default function LearningResource({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
+  const [tab, setTab] = useState<Tab>('lecture')
+  const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
+  const [regenerating, setRegenerating] = useState(false)
+  const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
+  const [trustOpen, setTrustOpen] = useState(false)
+
+  /* 知识点闭环状态：完成以"通过分阶测试(≥60%)"为唯一判定 */
+  const kpStatus = useMastery((s) => s.status[CURRENT_KP_ID] ?? 'learning')
+  const goCheck = useMastery((s) => s.goCheck)
+  const markPassed = useMastery((s) => s.markPassed)
+  const kpName = kpById(CURRENT_KP_ID)?.name ?? '当前知识点'
+
+  const handleQuizResult = (wrong: QuizQuestion[], submitted?: boolean) => {
+    setWrongQs(wrong)
+    if (submitted && (quizQuestions.length - wrong.length) / quizQuestions.length >= 0.6) {
+      markPassed(CURRENT_KP_ID)
+    }
+  }
+
+  /* 难度自适应：切换难度 → 模拟 Agent 实时再生成讲义 */
+  const changeLevel = (lv: (typeof LEVELS)[number]) => {
+    if (lv === level || regenerating) return
+    setRegenerating(true)
+    window.setTimeout(() => {
+      setLevel(lv)
+      setRegenerating(false)
+    }, 1100)
+  }
+
+  return (
+    <div className="resource-page">
+      {/* 统一标题区：锚条 + 高亮 + 状态徽章组 */}
+      <PageHeader
+        title="个性化学习资源"
+        highlight="学习资源"
+        subtitle="AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应"
+        badges={[
+          { label: '当前知识点', value: kpName },
+          {
+            label: '状态',
+            value: STATUS_LABEL[kpStatus],
+            tone: kpStatus === 'passed' ? 'safe' : kpStatus === 'pending-check' ? 'accent' : 'default',
+          },
+          { label: '适配难度', value: level, tone: 'accent' },
+          { label: 'RAG 引用文档', value: 12 },
+        ]}
+        actions={
+          <button
+            type="button"
+            className={`resource-trust ${trustOpen ? 'resource-trust--open' : ''}`}
+            onClick={() => setTrustOpen((o) => !o)}
+            aria-expanded={trustOpen}
+          >
+            <svg className="resource-trust__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            <span className="resource-trust__main">
+              <span className="resource-trust__value">已校验 · 幻觉率&lt;5%</span>
+              <span className="resource-trust__label">可信度 · 点击查看机制</span>
+            </span>
+          </button>
+        }
+      />
+
+      {trustOpen && (
+        <div className="resource-trust-detail">
+          <strong>多智能体交叉校验</strong>：领域知识生成 Agent 产出内容后，由内容审核 Agent 基于 RAG 知识库逐条核对术语与事实，一旦发现幻觉即打回重生成（最多 3 轮），最终幻觉率压至 <strong>&lt; 5%</strong>，确保你看到的讲义可信、可溯源。
+        </div>
+      )}
+
+      <RevealGroup>
+      {/* Tab 切换 */}
+      <RevealItem className="resource-tabs">
+        {TAB_GROUPS.map((g) => (
+          <div className={`resource-tab-group resource-tab-group--${g.tone}`} key={g.name}>
+            <div className="resource-tab-group__head">
+              <span className="resource-tab-group__dot" />
+              <span className="resource-tab-group__label">{g.name}</span>
+            </div>
+            <div className="resource-tab-group__items">
+              {g.tabs.map((t) => (
+                <button
+                  key={t.id}
+                  className={`resource-tab ${tab === t.id ? 'resource-tab--active' : ''}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  <span className="resource-tab__emoji">{t.emoji}</span>
+                  <span className="resource-tab__text">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </RevealItem>
+
+      {/* 内容卡片 */}
+      <RevealItem className="resource-card">
+        {tab === 'lecture' && (
+          <>
+            {/* 难度自适应再生成 */}
+            <div className="level-switch">
+              <span className="level-switch__label">难度自适应：</span>
+              <div className="level-switch__seg">
+                {LEVELS.map((lv) => (
+                  <button
+                    key={lv}
+                    className={`level-switch__btn ${level === lv ? 'level-switch__btn--active' : ''}`}
+                    onClick={() => changeLevel(lv)}
+                    disabled={regenerating}
+                  >
+                    {lv}
+                  </button>
+                ))}
+              </div>
+              <span className="level-switch__hint">切换难度，AI 实时重生成讲义</span>
+            </div>
+
+            <SourceTrace />
+
+            <div className="lecture-body">
+              <MarkdownRenderer content={lectureByLevel[level]} />
+              <AnimatePresence>
+                {regenerating && (
+                  <motion.div
+                    className="lecture-regen"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="lecture-regen__orb" />
+                    <span>领域知识生成 Agent 正在按新难度重生成讲义…</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </>
+        )}
+        {tab === 'video' && (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">AI 生成的讲解视频（Remotion 渲染）+ 同步旁白，点击播放：</div>
+            <VideoLecture />
+          </Suspense>
+        )}
+        {tab === 'mindmap' && (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">AI 已将讲义结构化为知识脉络图，可缩放/拖拽：</div>
+            <MindMap markdown={mindmapMarkdown} />
+          </Suspense>
+        )}
+        {tab === 'code' && (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完左侧代码即时看结果：</div>
+            <CodeSandbox />
+          </Suspense>
+        )}
+        {tab === 'diagram' && (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">神经元前向传播 / 反向更新流程图：</div>
+            <MermaidDiagram chart={mermaidChart} />
+          </Suspense>
+        )}
+        {tab === 'external' && (
+          <Suspense fallback={<Loading />}>
+            <ResourceAggregator />
+          </Suspense>
+        )}
+        {tab === 'quiz' && (
+          <>
+            <QuizRenderer questions={quizQuestions} onSubmitResult={handleQuizResult} />
+            {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
+          </>
+        )}
+        {tab === 'tutor' && (
+          <Suspense fallback={<Loading />}>
+            <SocraticTutor />
+          </Suspense>
+        )}
+      </RevealItem>
+
+      {/* 单一主线：学（任选形态）→ 检验（分阶测试）→ 通过即掌握，唯一下一步 */}
+      <RevealItem className="flow-next">
+        <div className="flow-next__text">
+          <span className="flow-next__step">
+            {STATUS_LABEL[kpStatus]} · {kpName}
+          </span>
+          <span className="flow-next__desc">
+            {kpStatus === 'passed'
+              ? '已通过分阶测试，该知识点标记为「已掌握」，进度已同步到学习路径、知识图谱与学情概览'
+              : kpStatus === 'pending-check'
+                ? '完成下方分阶测试（答对 ≥ 60%）即可标记掌握'
+                : '任选学习形态学完后，去分阶测试检验掌握度——「完成」以通过测试为准'}
+          </span>
+        </div>
+        {kpStatus === 'passed' ? (
+          <button className="flow-next__btn" type="button" onClick={() => onNavigate?.('learning-path')}>
+            ✓ 已掌握，去学下一个 →
+          </button>
+        ) : kpStatus === 'pending-check' ? (
+          <button className="flow-next__btn" type="button" onClick={() => setTab('quiz')}>
+            去完成分阶测试 →
+          </button>
+        ) : (
+          <button
+            className="flow-next__btn"
+            type="button"
+            onClick={() => {
+              goCheck(CURRENT_KP_ID)
+              setTab('quiz')
+            }}
+          >
+            我学好了，去检验 →
+          </button>
+        )}
+      </RevealItem>
+      </RevealGroup>
+    </div>
+  )
+}

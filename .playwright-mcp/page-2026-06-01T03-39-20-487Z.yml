@@ -1,0 +1,355 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "Beta" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e12]: Beta
+      - generic [ref=e13]:
+        - link "Home" [ref=e15] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - text: Resources
+            - img [ref=e18]
+          - generic:
+            - generic:
+              - link "Templates":
+                - /url: /templates
+              - link "Figma to Website":
+                - /url: /figma-to-website
+        - link "Prompt Library" [ref=e21] [cursor=pointer]:
+          - /url: https://promptlib.talizen.com/
+        - link "Help Center" [ref=e23] [cursor=pointer]:
+          - /url: /docs
+        - link "Pricing" [ref=e25] [cursor=pointer]:
+          - /url: /pricing
+        - link "Contact" [ref=e27] [cursor=pointer]:
+          - /url: /contact
+      - link "Login in" [ref=e29] [cursor=pointer]:
+        - /url: https://talizen.com
+        - button "Login in" [ref=e30]
+  - main [ref=e31]:
+    - generic [ref=e32]:
+      - iframe [ref=e33]:
+        
+      - generic [ref=e34]:
+        - generic [ref=e36]:
+          - heading "Build visually. Ship instantly." [level=1] [ref=e37]:
+            - text: Build visually.
+            - text: Ship instantly.
+          - heading [level=1]: Build visually. Ship instantly.
+        - paragraph [ref=e39]: No code. No limits. From idea to live site in minutes.
+        - generic [ref=e41]:
+          - link "Start for Free" [ref=e42] [cursor=pointer]:
+            - /url: https://talizen.com
+          - link "Join our Discord" [ref=e43] [cursor=pointer]:
+            - /url: https://discord.gg/yU2Bs23zfT
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e51]: meshGrandent
+              - img [ref=e52]
+            - generic [ref=e54]:
+              - generic [ref=e55]: Design
+              - generic [ref=e56]: </> Code
+              - generic [ref=e57]: Preview
+            - generic [ref=e58]:
+              - img [ref=e60]
+              - img [ref=e64]
+              - button "Publish" [ref=e68]
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: Index . 1440
+              - img "Editor canvas" [ref=e72]
+            - generic [ref=e73]:
+              - generic [ref=e74]:
+                - generic [ref=e75]: Chat
+                - generic [ref=e76]: Design
+              - generic [ref=e77]:
+                - img [ref=e79]
+                - heading "Build with Talizen AI" [level=3] [ref=e84]
+                - paragraph [ref=e85]: Describe complex layouts, style adjustments, or functional components. I'll transform your ideas into reality.
+                - button "Change hero background to dark..." [ref=e86]
+                - button "Add a booking form section" [ref=e87]
+              - generic [ref=e88]:
+                - textbox "Ask me anything..." [ref=e90]
+                - generic [ref=e91]:
+                  - generic [ref=e92]: Gemini 3 Flash
+                  - img [ref=e93]
+                  - img [ref=e95]
+                  - img [ref=e98]
+    - generic [ref=e102]:
+      - generic [ref=e104]: Scroll to Explore Capabilities
+      - generic [ref=e106]:
+        - generic:
+          - generic: AI Builder
+        - generic:
+          - generic: Visual Editor
+        - generic:
+          - generic: Figma to Site
+        - generic:
+          - generic: Own Your Code
+        - generic:
+          - generic: Deploy Instantly
+        - generic:
+          - generic: 24/7 Support
+    - generic [ref=e108]:
+      - heading "Why builders choose us." [level=2] [ref=e110]
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - generic [ref=e114]:
+            - heading "One Click. Live in Seconds." [level=3] [ref=e115]
+            - paragraph [ref=e116]: Push your site live on a global edge network instantly. No servers, no config — just a URL that works.
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - generic [ref=e123]:
+                  - img [ref=e124]
+                  - generic [ref=e127]: www.yourproduct.com
+                - img [ref=e128]
+              - generic [ref=e131]:
+                - img [ref=e132]
+                - generic [ref=e135]: published 2m ago . by Merry
+            - generic [ref=e136]:
+              - button "Custom Domain" [ref=e137]:
+                - img [ref=e138]
+                - text: Custom Domain
+              - button "Publish" [ref=e139]
+        - generic [ref=e140]:
+          - generic [ref=e142]:
+            - heading "Built-in SEO & conversion." [level=3] [ref=e143]
+            - paragraph [ref=e144]: Clean structure, optimized meta, fast load times — all out of the box. Rank higher. Convert better. Ship without second-guessing.
+          - img "Built-in SEO & conversion." [ref=e148]
+        - generic [ref=e149]:
+          - generic [ref=e151]:
+            - heading "Code Is Yours. Forever." [level=3] [ref=e152]
+            - paragraph [ref=e153]: No vendor lock-in. Take your codebase wherever you want. You own every line you generate.
+          - img "Export your code anytime." [ref=e157]
+    - generic [ref=e158]:
+      - generic [ref=e160]:
+        - heading "Built with Talize" [level=2] [ref=e161]
+        - paragraph [ref=e162]: Every case is 100% AI-generated, fully functional, and ready to ship.
+      - generic: VIEW PROJECT
+      - generic [ref=e164]:
+        - generic [ref=e165]:
+          - generic [ref=e166]:
+            - img "AI Landing Page"
+          - generic [ref=e167]:
+            - generic [ref=e168]: AI Landing Page
+            - generic [ref=e169]: "[MARKETING SITE] — [INTERACTIVE]"
+        - generic [ref=e170]:
+          - generic [ref=e171]:
+            - img "particleify"
+          - generic [ref=e172]:
+            - generic [ref=e173]: particleify
+            - generic [ref=e174]: "[TOOL] — [DESIGN]"
+        - generic [ref=e175]:
+          - generic [ref=e176]:
+            - img "Personal Portfolio"
+          - generic [ref=e177]:
+            - generic [ref=e178]: Personal Portfolio
+            - generic [ref=e179]: "[Personal] — [Portfolio]"
+        - generic [ref=e180]:
+          - generic [ref=e181]:
+            - img "Merry Gradient"
+          - generic [ref=e182]:
+            - generic [ref=e183]: Merry Gradient
+            - generic [ref=e184]: "[TOOL] — [DESIGN]"
+        - generic [ref=e185]:
+          - generic [ref=e186]:
+            - img "AI Landing Page"
+          - generic [ref=e187]:
+            - generic [ref=e188]: AI Landing Page
+            - generic [ref=e189]: "[MARKETING SITE] — [INTERACTIVE]"
+        - generic [ref=e190]:
+          - generic [ref=e191]:
+            - img "particleify"
+          - generic [ref=e192]:
+            - generic [ref=e193]: particleify
+            - generic [ref=e194]: "[TOOL] — [DESIGN]"
+        - generic [ref=e195]:
+          - generic [ref=e196]:
+            - img "Personal Portfolio"
+          - generic [ref=e197]:
+            - generic [ref=e198]: Personal Portfolio
+            - generic [ref=e199]: "[Personal] — [Portfolio]"
+        - generic [ref=e200]:
+          - generic [ref=e201]:
+            - img "Merry Gradient"
+          - generic [ref=e202]:
+            - generic [ref=e203]: Merry Gradient
+            - generic [ref=e204]: "[TOOL] — [DESIGN]"
+        - generic [ref=e205]:
+          - generic [ref=e206]:
+            - img "AI Landing Page"
+          - generic [ref=e207]:
+            - generic [ref=e208]: AI Landing Page
+            - generic [ref=e209]: "[MARKETING SITE] — [INTERACTIVE]"
+        - generic [ref=e210]:
+          - generic [ref=e211]:
+            - img "particleify"
+          - generic [ref=e212]:
+            - generic [ref=e213]: particleify
+            - generic [ref=e214]: "[TOOL] — [DESIGN]"
+        - generic [ref=e215]:
+          - generic [ref=e216]:
+            - img "Personal Portfolio"
+          - generic [ref=e217]:
+            - generic [ref=e218]: Personal Portfolio
+            - generic [ref=e219]: "[Personal] — [Portfolio]"
+        - generic [ref=e220]:
+          - generic [ref=e221]:
+            - img "Merry Gradient"
+          - generic [ref=e222]:
+            - generic [ref=e223]: Merry Gradient
+            - generic [ref=e224]: "[TOOL] — [DESIGN]"
+        - generic [ref=e225]:
+          - generic [ref=e226]:
+            - img "AI Landing Page"
+          - generic [ref=e227]:
+            - generic [ref=e228]: AI Landing Page
+            - generic [ref=e229]: "[MARKETING SITE] — [INTERACTIVE]"
+        - generic [ref=e230]:
+          - generic [ref=e231]:
+            - img "particleify"
+          - generic [ref=e232]:
+            - generic [ref=e233]: particleify
+            - generic [ref=e234]: "[TOOL] — [DESIGN]"
+        - generic [ref=e235]:
+          - generic [ref=e236]:
+            - img "Personal Portfolio"
+          - generic [ref=e237]:
+            - generic [ref=e238]: Personal Portfolio
+            - generic [ref=e239]: "[Personal] — [Portfolio]"
+        - generic [ref=e240]:
+          - generic [ref=e241]:
+            - img "Merry Gradient"
+          - generic [ref=e242]:
+            - generic [ref=e243]: Merry Gradient
+            - generic [ref=e244]: "[TOOL] — [DESIGN]"
+      - generic [ref=e245]:
+        - button "Previous case" [ref=e246]:
+          - img [ref=e247]
+        - button "Next case" [ref=e249]:
+          - img [ref=e250]
+    - generic [ref=e253]:
+      - generic [ref=e255]:
+        - heading "Why it's freer than low-code" [level=2] [ref=e256]
+        - heading "Low-code is just drag & drop. We are AI generation." [level=3] [ref=e257]:
+          - text: Low-code is just drag & drop.
+          - text: We are AI generation.
+      - generic [ref=e259]:
+        - generic [ref=e260]:
+          - generic [ref=e261]: Low-code Builders
+          - generic [ref=e262]: Talizen
+        - generic [ref=e263]:
+          - generic [ref=e264]:
+            - generic [ref=e265]:
+              - img [ref=e266]
+              - generic [ref=e270]: Template limitations
+            - generic [ref=e271]:
+              - img [ref=e272]
+              - generic [ref=e275]: Custom AI generation
+          - generic [ref=e276]:
+            - generic [ref=e277]:
+              - img [ref=e278]
+              - generic [ref=e282]: Cannot export code
+            - generic [ref=e283]:
+              - img [ref=e284]
+              - generic [ref=e287]: Full code export
+          - generic [ref=e288]:
+            - generic [ref=e289]:
+              - img [ref=e290]
+              - generic [ref=e294]: Hard to extend features
+            - generic [ref=e295]:
+              - img [ref=e296]
+              - generic [ref=e299]: API ready
+          - generic [ref=e300]:
+            - generic [ref=e301]:
+              - img [ref=e302]
+              - generic [ref=e306]: Platform lock-in
+            - generic [ref=e307]:
+              - img [ref=e308]
+              - generic [ref=e311]: Independent deployment
+      - paragraph [ref=e314]: "\"Don't be a platform user. Be a website owner.\""
+    - generic [ref=e316]:
+      - heading "Who It's For" [level=2] [ref=e318]
+      - generic [ref=e321]:
+        - link "01 Designers Turn your Figma designs into real, shippable websites — no dev handoff needed." [ref=e322] [cursor=pointer]:
+          - /url: /solutions/website-builder-for-designers
+          - generic [ref=e323]:
+            - generic [ref=e326]:
+              - img [ref=e329]
+              - generic [ref=e336]: "01"
+            - generic [ref=e337]:
+              - heading "Designers" [level=3] [ref=e338]
+              - paragraph [ref=e339]: Turn your Figma designs into real, shippable websites — no dev handoff needed.
+        - link "02 Founders Launch your product site or MVP in a fraction of the time. Validate faster." [ref=e340] [cursor=pointer]:
+          - /url: /solutions/website-builder-for-startups
+          - generic [ref=e341]:
+            - generic [ref=e345]:
+              - img [ref=e348]
+              - generic [ref=e354]: "02"
+            - generic [ref=e355]:
+              - heading "Founders" [level=3] [ref=e356]
+              - paragraph [ref=e357]: Launch your product site or MVP in a fraction of the time. Validate faster.
+        - link "03 Indie Makers Go from idea to live site in one sitting. Build, ship, iterate." [ref=e358] [cursor=pointer]:
+          - /url: /solutions/website-builder-for-indie-hackers
+          - generic [ref=e359]:
+            - generic [ref=e363]:
+              - img [ref=e366]
+              - generic [ref=e369]: "03"
+            - generic [ref=e370]:
+              - heading "Indie Makers" [level=3] [ref=e371]
+              - paragraph [ref=e372]: Go from idea to live site in one sitting. Build, ship, iterate.
+        - link "04 No-Code Users Build visually with full flexibility — and walk away owning every line of code." [ref=e373] [cursor=pointer]:
+          - /url: /solutions/website-builder-for-saas
+          - generic [ref=e374]:
+            - generic [ref=e377]:
+              - img [ref=e380]
+              - generic [ref=e383]: "04"
+            - generic [ref=e384]:
+              - heading "No-Code Users" [level=3] [ref=e385]
+              - paragraph [ref=e386]: Build visually with full flexibility — and walk away owning every line of code.
+    - generic [ref=e387]:
+      - generic [ref=e390]:
+        - heading "Idea. Build. Own." [level=2] [ref=e391]
+        - generic [ref=e393]: Your next website starts here — built by AI, owned by you, live in minutes.
+        - link "Start for Free" [ref=e395] [cursor=pointer]:
+          - /url: https://talizen.com
+      - generic [ref=e397]:
+        - generic [ref=e398]:
+          - link "Talizen AI" [ref=e399] [cursor=pointer]:
+            - /url: /
+            - img "Talizen AI" [ref=e400]
+          - generic [ref=e401]:
+            - link "X" [ref=e402] [cursor=pointer]:
+              - /url: https://x.com/creght2023
+              - img [ref=e403]
+            - link "YouTube" [ref=e405] [cursor=pointer]:
+              - /url: https://www.youtube.com/watch?v=v2ie6aM0BrQ
+              - img [ref=e406]
+        - generic [ref=e408]:
+          - generic [ref=e409]:
+            - heading "Solutions" [level=4] [ref=e410]
+            - link "AI Website Builder" [ref=e411] [cursor=pointer]:
+              - /url: /solutions/ai-website-builder
+            - link "AI Landing Page Builder" [ref=e412] [cursor=pointer]:
+              - /url: /solutions/ai-landing-page-builder
+            - link "Figma to Website" [ref=e413] [cursor=pointer]:
+              - /url: /solutions/figma-to-website
+            - link "Figma to React" [ref=e414] [cursor=pointer]:
+              - /url: /solutions/figma-to-react
+          - generic [ref=e415]:
+            - heading "Company" [level=4] [ref=e416]
+            - link "Contact Us" [ref=e417] [cursor=pointer]:
+              - /url: /contact
+            - link "Blog" [ref=e418] [cursor=pointer]:
+              - /url: "#"
+          - generic [ref=e419]:
+            - heading "Tools" [level=4] [ref=e420]
+            - link "Particleify" [ref=e421] [cursor=pointer]:
+              - /url: https://particleify.talizen.com/
+            - link "MerryGradient" [ref=e422] [cursor=pointer]:
+              - /url: http://merrygradient.talizen.com/

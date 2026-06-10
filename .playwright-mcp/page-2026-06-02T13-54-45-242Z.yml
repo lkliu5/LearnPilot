@@ -1,0 +1,155 @@
+- generic [ref=e122]:
+  - complementary [ref=e127]:
+    - generic [ref=e128]:
+      - generic [ref=e129]:
+        - img [ref=e131]
+        - generic [ref=e140]:
+          - generic [ref=e141]: 智学中枢
+          - generic [ref=e142]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e143] [cursor=pointer]:
+        - img [ref=e144]
+    - navigation [ref=e146]:
+      - button "学情概览 学习状态总览" [ref=e147] [cursor=pointer]:
+        - img [ref=e149]
+        - generic [ref=e154]:
+          - generic [ref=e155]: 学情概览
+          - generic [ref=e156]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e159] [cursor=pointer]:
+        - img [ref=e161]
+        - generic [ref=e164]:
+          - generic [ref=e165]: 画像诊断
+          - generic [ref=e166]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e167] [cursor=pointer]:
+        - img [ref=e169]
+        - generic [ref=e173]:
+          - generic [ref=e174]: 学习路径
+          - generic [ref=e175]: 个性化导航
+      - button "学习资源 AI讲义·测试题" [active] [ref=e176] [cursor=pointer]:
+        - img [ref=e178]
+        - generic [ref=e181]:
+          - generic [ref=e182]: 学习资源
+          - generic [ref=e183]: AI讲义·测试题
+      - button "Agent工作流 AI协同可视化" [ref=e184] [cursor=pointer]:
+        - img [ref=e186]
+        - generic [ref=e191]:
+          - generic [ref=e192]: Agent工作流
+          - generic [ref=e193]: AI协同可视化
+      - button "设计系统 视觉规范展示" [ref=e194] [cursor=pointer]:
+        - img [ref=e196]
+        - generic [ref=e201]:
+          - generic [ref=e202]: 设计系统
+          - generic [ref=e203]: 视觉规范展示
+      - button "知识图谱 Beta 可视化拓扑" [ref=e204] [cursor=pointer]:
+        - img [ref=e206]
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - text: 知识图谱
+            - generic [ref=e214]: Beta
+          - generic [ref=e215]: 可视化拓扑
+    - generic [ref=e216] [cursor=pointer]:
+      - generic [ref=e218]: 学
+      - generic [ref=e220]:
+        - generic [ref=e221]: 学习者_001
+        - generic [ref=e222]: 中级 · AI领域
+      - img [ref=e223]
+  - main [ref=e225]:
+    - generic [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - img [ref=e510]
+          - generic [ref=e519]:
+            - generic [ref=e520]:
+              - heading "神经网络基础" [level=1] [ref=e521]
+              - generic [ref=e522]: 初级
+            - paragraph [ref=e523]: AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应
+        - generic [ref=e524]:
+          - generic [ref=e525]:
+            - generic [ref=e526]: 📍
+            - generic [ref=e527]: 神经网络
+            - generic [ref=e528]: 当前知识点
+          - generic [ref=e529]:
+            - generic [ref=e530]: 🎯
+            - generic [ref=e531]: 初级
+            - generic [ref=e532]: 适配难度
+          - generic [ref=e533]:
+            - generic [ref=e534]: 📚
+            - generic [ref=e535]: "12"
+            - generic [ref=e536]: RAG 引用文档
+          - generic [ref=e537]:
+            - generic [ref=e538]: 🛡️
+            - generic [ref=e539]: ✓ 已校验
+            - generic [ref=e540]: 幻觉率 < 5%
+      - generic [ref=e541]:
+        - button "📖 定制讲义" [ref=e542] [cursor=pointer]
+        - button "🎬 讲解视频" [ref=e543] [cursor=pointer]
+        - button "🧠 思维导图" [ref=e544] [cursor=pointer]
+        - button "💻 代码实操" [ref=e545] [cursor=pointer]
+        - button "📊 知识图解" [ref=e546] [cursor=pointer]
+        - button "🔗 资源推荐" [ref=e547] [cursor=pointer]
+        - button "✍️ 分阶测试" [ref=e548] [cursor=pointer]
+      - generic [ref=e549]:
+        - button "🛡️ RAG 溯源 · 多智能体已交叉校验 5 篇来源 ▾" [ref=e551] [cursor=pointer]:
+          - generic [ref=e552]: 🛡️
+          - generic [ref=e553]: RAG 溯源 · 多智能体已交叉校验
+          - generic [ref=e554]: 5 篇来源
+          - generic [ref=e555]: ▾
+        - generic [ref=e556]:
+          - heading "神经网络基础" [level=1] [ref=e557]
+          - blockquote [ref=e558]:
+            - paragraph [ref=e559]:
+              - text: 本讲义由
+              - strong [ref=e560]: 领域知识生成 Agent
+              - text: 基于你的学情画像生成，难度已适配为「初级」，并经
+              - strong [ref=e561]: 内容审核 Agent
+              - text: RAG 交叉校验（幻觉率 < 5%）。
+          - heading "一、什么是神经网络" [level=2] [ref=e562]
+          - paragraph [ref=e563]: 神经网络（Neural Network）是一种受生物神经系统启发的计算模型。它由大量**神经元（Neuron）**相互连接构成，通过调整连接权重来学习数据中的规律。
+          - paragraph [ref=e564]: 一个神经元完成三步运算：
+          - list [ref=e565]:
+            - listitem [ref=e566]:
+              - text: 对输入做
+              - strong [ref=e567]: 加权求和
+            - listitem [ref=e568]:
+              - text: 加上
+              - strong [ref=e569]: 偏置（bias）
+            - listitem [ref=e570]:
+              - text: 经过
+              - strong [ref=e571]: 激活函数
+              - text: 输出
+          - heading "二、前向传播" [level=2] [ref=e572]
+          - paragraph [ref=e573]: 前向传播是数据从输入层流向输出层的过程。对单个神经元：
+          - code [ref=e576]:
+            - text: import numpy as np
+            - text: "def neuron(inputs, weights, bias): # 1. 加权求和 + 偏置 z = np.dot(inputs, weights) + bias # 2. ReLU 激活 return np.maximum(0, z) x = np.array([0.5, 0.8, 0.2]) w = np.array([0.4, 0.7, 0.1])"
+            - text: "print(neuron(x, w, bias=0.1)) # -> 0.88"
+          - heading "三、常见激活函数" [level=2] [ref=e577]
+          - list [ref=e578]:
+            - listitem [ref=e579]:
+              - strong [ref=e580]: ReLU
+              - text: ：
+              - code [ref=e581]: max(0, x)
+              - text: ，计算快、缓解梯度消失，最常用
+            - listitem [ref=e582]:
+              - strong [ref=e583]: Sigmoid
+              - text: ：将输出压缩到 (0, 1)，适合二分类输出层
+            - listitem [ref=e584]:
+              - strong [ref=e585]: Tanh
+              - text: ：输出范围 (-1, 1)，零均值，收敛通常快于 Sigmoid
+          - heading "四、反向传播与学习" [level=2] [ref=e586]
+          - paragraph [ref=e587]:
+            - text: 网络通过
+            - strong [ref=e588]:
+              - text: 反向传播（Backpropagation）
+              - strong [ref=e589]: 计算损失对每个权重的梯度，再用
+              - text: 梯度下降
+            - text: 更新权重：
+          - paragraph [ref=e590]:
+            - code [ref=e591]: w ← w − η · ∂L/∂w
+          - paragraph [ref=e592]:
+            - text: 其中
+            - code [ref=e593]: η
+            - text: 是学习率（learning rate）。多轮迭代后，网络逐步逼近最优参数。
+          - blockquote [ref=e594]:
+            - paragraph [ref=e595]:
+              - strong [ref=e596]: 小结
+              - text: ：神经元 → 前向传播 → 激活 → 反向传播更新权重，构成了神经网络学习的完整闭环。下一步建议学习「深度学习原理」。

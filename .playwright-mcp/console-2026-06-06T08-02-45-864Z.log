@@ -1,0 +1,56 @@
+[    4069ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3013/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[   65859ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3013/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:746
+[  138082ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3013/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:721
+[12357106ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[12357115ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[23247150ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[23256726ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3013/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[63597994ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[63598008ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[64168531ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3013/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[65143502ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[65143507ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[65382828ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/services/profileNarrative.ts:0
+[65382829ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/ProfileBuilder.css?t=1780761719959:0
+[65382859ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/utils/chartTheme.ts:0
+[65382869ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/KnowledgeGraph.css:0
+[65382881ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/AgentStatusCard.tsx:0
+[65382882ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/AgentWorkflow.css:0
+[65382887ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/MarkdownRenderer.tsx:0
+[65382888ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/QuizRenderer.tsx:0
+[65382906ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/SourceTrace.tsx:0
+[65382944ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/WeakPointReinforce.tsx:0
+[65382950ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/LearningResource.css:0
+[65382969ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/BlurText/BlurText.jsx:0
+[65382971ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/GuideCard.tsx?t=1780757362240:0
+[65382992ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/hooks/useScrollReveal.ts:0
+[65382992ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/Dashboard.css?t=1780757585827:0
+[65382992ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/Silk/Silk.jsx:0
+[65382993ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/Login.css:0
+[65382993ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/ParticleVortex.tsx:0
+[65383002ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/GhostCursor/GhostCursor.jsx:0
+[65383012ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/Landing.css:0
+[65700864ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[65700868ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[66260808ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3013/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[67880577ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[67913325ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[67917364ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/ParticleVortex.tsx:0
+[67917410ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/GhostCursor/GhostCursor.jsx:0
+[67917410ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/Landing.css:0
+[67917410ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/MarkdownRenderer.tsx:0
+[67917412ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/QuizRenderer.tsx:0
+[67917421ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/SourceTrace.tsx:0
+[67917427ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/WeakPointReinforce.tsx:0
+[67917428ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/LearningResource.css:0
+[68313800ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[68313806ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[92389300ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3013/@vite/client:559
+[92391735ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/:0
+[92391881ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3013/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
+[92394400ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/fonts/sora-latin-wght-normal.woff2:0
+[92394402ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/favicon.svg:0
+[92394402ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3013/fonts/jetbrains-mono-latin-400-normal.woff2:0
+[148560807ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/components/GuideCard.tsx?t=1780757362240:0
+[148560808ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/hooks/useScrollReveal.ts:0
+[148560808ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:3013/src/pages/Dashboard.css?t=1780757585827:0

@@ -1,0 +1,120 @@
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import type { QuizQuestion } from './QuizRenderer'
+import QuizRenderer from './QuizRenderer'
+
+/* 知识点 → 强化讲解 + 一道针对性练习（演示 Agent 错题驱动再生成）*/
+const reinforcementBank: Record<string, { point: string; recap: string; practice: QuizQuestion }> = {
+  q1: {
+    point: '神经元运算顺序',
+    recap: '记忆口诀：**先乘后加再激活** —— ① 输入×权重求和 → ② 加偏置 b → ③ 激活函数。顺序不能颠倒，因为激活必须作用在「加权和+偏置」的结果上。',
+    practice: {
+      question_id: 'r-q1',
+      question_type: 'single',
+      question_text: '【强化】若把激活函数放到加权求和之前，会发生什么？',
+      options: [
+        { option_id: 'a', option_text: '结果不变，顺序无所谓' },
+        { option_id: 'b', option_text: '失去对「加权和」整体的非线性变换，等价于线性模型' },
+        { option_id: 'c', option_text: '会让网络收敛更快' },
+      ],
+      correct_answer: 'b',
+      explanation: '激活必须作用于加权和+偏置的结果，提前激活会破坏非线性表达能力。',
+    },
+  },
+  q2: {
+    point: '激活函数辨析',
+    recap: '激活函数 = 给神经元引入**非线性**的函数。常见三个：**ReLU**（max(0,x)）、**Sigmoid**、**Tanh**。注意「梯度 Gradient」是反向传播里的概念，**不是**激活函数。',
+    practice: {
+      question_id: 'r-q2',
+      question_type: 'multiple',
+      question_text: '【强化】下列关于激活函数，正确的有？（多选）',
+      options: [
+        { option_id: 'a', option_text: 'ReLU 在正区间梯度恒为 1' },
+        { option_id: 'b', option_text: 'Sigmoid 输出范围是 (0,1)' },
+        { option_id: 'c', option_text: 'Gradient 是一种激活函数' },
+        { option_id: 'd', option_text: 'Tanh 输出零均值，范围 (-1,1)' },
+      ],
+      correct_answer: ['a', 'b', 'd'],
+      explanation: 'ReLU/Sigmoid/Tanh 描述均正确；Gradient（梯度）不是激活函数。',
+    },
+  },
+  q3: {
+    point: 'ReLU 与梯度消失',
+    recap: '**ReLU** 在正区间导数恒为 1，反向传播时梯度不会被反复压缩，因此能**缓解梯度消失**；而 Sigmoid/Tanh 在饱和区导数趋近 0，深层网络易梯度消失。',
+    practice: {
+      question_id: 'r-q3',
+      question_type: 'boolean',
+      question_text: '【强化】Sigmoid 在深层网络中比 ReLU 更容易引起梯度消失。',
+      options: [
+        { option_id: 'true', option_text: '正确' },
+        { option_id: 'false', option_text: '错误' },
+      ],
+      correct_answer: 'true',
+      explanation: 'Sigmoid 两端饱和、导数趋零，深层叠加后梯度迅速衰减，比 ReLU 更易梯度消失。',
+    },
+  },
+}
+
+export default function WeakPointReinforce({ wrong }: { wrong: QuizQuestion[] }) {
+  const [generating, setGenerating] = useState(true)
+  const items = wrong.map((w) => reinforcementBank[w.question_id]).filter(Boolean)
+
+  useEffect(() => {
+    setGenerating(true)
+    const t = window.setTimeout(() => setGenerating(false), 1400)
+    return () => window.clearTimeout(t)
+  }, [wrong])
+
+  if (wrong.length === 0) return null
+
+  return (
+    <motion.div
+      className="weak"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div className="weak__head">
+        <span className="weak__icon">🎯</span>
+        <div>
+          <div className="weak__title">错题驱动 · 针对性强化</div>
+          <div className="weak__sub">
+            诊断 Agent 检测到 {wrong.length} 个薄弱点，领域知识生成 Agent 已为你定制强化练习
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {generating ? (
+          <motion.div key="gen" className="weak__gen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="weak__gen-orb" />
+            <span>AI 正在针对你的薄弱点重新生成强化练习…</span>
+            <div className="weak__gen-tags">
+              {items.map((it) => <span key={it.point} className="weak__gen-tag">{it.point}</span>)}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {items.map((it, i) => (
+              <div key={it.point} className="weak__card">
+                <div className="weak__card-head">
+                  <span className="weak__badge">薄弱点 {i + 1}</span>
+                  <span className="weak__point">{it.point}</span>
+                </div>
+                <div className="weak__recap" dangerouslySetInnerHTML={{ __html: mdBold(it.recap) }} />
+                <div className="weak__practice">
+                  <QuizRenderer questions={[it.practice]} />
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+/* 极简 **加粗** 渲染（仅用于 recap 短文本）*/
+function mdBold(s: string) {
+  return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+}

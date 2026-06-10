@@ -1,0 +1,634 @@
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import CountUp from '../components/CountUp'
+import PageHeader from '../components/PageHeader'
+import RadarChart from '../components/charts/RadarChart'
+import JobMarketPanel from '../components/JobMarketPanel'
+import { revealItem } from '../components/Reveal'
+import type { PageType } from '../App'
+import { useJourney } from '../store/journey'
+import type { JobMarket } from '../services/jobMarket'
+import { generateNarrative, type SourceRef } from '../services/profileNarrative'
+import './ProfileBuilder.css'
+
+/* 雷达 6 维：与岗位画像 radar 字段对齐，作为「当前能力 vs 岗位要求」对标的统一坐标系 */
+const RADAR_DIMS = ['机器学习基础', '神经网络', '深度学习', '注意力机制', 'Transformer', '大模型微调'] as const
+
+const educationLevels = ['本科', '硕士', '博士', '其他']
+const majorFields = ['计算机科学', '电子信息', '人工智能', '软件工程', '数据科学', '其他']
+const learningGoals = ['职业培训', '技能认证', '学术研究', '兴趣学习', '其他']
+
+/* 解析来源：决定 Step2 的来源徽章配色与文案 */
+type Source = 'resume' | 'ocr' | 'text' | 'manual'
+const SOURCE_META: Record<Source, { label: string; tone: string }> = {
+  resume: { label: '简历解析', tone: 'resume' },
+  ocr: { label: '图片 OCR', tone: 'ocr' },
+  text: { label: '文字描述', tone: 'text' },
+  manual: { label: '手动填写', tone: 'manual' },
+}
+
+interface Basic {
+  value: string
+  source: Source
+}
+interface SkillItem {
+  /** 对应 RADAR_DIMS 之一 */
+  name: string
+  level: number
+  source: Source
+}
+interface ParsedProfile {
+  education: Basic
+  major: Basic
+  goal: Basic
+  skills: SkillItem[]
+}
+
+/** 空白手动画像：手动填写兜底入口产出，全部来源标 manual，技能默认 50 */
+function emptyProfile(): ParsedProfile {
+  return {
+    education: { value: '', source: 'manual' },
+    major: { value: '', source: 'manual' },
+    goal: { value: '', source: 'manual' },
+    skills: RADAR_DIMS.map((name) => ({ name, level: 50, source: 'manual' })),
+  }
+}
+
+/**
+ * 多模态解析（前端模拟）：依据本次提供的输入通道（简历 / 图片 / 文字）产出结构化画像，
+ * 每个字段标注其来源。后端就绪后，仅需把这里替换为真实解析 service，Step2/Step3 UI 不变。
+ */
+function mockParse(channels: { resume: boolean; image: boolean; text: boolean }): ParsedProfile {
+  // 来源优先级：简历 > 图片OCR > 文字；至少有一个通道
+  const primary: Source = channels.resume ? 'resume' : channels.image ? 'ocr' : 'text'
+  const secondary: Source = channels.text ? 'text' : primary
+  return {
+    education: { value: '硕士', source: primary },
+    major: { value: '人工智能', source: primary },
+    goal: { value: '职业培训', source: secondary },
+    skills: [
+      { name: '机器学习基础', level: 85, source: primary },
+      { name: '神经网络', level: 72, source: primary },
+      { name: '深度学习', level: 68, source: secondary },
+      { name: '注意力机制', level: 45, source: channels.image ? 'ocr' : secondary },
+      { name: 'Transformer', level: 30, source: secondary },
+      { name: '大模型微调', level: 20, source: secondary },
+    ],
+  }
+}
+
+/* Gap 分档：当前/要求 比值 → 三档 */
+type Tier = 'met' | 'partial' | 'missing'
+function tierOf(current: number, required: number): Tier {
+  if (required <= 0 || current >= required) return 'met'
+  return current / required >= 0.6 ? 'partial' : 'missing'
+}
+const TIER_META: Record<Tier, { label: string; cls: string }> = {
+  met: { label: '已具备', cls: 'met' },
+  partial: { label: '部分掌握', cls: 'partial' },
+  missing: { label: '缺失', cls: 'missing' },
+}
+
+type Step = 'collect' | 'parsing' | 'confirm' | 'benchmark'
+const STEP_INDEX: Record<Step, number> = { collect: 0, parsing: 0, confirm: 1, benchmark: 2 }
+const STEP_LABELS = ['信息采集', '确认画像', '岗位对标']
+
+export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
+  const completeDiagnosis = useJourney((s) => s.completeDiagnosis)
+  const [step, setStep] = useState<Step>('collect')
+
+  /* Step1 采集状态 */
+  const [files, setFiles] = useState<{ name: string; kind: 'doc' | 'image' }[]>([])
+  const [description, setDescription] = useState('')
+  const [targetJob, setTargetJob] = useState<JobMarket | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  /* 解析产物（Step2 可编辑） */
+  const [draft, setDraft] = useState<ParsedProfile | null>(null)
+  /* 当前点击回看的来源 id（高亮 ⇄ 来源 chip 联动） */
+  const [activeSource, setActiveSource] = useState<string | null>(null)
+
+  const hasDoc = files.some((f) => f.kind === 'doc')
+  const hasImage = files.some((f) => f.kind === 'image')
+  const hasInput = files.length > 0 || description.trim().length > 0
+  const onSelectJob = useCallback((j: JobMarket | null) => setTargetJob(j), [])
+
+  const addFiles = (list: FileList | null) => {
+    if (!list) return
+    const next = Array.from(list).map((f) => ({
+      name: f.name,
+      kind: /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name) ? ('image' as const) : ('doc' as const),
+    }))
+    setFiles((prev) => [...prev, ...next])
+  }
+
+  /* 智能解析：进入解析动画 → 产出结构化画像 → 确认页 */
+  const runParse = () => {
+    setStep('parsing')
+    setTimeout(() => {
+      setDraft(mockParse({ resume: hasDoc, image: hasImage, text: description.trim().length > 0 }))
+      setStep('confirm')
+    }, 2600)
+  }
+
+  /* 手动填写兜底：跳过解析，直接进入确认页编辑空白画像 */
+  const startManual = () => {
+    setDraft(emptyProfile())
+    setStep('confirm')
+  }
+
+  const updateBasic = (key: 'education' | 'major' | 'goal', value: string) => {
+    setDraft((d) => (d ? { ...d, [key]: { value, source: 'manual' as Source } } : d))
+  }
+  const updateSkill = (name: string, level: number) => {
+    setDraft((d) =>
+      d
+        ? { ...d, skills: d.skills.map((s) => (s.name === name ? { ...s, level, source: 'manual' as Source } : s)) }
+        : d
+    )
+  }
+
+  /* Step3 对标计算：当前能力（来自 draft）对齐 RADAR_DIMS，对标线取目标岗位 radar */
+  const currentValues = useMemo(
+    () => RADAR_DIMS.map((dim) => draft?.skills.find((s) => s.name === dim)?.level ?? 0),
+    [draft]
+  )
+  const radarTarget = useMemo(
+    () => (targetJob ? RADAR_DIMS.map((dim) => targetJob.radar[dim] ?? 0) : undefined),
+    [targetJob]
+  )
+  const gaps = useMemo(
+    () =>
+      RADAR_DIMS.map((dim, i) => {
+        const required = targetJob?.radar[dim] ?? 0
+        const current = currentValues[i]
+        return { dim, current, required, gap: required - current, tier: tierOf(current, required) }
+      }),
+    [currentValues, targetJob]
+  )
+  const metCount = gaps.filter((g) => g.tier === 'met').length
+  const matchPct = targetJob ? Math.round((metCount / RADAR_DIMS.length) * 100) : 0
+
+  /* AI 画像综述：基于结构化字段 + 原始材料引用生成（grounding）；无材料则为 null */
+  const materials = useMemo<SourceRef[]>(() => {
+    const m: SourceRef[] = files.map((f, i) => ({
+      id: `file-${i}`,
+      label: f.name,
+      kind: f.kind === 'image' ? ('image' as const) : ('doc' as const),
+    }))
+    if (description.trim()) m.push({ id: 'desc', label: '文字描述', kind: 'text' })
+    return m
+  }, [files, description])
+  const narrative = useMemo(
+    () => (draft ? generateNarrative(draft, materials, targetJob) : null),
+    [draft, materials, targetJob]
+  )
+  const activeSourceLabel = materials.find((m) => m.id === activeSource)?.label
+
+  const finish = () => {
+    completeDiagnosis(targetJob ? { targetJobName: targetJob.name, matchPct } : undefined)
+    onNavigate?.('learning-path')
+  }
+
+  return (
+    <div className="profile-builder">
+      <PageHeader
+        title="学习者画像诊断"
+        highlight="画像"
+        subtitle="多模态采集你的能力信息，结构化确认后与目标岗位实时对标，生成针对性学习路径"
+      />
+
+      {/* 三步进度条 */}
+      <div className="profile-builder__progress">
+        {STEP_LABELS.map((label, index) => {
+          const cur = STEP_INDEX[step]
+          return (
+            <div
+              key={label}
+              className={`profile-builder__step ${cur === index ? 'profile-builder__step--active' : ''} ${
+                cur > index ? 'profile-builder__step--completed' : ''
+              }`}
+            >
+              <div className="profile-builder__step-number">{index + 1}</div>
+              <span className="profile-builder__step-label">{label}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {/* ============ Step 1 信息采集 ============ */}
+        {step === 'collect' && (
+          <motion.div
+            key="collect"
+            className="profile-builder__step-content"
+            variants={revealItem}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {/* 多模态输入 */}
+            <div className="profile-builder__card">
+              <h2>信息采集</h2>
+              <p>上传简历或截图、用文字描述你的背景，AI 将自动解析为结构化画像；也可手动填写兜底</p>
+
+              {/* 上传区（简历 PDF/Word + 图片 OCR）*/}
+              <div
+                className={`pb-upload ${dragOver ? 'pb-upload--over' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOver(true)
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  addFiles(e.dataTransfer.files)
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,image/*"
+                  className="pb-upload__input"
+                  onChange={(e) => addFiles(e.target.files)}
+                />
+                <div className="pb-upload__icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </div>
+                <div className="pb-upload__text">
+                  <strong>点击或拖拽上传</strong>
+                  <span>简历 PDF / Word · 成绩单或证书截图（自动 OCR）</span>
+                </div>
+                <div className="pb-upload__modes">
+                  <span className="pb-modechip">📄 简历解析</span>
+                  <span className="pb-modechip">🖼️ 图片 OCR</span>
+                  <span className="pb-modechip">📝 文字描述</span>
+                </div>
+              </div>
+
+              {/* 已选文件 */}
+              {files.length > 0 && (
+                <div className="pb-files">
+                  {files.map((f, i) => (
+                    <div className="pb-file" key={`${f.name}-${i}`}>
+                      <span className={`pb-file__kind pb-file__kind--${f.kind}`}>
+                        {f.kind === 'image' ? '图' : '档'}
+                      </span>
+                      <span className="pb-file__name">{f.name}</span>
+                      <button
+                        className="pb-file__remove"
+                        aria-label="移除"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setFiles((prev) => prev.filter((_, idx) => idx !== i))
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 文字描述 */}
+              <div className="form-group pb-desc">
+                <label className="form-label">文字描述（选填）</label>
+                <textarea
+                  className="pb-textarea"
+                  placeholder="例：人工智能硕士，做过 RAG 项目，熟悉 PyTorch 和 Prompt 工程，想转大模型应用方向…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {/* 目标岗位 · 实时市场画像（迁移复用）*/}
+            <div className="profile-builder__card profile-builder__card--job">
+              <div className="pb-section-head">
+                <h2>目标岗位 · 实时市场画像</h2>
+                <span className="pb-badge">联网快照 · 缓存</span>
+              </div>
+              <p>选择目标岗位，其实时技能要求将作为下一步「岗位对标」的基准线</p>
+              <JobMarketPanel onSelect={onSelectJob} />
+            </div>
+
+            {/* 操作区 */}
+            <div className="profile-builder__actions profile-builder__actions--collect">
+              <button className="profile-builder__back-btn" onClick={startManual}>
+                跳过上传，手动填写
+              </button>
+              <div className="pb-collect-primary">
+                {!targetJob && <span className="pb-hint">请先选择目标岗位</span>}
+                <button
+                  className="profile-builder__next-btn"
+                  disabled={!targetJob || !hasInput}
+                  onClick={runParse}
+                >
+                  智能解析 →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ============ 解析中 ============ */}
+        {step === 'parsing' && (
+          <motion.div key="parsing" className="profile-builder__generating" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="generating-animation">
+              <motion.div
+                className="generating-orb"
+                animate={{ scale: [1, 1.2, 1], rotate: [0, 180, 360] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                className="generating-pulse"
+                animate={{ scale: [1, 2], opacity: [0.5, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+            </div>
+            <h2>正在解析你的多模态信息…</h2>
+            <p>学情诊断 Agent 正在从简历 / 图片 / 描述中抽取结构化能力画像</p>
+          </motion.div>
+        )}
+
+        {/* ============ Step 2 确认画像 ============ */}
+        {step === 'confirm' && draft && (
+          <motion.div
+            key="confirm"
+            className="profile-builder__step-content"
+            variants={revealItem}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <div className="profile-builder__card">
+              <div className="pb-section-head">
+                <h2>确认画像</h2>
+                <span className="pb-badge">解析结果 · 可编辑</span>
+              </div>
+              <p>核对 AI 解析出的画像，每项已标注来源；如有出入可直接修改，确认后写入你的学习者画像</p>
+
+              {/* AI 画像综述：先综述、再核对结构化字段 */}
+              {narrative ? (
+                <div className="pb-narrative">
+                  <div className="pb-narrative__head">
+                    <span className="pb-narrative__icon">✦</span>
+                    <span className="pb-narrative__title">AI 画像综述</span>
+                    <span className="pb-narrative__count">综合 {narrative.materialCount} 份材料生成</span>
+                  </div>
+
+                  <div className="pb-narrative__body">
+                    {narrative.paragraphs.map((segs, pi) => (
+                      <p className="pb-narrative__para" key={pi}>
+                        {segs.map((seg, si) =>
+                          seg.tone ? (
+                            <mark
+                              key={si}
+                              className={`pb-hl pb-hl--${seg.tone} ${
+                                seg.sourceId ? 'pb-hl--linked' : ''
+                              } ${seg.sourceId && seg.sourceId === activeSource ? 'pb-hl--active' : ''}`}
+                              onClick={seg.sourceId ? () => setActiveSource(seg.sourceId!) : undefined}
+                              title={seg.sourceId ? '点击回看来源' : undefined}
+                            >
+                              {seg.text}
+                            </mark>
+                          ) : (
+                            <span key={si}>{seg.text}</span>
+                          )
+                        )}
+                      </p>
+                    ))}
+                  </div>
+
+                  {/* 信息来源 chips：可点击回看 */}
+                  <div className="pb-narrative__sources">
+                    <span className="pb-narrative__sources-label">信息来源</span>
+                    {narrative.sources.map((src) => (
+                      <button
+                        key={src.id}
+                        className={`pb-srcchip pb-srcchip--${src.kind} ${
+                          activeSource === src.id ? 'pb-srcchip--active' : ''
+                        }`}
+                        onClick={() => setActiveSource(activeSource === src.id ? null : src.id)}
+                      >
+                        <span className="pb-srcchip__kind">
+                          {src.kind === 'image' ? '🖼️' : src.kind === 'text' ? '📝' : '📄'}
+                        </span>
+                        {src.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {activeSourceLabel && (
+                    <div className="pb-narrative__viewer">
+                      正在回看来源：<strong>{activeSourceLabel}</strong>
+                      <button className="pb-narrative__viewer-close" onClick={() => setActiveSource(null)}>
+                        收起
+                      </button>
+                    </div>
+                  )}
+
+                  <p className="pb-narrative__note">
+                    综述严格基于上传材料生成，不含材料外信息；关键结论可点击高亮或来源 chip 回看核对。
+                  </p>
+                </div>
+              ) : (
+                <div className="pb-narrative pb-narrative--manual">
+                  <span className="pb-narrative__icon">✎</span>
+                  <span>本画像为手动填写，未上传材料，故不生成 AI 综述。请直接核对下方字段。</span>
+                </div>
+              )}
+
+              {/* 基本信息（可编辑 chip 组）*/}
+              <div className="form-group">
+                <label className="form-label">
+                  学历背景 <SourceTag source={draft.education.source} />
+                </label>
+                <div className="form-options">
+                  {educationLevels.map((level) => (
+                    <button
+                      key={level}
+                      className={`form-option ${draft.education.value === level ? 'form-option--selected' : ''}`}
+                      onClick={() => updateBasic('education', level)}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  专业方向 <SourceTag source={draft.major.source} />
+                </label>
+                <div className="form-options">
+                  {majorFields.map((field) => (
+                    <button
+                      key={field}
+                      className={`form-option ${draft.major.value === field ? 'form-option--selected' : ''}`}
+                      onClick={() => updateBasic('major', field)}
+                    >
+                      {field}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  学习目标 <SourceTag source={draft.goal.source} />
+                </label>
+                <div className="form-options">
+                  {learningGoals.map((goal) => (
+                    <button
+                      key={goal}
+                      className={`form-option ${draft.goal.value === goal ? 'form-option--selected' : ''}`}
+                      onClick={() => updateBasic('goal', goal)}
+                    >
+                      {goal}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 能力维度（可编辑滑块）*/}
+              <div className="form-group">
+                <label className="form-label">能力维度自评（解析估值，可微调）</label>
+                <div className="pb-skills">
+                  {draft.skills.map((s) => (
+                    <div className="pb-skill" key={s.name}>
+                      <div className="pb-skill__head">
+                        <span className="pb-skill__name">{s.name}</span>
+                        <SourceTag source={s.source} />
+                        <span className="pb-skill__val">{s.level}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={s.level}
+                        className="knowledge-slider"
+                        onChange={(e) => updateSkill(s.name, parseInt(e.target.value))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="profile-builder__actions">
+                <button className="profile-builder__back-btn" onClick={() => setStep('collect')}>
+                  返回采集
+                </button>
+                <button
+                  className="profile-builder__next-btn"
+                  disabled={!draft.education.value || !draft.major.value || !draft.goal.value}
+                  onClick={() => setStep('benchmark')}
+                >
+                  确认画像，查看岗位对标 →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ============ Step 3 岗位对标 ============ */}
+        {step === 'benchmark' && draft && (
+          <motion.div
+            key="benchmark"
+            className="profile-builder__step-content"
+            variants={revealItem}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <div className="profile-builder__card">
+              <div className="pb-section-head">
+                <h2>岗位对标</h2>
+                {targetJob ? (
+                  <span className="pb-badge">
+                    对标 {targetJob.name} · 达标 {metCount}/{RADAR_DIMS.length}
+                  </span>
+                ) : (
+                  <span className="pb-badge">未选目标岗位</span>
+                )}
+              </div>
+              <p>雷达图叠加「当前能力 vs 该岗位实时技能要求」，逐维度给出差距分档</p>
+
+              {/* 雷达：当前能力 + 岗位要求线 */}
+              <div className="pb-radar">
+                <RadarChart
+                  data={{ dimensions: [...RADAR_DIMS], values: currentValues }}
+                  target={radarTarget}
+                  targetName={targetJob ? `${targetJob.name}·要求` : undefined}
+                />
+              </div>
+
+              {/* 对标摘要 */}
+              {targetJob && (
+                <div className="pb-match">
+                  <div className="pb-match__stat">
+                    <CountUp className="pb-match__value" value={matchPct} suffix="%" />
+                    <span className="pb-match__label">岗位匹配度</span>
+                  </div>
+                  <div className="pb-match__legend">
+                    <span className="pb-tier-dot pb-tier-dot--met" /> 已具备
+                    <span className="pb-tier-dot pb-tier-dot--partial" /> 部分掌握
+                    <span className="pb-tier-dot pb-tier-dot--missing" /> 缺失
+                  </div>
+                </div>
+              )}
+
+              {/* Gap 三档列表 */}
+              <div className="pb-gaps">
+                {gaps.map((g) => (
+                  <div className={`pb-gap pb-gap--${TIER_META[g.tier].cls}`} key={g.dim}>
+                    <div className="pb-gap__top">
+                      <span className="pb-gap__name">{g.dim}</span>
+                      <span className={`pb-gap__tier pb-gap__tier--${TIER_META[g.tier].cls}`}>
+                        {TIER_META[g.tier].label}
+                      </span>
+                    </div>
+                    <div className="pb-gap__bar">
+                      <span className="pb-gap__fill" style={{ width: `${g.current}%` }} />
+                      {targetJob && <span className="pb-gap__req" style={{ left: `${g.required}%` }} title={`要求 ${g.required}`} />}
+                    </div>
+                    <div className="pb-gap__meta">
+                      <span>当前 {g.current}</span>
+                      {targetJob && <span>要求 {g.required}{g.gap > 0 ? ` · 差 ${g.gap}` : ''}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="profile-builder__actions">
+                <button className="profile-builder__back-btn" onClick={() => setStep('confirm')}>
+                  返回确认
+                </button>
+                <button className="profile-builder__next-btn" onClick={finish}>
+                  生成针对性学习路径 →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/** 来源徽章：标注画像每项数据的多模态来源 */
+function SourceTag({ source }: { source: Source }) {
+  const m = SOURCE_META[source]
+  return <span className={`pb-srctag pb-srctag--${m.tone}`}>{m.label}</span>
+}

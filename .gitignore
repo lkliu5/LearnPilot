@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Node / 前端
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# 数据 / 向量库（后续阶段产物）
+*.sqlite
+*.sqlite3
+chroma/
+.chroma/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

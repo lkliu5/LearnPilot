@@ -1,0 +1,95 @@
+[     174ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=22611fce:21550
+[  254150ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-7KUNUNEM.js?v=22611fce:746
+[  257757ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=22611fce:21550
+[  269488ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-7KUNUNEM.js?v=22611fce:746
+[  274227ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/node_modules/.vite/deps/chunk-7KUNUNEM.js?v=22611fce:721
+[  277856ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:21550
+[  277900ms] [ERROR] Warning: Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:
+1. You might have mismatching versions of React and the renderer (such as React DOM)
+2. You might be breaking the Rules of Hooks
+3. You might have more than one copy of React in the same app
+See https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem. @ http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:135
+[  277900ms] [ERROR] Warning: Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:
+1. You might have mismatching versions of React and the renderer (such as React DOM)
+2. You might be breaking the Rules of Hooks
+3. You might have more than one copy of React in the same app
+See https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem. @ http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:135
+[  277901ms] TypeError: Cannot read properties of null (reading 'useRef')
+    at useRef (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:1074:29)
+    at ParticleVortex (http://localhost:3000/src/components/ParticleVortex.tsx:24:15)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19198:20)
+[  277910ms] [ERROR] Warning: Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:
+1. You might have mismatching versions of React and the renderer (such as React DOM)
+2. You might be breaking the Rules of Hooks
+3. You might have more than one copy of React in the same app
+See https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem. @ http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:135
+[  277910ms] [ERROR] Warning: Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:
+1. You might have mismatching versions of React and the renderer (such as React DOM)
+2. You might be breaking the Rules of Hooks
+3. You might have more than one copy of React in the same app
+See https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem. @ http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:135
+[  277912ms] TypeError: Cannot read properties of null (reading 'useRef')
+    at useRef (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:1074:29)
+    at ParticleVortex (http://localhost:3000/src/components/ParticleVortex.tsx:24:15)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:15914:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3674:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3699:24)
+    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:3733:39)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19765:15)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19198:20)
+[  277915ms] [ERROR] The above error occurred in the <ParticleVortex> component:
+
+    at ParticleVortex (http://localhost:3000/src/components/ParticleVortex.tsx:22:42)
+    at section
+    at div
+    at Landing (http://localhost:3000/src/pages/Landing.tsx?t=1780301453307:32:35)
+    at App (http://localhost:3000/src/App.tsx?t=1780301453307:31:29)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:14031
+[  277916ms] TypeError: Cannot read properties of null (reading 'useRef')
+    at useRef (http://localhost:3000/node_modules/.vite/deps/chunk-DRWLMN53.js?v=22611fce:1074:29)
+    at ParticleVortex (http://localhost:3000/src/components/ParticleVortex.tsx:24:15)
+    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:11548:26)
+    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:14926:21)
+    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:15914:22)
+    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19753:22)
+    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19198:20)
+    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19137:13)
+    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:19116:15)
+    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=62a326c6:18736:28)
+[  285131ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=22611fce:21550
+[  766312ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
+[  770389ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=8dd4e765:21550
+[  842121ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
+[  844480ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  847838ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  851183ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  854545ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  857921ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  861285ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  864667ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  868018ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  871385ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  874762ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  878139ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  881486ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  884848ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  888214ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  891565ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  894931ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  898298ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  901669ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  905047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  908412ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  911778ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[  916170ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-PJEEZAML.js?v=bba4adbf:21550

@@ -1,0 +1,124 @@
+- generic [ref=e3]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - img [ref=e12]
+        - generic [ref=e21]:
+          - generic [ref=e22]: 智学中枢
+          - generic [ref=e23]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+    - navigation [ref=e27]:
+      - button "学情概览 学习状态总览" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - generic [ref=e35]:
+          - generic [ref=e36]: 学情概览
+          - generic [ref=e37]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e40] [cursor=pointer]:
+        - img [ref=e42]
+        - generic [ref=e45]:
+          - generic [ref=e46]: 画像诊断
+          - generic [ref=e47]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e48] [cursor=pointer]:
+        - img [ref=e50]
+        - generic [ref=e54]:
+          - generic [ref=e55]: 学习路径
+          - generic [ref=e56]: 个性化导航
+      - button "Agent工作流 AI协同可视化" [active] [ref=e57] [cursor=pointer]:
+        - img [ref=e59]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Agent工作流
+          - generic [ref=e66]: AI协同可视化
+      - generic [ref=e67]:
+        - img [ref=e69]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - text: 知识图谱
+            - generic [ref=e77]: Beta
+          - generic [ref=e78]: 可视化拓扑
+    - generic [ref=e79] [cursor=pointer]:
+      - generic [ref=e81]: 学
+      - generic [ref=e83]:
+        - generic [ref=e84]: 学习者_001
+        - generic [ref=e85]: 中级 · AI领域
+      - img [ref=e86]
+  - main [ref=e88]:
+    - generic [ref=e565]:
+      - generic [ref=e566]:
+        - generic [ref=e567]:
+          - heading "智能体协同调度大屏" [level=1] [ref=e568]
+          - paragraph [ref=e569]: 实时查看多智能体工作流执行状态与决策逻辑
+        - generic [ref=e570]:
+          - button "启动演示" [ref=e571] [cursor=pointer]
+          - button "重置状态" [ref=e572] [cursor=pointer]
+      - generic [ref=e573]:
+        - generic [ref=e574]:
+          - generic [ref=e575]:
+            - generic [ref=e577]: "1"
+            - generic [ref=e578]: 诊断
+          - generic [ref=e579]:
+            - generic [ref=e581]: "2"
+            - generic [ref=e582]: 生成
+          - generic [ref=e583]:
+            - generic [ref=e585]: "3"
+            - generic [ref=e586]: 审核
+          - generic [ref=e587]:
+            - generic [ref=e589]: "4"
+            - generic [ref=e590]: 完成
+        - generic [ref=e591]: 等待启动
+      - generic [ref=e592]:
+        - generic [ref=e594]:
+          - generic [ref=e595]:
+            - img [ref=e597]
+            - generic [ref=e600]: LangGraph编排器
+          - generic [ref=e601]:
+            - generic [ref=e603]: 🔍
+            - generic [ref=e605]: 学情诊断Agent
+            - generic [ref=e606]: 等待用户输入
+          - generic [ref=e607]:
+            - generic [ref=e609]: 📝
+            - generic [ref=e611]: 领域知识生成Agent
+            - generic [ref=e612]: 等待诊断结果
+          - generic [ref=e613]:
+            - generic [ref=e615]: ✓
+            - generic [ref=e617]: 内容审核Agent
+            - generic [ref=e618]: 等待生成内容
+          - generic [ref=e619]:
+            - img [ref=e621]
+            - generic [ref=e624]: RAG知识库
+          - generic:
+            - img
+        - generic [ref=e625]:
+          - generic [ref=e626]:
+            - heading "智能体状态" [level=3] [ref=e627]
+            - generic [ref=e628]:
+              - generic [ref=e630] [cursor=pointer]:
+                - generic [ref=e633]:
+                  - generic [ref=e634]: 学情诊断Agent
+                  - generic [ref=e635]: 等待用户输入
+                - generic [ref=e636]: 待命
+              - generic [ref=e638] [cursor=pointer]:
+                - generic [ref=e641]:
+                  - generic [ref=e642]: 领域知识生成Agent
+                  - generic [ref=e643]: 等待诊断结果
+                - generic [ref=e644]: 待命
+              - generic [ref=e646] [cursor=pointer]:
+                - generic [ref=e649]:
+                  - generic [ref=e650]: 内容审核Agent
+                  - generic [ref=e651]: 等待生成内容
+                - generic [ref=e652]: 待命
+          - generic [ref=e653]:
+            - heading "消息日志" [level=3] [ref=e654]
+            - generic [ref=e656]: 暂无消息记录
+          - generic [ref=e657]:
+            - heading "工作流统计" [level=3] [ref=e658]
+            - generic [ref=e659]:
+              - generic [ref=e660]:
+                - generic [ref=e661]: "0"
+                - generic [ref=e662]: 已完成Agent
+              - generic [ref=e663]:
+                - generic [ref=e664]: "0"
+                - generic [ref=e665]: 消息交互数
+              - generic [ref=e666]:
+                - generic [ref=e667]: 0%
+                - generic [ref=e668]: 工作流进度

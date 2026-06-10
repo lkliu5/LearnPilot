@@ -1,0 +1,120 @@
+- generic [ref=e122]:
+  - complementary [ref=e127]:
+    - generic [ref=e128]:
+      - generic [ref=e129]:
+        - img [ref=e131]
+        - generic [ref=e140]:
+          - generic [ref=e141]: 智学中枢
+          - generic [ref=e142]: AI Learning Platform
+      - button "折叠侧边栏" [ref=e143] [cursor=pointer]:
+        - img [ref=e144]
+    - navigation [ref=e146]:
+      - button "学情概览 学习状态总览" [ref=e147] [cursor=pointer]:
+        - img [ref=e149]
+        - generic [ref=e154]:
+          - generic [ref=e155]: 学情概览
+          - generic [ref=e156]: 学习状态总览
+      - button "画像诊断 知识能力评估" [ref=e159] [cursor=pointer]:
+        - img [ref=e161]
+        - generic [ref=e164]:
+          - generic [ref=e165]: 画像诊断
+          - generic [ref=e166]: 知识能力评估
+      - button "学习路径 个性化导航" [ref=e167] [cursor=pointer]:
+        - img [ref=e169]
+        - generic [ref=e173]:
+          - generic [ref=e174]: 学习路径
+          - generic [ref=e175]: 个性化导航
+      - button "学习资源 AI讲义·测试题" [active] [ref=e176] [cursor=pointer]:
+        - img [ref=e178]
+        - generic [ref=e181]:
+          - generic [ref=e182]: 学习资源
+          - generic [ref=e183]: AI讲义·测试题
+      - button "Agent工作流 AI协同可视化" [ref=e184] [cursor=pointer]:
+        - img [ref=e186]
+        - generic [ref=e191]:
+          - generic [ref=e192]: Agent工作流
+          - generic [ref=e193]: AI协同可视化
+      - button "设计系统 视觉规范展示" [ref=e194] [cursor=pointer]:
+        - img [ref=e196]
+        - generic [ref=e201]:
+          - generic [ref=e202]: 设计系统
+          - generic [ref=e203]: 视觉规范展示
+      - button "知识图谱 Beta 可视化拓扑" [ref=e204] [cursor=pointer]:
+        - img [ref=e206]
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - text: 知识图谱
+            - generic [ref=e214]: Beta
+          - generic [ref=e215]: 可视化拓扑
+    - generic [ref=e216] [cursor=pointer]:
+      - generic [ref=e218]: 学
+      - generic [ref=e220]:
+        - generic [ref=e221]: 学习者_001
+        - generic [ref=e222]: 中级 · AI领域
+      - img [ref=e223]
+  - main [ref=e225]:
+    - generic [ref=e506]:
+      - generic [ref=e507]:
+        - generic [ref=e508]:
+          - heading "个性化学习资源" [level=1] [ref=e509]
+          - paragraph [ref=e510]: AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应
+        - generic [ref=e511]:
+          - generic [ref=e512]:
+            - generic [ref=e513]: 神经网络基础
+            - generic [ref=e514]: 当前知识点
+          - generic [ref=e515]:
+            - generic [ref=e516]: 初级
+            - generic [ref=e517]: 适配难度
+          - generic [ref=e518]:
+            - generic [ref=e519]: "12"
+            - generic [ref=e520]: RAG 引用文档
+          - generic [ref=e521]:
+            - generic [ref=e522]: ✓ 已校验
+            - generic [ref=e523]: 幻觉率 < 5%
+      - generic [ref=e524]:
+        - button "📖 定制讲义" [ref=e525] [cursor=pointer]
+        - button "🎬 讲解视频" [ref=e526] [cursor=pointer]
+        - button "🧠 思维导图" [ref=e527] [cursor=pointer]
+        - button "💻 代码实操" [ref=e528] [cursor=pointer]
+        - button "📊 知识图解" [ref=e529] [cursor=pointer]
+        - button "🔗 资源推荐" [ref=e530] [cursor=pointer]
+        - button "✍️ 分阶测试" [ref=e531] [cursor=pointer]
+        - button "💬 导学对话" [ref=e532] [cursor=pointer]
+      - generic [ref=e534]:
+        - generic [ref=e535]:
+          - generic [ref=e536]: 🦉
+          - generic [ref=e537]:
+            - generic [ref=e538]: 苏格拉底导学助手
+            - generic [ref=e539]: 引导式提问 · 不直接给答案，帮你自己想通
+        - generic [ref=e540]:
+          - generic [ref=e541]:
+            - generic [ref=e542]: 🦉
+            - generic [ref=e543]: 我是你的导学助手 🦉。学习「神经网络基础」时，我不会直接给答案，而是用提问引导你思考。先问你：你觉得一个神经元拿到输入后，第一步会做什么？
+          - generic [ref=e545]: 先加权求和
+          - generic [ref=e546]:
+            - generic [ref=e547]: 🦉
+            - generic [ref=e548]: 很好！加权求和之后，为了让神经元有「偏移」能力，通常还会加上一个量——你还记得它叫什么吗？（提示：让决策边界可平移）
+          - generic [ref=e550]: 加上偏置 b
+          - generic [ref=e551]:
+            - generic [ref=e552]: 🦉
+            - generic [ref=e553]: 没错，是偏置 b。那么加权求和再加偏置得到 z 之后，为什么不能直接把 z 当输出，而要再经过一个「激活函数」呢？想想如果全是线性运算会怎样？
+          - generic [ref=e555]: 反向传播+梯度下降
+          - generic [ref=e556]:
+            - generic [ref=e557]: 🦉
+            - generic [ref=e558]: 完美闭环 🎉 你已经独立推导出：前向传播得到输出 → 用损失衡量误差 → 反向传播算梯度 → 梯度下降更新权重。这正是神经网络学习的核心。要不要去「分阶测试」检验一下？
+          - generic [ref=e560]: 因为要引入非线性
+          - generic [ref=e561]:
+            - generic [ref=e562]: 🦉
+            - generic [ref=e563]: 正中要害——没有激活函数，多层网络叠起来仍等价于一个线性变换，无法拟合复杂模式。那你能说出一个最常用、且能缓解梯度消失的激活函数吗？
+          - generic [ref=e565]: 反向传播+梯度下降
+          - generic [ref=e566]:
+            - generic [ref=e567]: 🦉
+            - generic [ref=e568]: 完美闭环 🎉 你已经独立推导出：前向传播得到输出 → 用损失衡量误差 → 反向传播算梯度 → 梯度下降更新权重。这正是神经网络学习的核心。要不要去「分阶测试」检验一下？
+        - generic [ref=e569]:
+          - button "先加权求和" [ref=e570] [cursor=pointer]
+          - button "加上偏置 b" [ref=e571] [cursor=pointer]
+          - button "因为要引入非线性" [ref=e572] [cursor=pointer]
+          - button "反向传播+梯度下降" [ref=e573] [cursor=pointer]
+        - generic [ref=e574]:
+          - textbox "说说你的想法，我来引导你…" [ref=e575]
+          - button "发送" [disabled] [ref=e576]

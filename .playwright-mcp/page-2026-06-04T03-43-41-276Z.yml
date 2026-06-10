@@ -1,0 +1,66 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]: 智学中枢
+      - button "进入系统" [ref=e7] [cursor=pointer]
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - paragraph [ref=e10]:
+          - generic [ref=e11]: 诊
+          - generic [ref=e12]: 断
+          - generic [ref=e13]: 学
+          - generic [ref=e14]: 情
+          - generic [ref=e15]: 。
+        - paragraph [ref=e16]:
+          - generic [ref=e17]: 生
+          - generic [ref=e18]: 成
+          - generic [ref=e19]: 每
+          - generic [ref=e20]: 一
+          - generic [ref=e21]: 课
+          - generic [ref=e22]: 。
+      - paragraph [ref=e23]:
+        - generic [ref=e24]: 多智能体协同
+        - generic [ref=e25]: ·
+        - generic [ref=e26]: 个性化学习路径
+        - generic [ref=e27]: ·
+        - generic [ref=e28]: 从画像到资源，分钟级生成。
+      - generic [ref=e29]:
+        - button "进入系统" [ref=e30] [cursor=pointer]
+        - link "了解能力 ↓" [ref=e31] [cursor=pointer]:
+          - /url: "#explore"
+      - generic [ref=e33]: 向下滚动 · 探索系统能力
+    - generic [ref=e35]:
+      - generic [ref=e37]:
+        - generic [ref=e39]: 01 · DIAGNOSIS
+        - heading "学情诊断" [level=2] [ref=e40]
+        - paragraph [ref=e41]: 对话式交互精准识别知识盲区，构建动态学情画像
+      - generic [ref=e43]:
+        - generic [ref=e45]: 02 · GENERATION
+        - heading "资源生成" [level=2] [ref=e46]
+        - paragraph [ref=e47]: 基于画像生成适配难度的定制讲义、实操与分阶测试
+      - generic [ref=e49]:
+        - generic [ref=e51]: 03 · MULTI-AGENT
+        - heading "多智能体协同" [level=2] [ref=e52]
+        - paragraph [ref=e53]: LangGraph 编排诊断 / 生成 / 审核 Agent 协同决策
+      - generic [ref=e55]:
+        - generic [ref=e57]: 04 · ANTI-HALLUCINATION
+        - heading "防幻觉校验" [level=2] [ref=e58]
+        - paragraph [ref=e59]: RAG 检索增强 + 多 Agent 交叉校验，幻觉率压至 <5%
+    - generic [ref=e60]:
+      - paragraph [ref=e61]:
+        - generic [ref=e62]: 准
+        - generic [ref=e63]: 备
+        - generic [ref=e64]: 好
+        - generic [ref=e65]: 开
+        - generic [ref=e66]: 启
+        - generic [ref=e67]: 个
+        - generic [ref=e68]: 性
+        - generic [ref=e69]: 化
+        - generic [ref=e70]: 学
+        - generic [ref=e71]: 习
+        - generic [ref=e72]: 了
+        - generic [ref=e73]: 吗
+        - generic [ref=e74]: ？
+      - button "立即进入系统" [ref=e75] [cursor=pointer]
+  - button "切换界面配色风格" [active] [ref=e76] [cursor=pointer]:
+    - generic [ref=e78]: 清新青春
