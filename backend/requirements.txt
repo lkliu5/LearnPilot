@@ -1,5 +1,8 @@
-# B0 骨架最小依赖集（后续阶段按需追加 Chroma / SQLite / bge / LangGraph 等）
+# B0 骨架最小依赖集（后续阶段按需追加 Chroma / bge / LangGraph 等）
 fastapi
 uvicorn[standard]
 pydantic-settings
 python-dotenv
+# B1 数据层 + 双角色认证（SQLite 经 SQLAlchemy；JWT 用纯 Python 的 PyJWT，口令哈希用 stdlib pbkdf2，无原生构建依赖）
+sqlalchemy
+pyjwt

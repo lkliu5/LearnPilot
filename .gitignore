@@ -15,6 +15,7 @@ dist-ssr/
 # 数据 / 向量库（后续阶段产物）
 *.sqlite
 *.sqlite3
+*.db
 chroma/
 .chroma/
 

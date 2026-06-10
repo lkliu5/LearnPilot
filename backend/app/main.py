@@ -1,15 +1,18 @@
 """FastAPI 应用入口。
 
 B0：CORS + traceId 中间件 + 统一信封异常处理 + 挂载 /api/v1 路由。
+B1：启动时初始化数据库 + 种子 + 日志脱敏；挂载 auth / admin 路由。
 """
 from __future__ import annotations
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.v1 import health
+from app.api.v1 import admin, auth, health
 from app.core.config import settings
 from app.core.envelope import (
     TraceIdMiddleware,
@@ -17,8 +20,19 @@ from app.core.envelope import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.core.init_db import init_db
+from app.core.logging import setup_logging
 
-app = FastAPI(title=settings.app_name)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动：装脱敏过滤器 + 建表灌种子（幂等）
+    setup_logging()
+    init_db()
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 # CORS（暴露 X-Trace-Id 便于前端排查）
 app.add_middleware(
@@ -40,3 +54,5 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # 路由挂载
 app.include_router(health.router, prefix=settings.api_prefix)
+app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(admin.router, prefix=settings.api_prefix)

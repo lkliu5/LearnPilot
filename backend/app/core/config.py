@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     # LLM Provider（mock / deepseek / qwen / anthropic）—— B0 仅占位
     llm_provider: str = "mock"
 
+    # 数据库（B1）：SQLite 嵌入式，相对 backend/ 工作目录
+    database_url: str = "sqlite:///./zhixue.db"
+
+    # JWT（B1）：HS256；demo 默认密钥，生产经 .env 覆盖
+    jwt_secret: str = "zhixue-dev-secret-change-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_seconds: int = 7200  # 登录响应 expiresIn 与之一致
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:
