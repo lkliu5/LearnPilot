@@ -6,3 +6,6 @@ python-dotenv
 # B1 数据层 + 双角色认证（SQLite 经 SQLAlchemy；JWT 用纯 Python 的 PyJWT，口令哈希用 stdlib pbkdf2，无原生构建依赖）
 sqlalchemy
 pyjwt
+# B2-a P0 主流程（Mock 数据源）：multipart 表单解析 + PDF 文本抽取
+python-multipart
+pypdf

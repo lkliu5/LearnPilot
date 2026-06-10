@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.v1 import admin, auth, health
+from app.api.v1 import admin, auth, health, learning_path, profile, tasks
 from app.core.config import settings
 from app.core.envelope import (
     TraceIdMiddleware,
@@ -56,3 +56,7 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(admin.router, prefix=settings.api_prefix)
+# B2-a：Profile / LearningPath / Task
+app.include_router(profile.router, prefix=settings.api_prefix)
+app.include_router(learning_path.router, prefix=settings.api_prefix)
+app.include_router(tasks.router, prefix=settings.api_prefix)
