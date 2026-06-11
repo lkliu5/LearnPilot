@@ -17,3 +17,5 @@ sentence-transformers
 rank_bm25
 # B5-a LangGraph 多智能体工作流骨架（纯 Mock provider，无密钥可跑）
 langgraph
+# B5-b DeepSeek 真实生成（OpenAI 兼容协议 SDK）；mock 模式不经过该 SDK、无 Key 可跑
+openai

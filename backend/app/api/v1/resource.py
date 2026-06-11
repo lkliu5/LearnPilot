@@ -4,8 +4,8 @@
 - GET  /resource/knowledge-point/{kpId}  知识点元信息 { id,name,description,status }
 - POST /resource/lecture                  自适应讲义（markdown+sources+hallucinationRate）
 
-均需登录。生成走 service → LLMClient（mock）。知识点不存在 → 1004；
-讲义难度档非法 → 1001。
+均需登录。生成走 service → LLMClient（mock 确定性 / deepseek 真实工作流）。
+知识点不存在 → 1004；讲义难度档非法 → 1001；LLM/Agent 生成失败 → 2001（B5-b）。
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.schemas.resource import LectureRequest
@@ -49,4 +50,6 @@ async def generate_lecture(
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
         return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)

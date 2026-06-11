@@ -1,24 +1,34 @@
-"""LLM 调用适配层（B2-a）。
+"""LLM 调用适配层（B2-a 落地 mock；B5-b 接入 deepseek 真实 provider）。
 
 CLAUDE.md 工程纪律：所有生成类接口必须经本层调用，provider 可配
-`mock / deepseek / qwen / anthropic`。本阶段只落地 **mock** provider——按接口
-契约返回结构化假数据，无任何 API Key 即可跑通全链路；真实 provider（deepseek /
-qwen / anthropic）仅留接口占位，抛 NotImplementedError，B5 阶段接入真实生成与 RAG。
+`mock / deepseek / qwen / anthropic`。
+- **mock**：按接口契约返回确定性结构化假数据，无任何 API Key 即可跑通全链路
+  （前端演示兜底，B5-b 后行为仍与 B2 逐字等价）；
+- **deepseek**（B5-b）：经 app.core.llm_deepseek.chat（openai 兼容 SDK）真实生成，
+  结构化输出做契约清洗（枚举校验 / level 截断 / sourceId 白名单 / JSON 容错解析），
+  上游异常统一 LLMGenerationError → 路由映射 code 2001；
+- qwen / anthropic：仍留占位，抛 NotImplementedError。
 
 设计：
-- 语义化方法（parse_skills / generate_narrative）而非裸 `complete()`，因为各生成
-  接口需返回与接口文档逐字对齐的结构化数据；mock 在此确定性产出，B5 改为
-  「RAG 检索 → 生成 Agent → 审核 Agent」时保持方法签名不变，仅替换实现。
+- 语义化方法（extract_profile / generate_narrative）而非裸 `complete()`，因为各生成
+  接口需返回与接口文档逐字对齐的结构化数据；
+- `complete()` 供 Agent 节点调用（B5-a 工作流）；真实模式只发渲染后 prompt；
 - `get_llm()` 返回进程内单例，按 settings.llm_provider 选择实现。
 
-字段口径依据《后端接口文档》4.1（ParsedProfile.skills）、4.2（Narrative）、
-2.4（雷达 6 维固定键名）。
+字段口径依据《后端接口文档》4.1（ParsedProfile.skills / 枚举）、4.2（Narrative）、
+2.4（雷达 6 维固定键名）、15.3（幻觉率口径，critic 真实实现在 agents.critic_agent）。
 """
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
+from app.core import llm_deepseek
 from app.core.config import settings
+from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
+
+__all__ = ["LLMClient", "LLMGenerationError", "get_llm", "set_force_critic_low"]
 
 # 雷达 / 画像 6 维固定键名（接口文档 2.4，画像与岗位共用以便对标）
 ABILITY_DIMENSIONS: list[str] = [
@@ -50,6 +60,35 @@ _LECTURE_HALLUCINATION_RATE: float = 0.021
 
 # 关键词 → 维度索引，用于在 mock 中「读到」材料文本时小幅抬升对应维度，
 # 体现解析的可解释性；未命中则用基线值（不编造、不随机）。
+# 接口文档 4.1 枚举（真实抽取的契约清洗白名单；非法值回落「其他」）
+_EDUCATION_ENUM = ("本科", "硕士", "博士", "其他")
+_MAJOR_ENUM = ("计算机科学", "电子信息", "人工智能", "软件工程", "数据科学", "其他")
+_GOAL_ENUM = ("职业培训", "技能认证", "学术研究", "兴趣学习", "其他")
+
+# 容错 JSON 提取：取首个 { 到末个 } 的最大块（模型常在 JSON 外包裹说明文字）
+_JSON_BLOCK_RE = re.compile(r"\{.*\}", re.S)
+
+
+def _extract_json(text: str) -> Any | None:
+    """从模型自由文本中提取 JSON 对象；解析失败返回 None（调用方兜底）。"""
+    for candidate in (text, *_JSON_BLOCK_RE.findall(text or "")):
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return None
+
+
+def _strip_md_fence(text: str) -> str:
+    """剥离模型偶发的 ```markdown 围栏包裹，保留正文。"""
+    t = (text or "").strip()
+    if t.startswith("```"):
+        lines = t.split("\n")
+        if len(lines) >= 2 and lines[-1].strip() == "```":
+            t = "\n".join(lines[1:-1]).strip()
+    return t
+
+
 _KEYWORD_TO_DIM: dict[str, int] = {
     "机器学习": 0,
     "machine learning": 0,
@@ -74,23 +113,21 @@ class LLMClient:
         self.provider = provider or settings.llm_provider
 
     # ---- provider 守卫 ----------------------------------------------------
+    @property
+    def is_mock(self) -> bool:
+        return self.provider == "mock"
+
     def _ensure_supported(self) -> None:
-        if self.provider != "mock":
+        if self.provider not in ("mock", "deepseek"):
             raise NotImplementedError(
                 f"LLM provider '{self.provider}' 尚未实现："
-                "deepseek / qwen / anthropic 真实生成将在 B5 阶段接入；"
-                "当前请将 settings.llm_provider 配置为 'mock'。"
+                "当前支持 mock / deepseek；qwen / anthropic 为后续占位。"
             )
 
-    # ---- 生成类方法（mock 实现） -----------------------------------------
-    def parse_skills(self, text: str, source: str) -> list[dict[str, Any]]:
-        """从材料文本抽取 6 维技能画像（接口文档 4.1 skills）。
-
-        mock 口径：以基线值为底，命中关键词的维度小幅抬升（上限 100），
-        每项 source 取调用方传入的来源类型（resume|ocr|text|manual）。
-        无文本（纯手动）时 source 应为 manual，且仅给基线值不编造经历。
-        """
-        self._ensure_supported()
+    # ---- 画像抽取（接口文档 4.1） -----------------------------------------
+    @staticmethod
+    def _keyword_skills(text: str, source: str) -> list[dict[str, Any]]:
+        """确定性 6 维技能基线：命中关键词的维度小幅抬升（mock / 无材料兜底共用）。"""
         levels = list(_MOCK_BASELINE)
         lowered = (text or "").lower()
         for keyword, dim in _KEYWORD_TO_DIM.items():
@@ -101,6 +138,71 @@ class LLMClient:
             for name, level in zip(ABILITY_DIMENSIONS, levels)
         ]
 
+    def parse_skills(self, text: str, source: str) -> list[dict[str, Any]]:
+        """从材料文本抽取 6 维技能画像（接口文档 4.1 skills，mock 确定性口径）。
+
+        以基线值为底，命中关键词的维度小幅抬升（上限 100），每项 source 取调用方
+        传入的来源类型（resume|ocr|text|manual）。无文本（纯手动）时 source 应为
+        manual，且仅给基线值不编造经历。真实模式请使用 extract_profile。
+        """
+        return self._keyword_skills(text, source)
+
+    def extract_profile(self, text: str, source: str) -> dict[str, Any]:
+        """抽取完整结构化画像（接口文档 4.1：education/major/goal/skills）。
+
+        - mock 或**无材料文本**（manual，防幻觉约束：不得调用 LLM 编造经历）：
+          确定性产出，与 B2 行为逐字等价；
+        - deepseek：真实抽取 + 契约清洗（枚举白名单、level 截断 0-100、
+          固定 6 维补齐、source 统一为调用方传入值）。
+        """
+        self._ensure_supported()
+        stripped = (text or "").strip()
+        if self.is_mock or not stripped:
+            return {
+                "education": "硕士",
+                "major": "人工智能",
+                "goal": "职业培训",
+                "skills": self._keyword_skills(stripped, source),
+            }
+        return self._deepseek_extract_profile(stripped, source)
+
+    def _deepseek_extract_profile(self, text: str, source: str) -> dict[str, Any]:
+        system = (
+            "你是学习者画像抽取专家。从材料文本中抽取结构化画像，仅输出 JSON："
+            '{"education": "...", "major": "...", "goal": "...", '
+            '"skills": [{"name": "...", "level": 0}]}。'
+            f"education 取值 {list(_EDUCATION_ENUM)}；major 取值 {list(_MAJOR_ENUM)}；"
+            f"goal 取值 {list(_GOAL_ENUM)}；"
+            f"skills.name 必须取自固定 6 维 {ABILITY_DIMENSIONS}，level 为 0-100 整数，"
+            "仅依据材料体现的能力给出，材料未体现的维度可省略；"
+            "禁止编造材料中不存在的经历。"
+        )
+        raw = llm_deepseek.chat(f"材料文本：\n{text}", system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("画像抽取输出无法解析为契约 JSON")
+
+        def _pick(value: Any, enum: tuple[str, ...]) -> str:
+            return value if value in enum else "其他"
+
+        by_name: dict[str, int] = {}
+        for s in data.get("skills") or []:
+            if not isinstance(s, dict):
+                continue
+            name, level = s.get("name"), s.get("level")
+            if name in ABILITY_DIMENSIONS and isinstance(level, (int, float)):
+                by_name[name] = max(0, min(100, int(level)))  # 截断 0-100
+        skills = [
+            {"name": name, "level": by_name.get(name, baseline), "source": source}
+            for name, baseline in zip(ABILITY_DIMENSIONS, _MOCK_BASELINE)
+        ]
+        return {
+            "education": _pick(data.get("education"), _EDUCATION_ENUM),
+            "major": _pick(data.get("major"), _MAJOR_ENUM),
+            "goal": _pick(data.get("goal"), _GOAL_ENUM),
+            "skills": skills,
+        }
+
     def generate_narrative(
         self,
         draft: dict[str, Any],
@@ -110,23 +212,34 @@ class LLMClient:
         """生成两段式带来源标注的画像叙述（接口文档 4.2 paragraphs）。
 
         返回恰好两段，每段为 NarrativeSegment 数组：
-        - 第一段：背景与优势（tone=key，sourceId 指向首个材料）；
+        - 第一段：背景与优势（tone=key，sourceId 指向支撑材料）；
         - 第二段：与目标岗位差距（tone=weak，定位最弱维度）。
         调用方负责在「无材料」时不调用本方法（叙述应返回 null，防幻觉）。
+        deepseek 模式：真实生成 + 契约清洗（恰好两段、sourceId 白名单、tone 校验）。
         """
         self._ensure_supported()
+        if not self.is_mock:
+            return self._deepseek_narrative(draft, materials, target_job)
+        return self._mock_narrative(draft, materials, target_job)
+
+    def _mock_narrative(
+        self,
+        draft: dict[str, Any],
+        materials: list[dict[str, Any]],
+        target_job: dict[str, Any] | None,
+    ) -> list[list[dict[str, Any]]]:
+        """B2 确定性两段叙述（mock 模式逐字等价保留）。"""
         skills: list[dict[str, Any]] = draft.get("skills") or []
         major = (draft.get("major") or {}).get("value") or "人工智能"
         # 首个材料作为关键句的来源锚点
         source_id = materials[0]["id"] if materials else None
 
-        # 优势 / 薄弱维度（按 level）
-        if skills:
-            strongest = max(skills, key=lambda s: s.get("level", 0))
-            weakest = min(skills, key=lambda s: s.get("level", 0))
-        else:
-            strongest = {"name": ABILITY_DIMENSIONS[0]}
-            weakest = {"name": ABILITY_DIMENSIONS[-1]}
+        # 优势维度（按 level；薄弱维度在 _gap_paragraph 内定位）
+        strongest = (
+            max(skills, key=lambda s: s.get("level", 0))
+            if skills
+            else {"name": ABILITY_DIMENSIONS[0]}
+        )
 
         para1 = [
             {"text": "该学习者具备 ", "sourceId": None},
@@ -136,14 +249,83 @@ class LLMClient:
             {"text": "。"},
         ]
 
+        para2 = self._gap_paragraph(draft, target_job)
+        return [para1, para2]
+
+    @staticmethod
+    def _gap_paragraph(
+        draft: dict[str, Any], target_job: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        """确定性「差距段」（mock 第二段；真实模式段数不足时的兜底段）。"""
+        skills: list[dict[str, Any]] = draft.get("skills") or []
+        weakest = (
+            min(skills, key=lambda s: s.get("level", 0))
+            if skills
+            else {"name": ABILITY_DIMENSIONS[-1]}
+        )
         job_name = (target_job or {}).get("name")
         lead = f"与目标岗位「{job_name}」相比，" if job_name else "与目标岗位要求相比，"
-        para2 = [
+        return [
             {"text": lead, "sourceId": None},
             {"text": f"{weakest['name']}能力偏弱", "tone": "weak"},
             {"text": "，建议作为后续学习路径的优先强化方向。"},
         ]
-        return [para1, para2]
+
+    def _deepseek_narrative(
+        self,
+        draft: dict[str, Any],
+        materials: list[dict[str, Any]],
+        target_job: dict[str, Any] | None,
+    ) -> list[list[dict[str, Any]]]:
+        """真实两段叙述 + 契约清洗（接口文档 4.2）。
+
+        sourceId 标注规则与 4.2 契约一致：只能取材料列表中的 id（白名单），
+        模型给出列表外 id 一律置 null（防幻觉引用）；tone 仅保留 key|weak。
+        """
+        material_ids = {m["id"] for m in materials}
+        system = (
+            "你是学习画像叙述专家。基于给定结构化画像草稿与材料清单，生成恰好两段叙述，"
+            '仅输出 JSON：{"paragraphs": [[{"text": "...", "tone": "key", '
+            '"sourceId": "m1"}], [{"text": "..."}]]}。'
+            "规则：第一段讲学习者背景与优势，关键事实片段 tone=key 并把 sourceId 标注为"
+            "支撑该事实的材料 id；第二段讲与目标岗位的差距，薄弱点片段 tone=weak；"
+            "sourceId 只能取材料清单中的 id，无材料支撑的片段 sourceId 置 null；"
+            "tone 只能取 key 或 weak，普通叙述片段省略 tone；"
+            "禁止编造材料中不存在的经历。"
+        )
+        payload = {
+            "draft": draft,
+            "materials": materials,
+            "targetJob": target_job,
+        }
+        raw = llm_deepseek.chat(
+            json.dumps(payload, ensure_ascii=False), system=system
+        )
+        data = _extract_json(raw)
+        if not isinstance(data, dict) or not isinstance(data.get("paragraphs"), list):
+            raise LLMGenerationError("叙述输出无法解析为契约 JSON")
+
+        paragraphs: list[list[dict[str, Any]]] = []
+        for para in data["paragraphs"][:2]:
+            if not isinstance(para, list):
+                continue
+            segments: list[dict[str, Any]] = []
+            for seg in para:
+                if not isinstance(seg, dict) or not seg.get("text"):
+                    continue
+                cleaned: dict[str, Any] = {"text": str(seg["text"])}
+                if seg.get("tone") in ("key", "weak"):
+                    cleaned["tone"] = seg["tone"]
+                sid = seg.get("sourceId")
+                cleaned["sourceId"] = sid if sid in material_ids else None
+                segments.append(cleaned)
+            if segments:
+                paragraphs.append(segments)
+        if not paragraphs:
+            raise LLMGenerationError("叙述输出不含有效段落")
+        while len(paragraphs) < 2:  # 恰好两段（4.2 契约）：不足时补确定性差距段
+            paragraphs.append(self._gap_paragraph(draft, target_job))
+        return paragraphs
 
     def generate_lecture(
         self, kp_id: str, kp_name: str, difficulty: str, description: str = ""
@@ -152,10 +334,13 @@ class LLMClient:
 
         mock 口径：按难度档（入门/初级/高级）确定性产出三种讲述风格的 Markdown
         （初级/高级含 ```python 代码块```），sources/hallucinationRate 为占位常量。
-        B5 替换为「RAG 检索 → 生成 Agent → 审核 Agent」，方法签名不变，sources 由
-        真实命中切片回填、hallucinationRate 按 15.3 逐句接地口径计算。
+        真实模式讲义不走本方法——经 workflows.run_learning_workflow
+        「RAG 检索 → 生成 Agent → 审核 Agent」生成（services.resource 分支）。
         """
-        self._ensure_supported()
+        if not self.is_mock:
+            raise LLMGenerationError(
+                "真实模式讲义应经 run_learning_workflow 生成，不应调用 generate_lecture"
+            )
         return {
             "markdown": self._lecture_markdown(kp_name, difficulty, description),
             "sources": [dict(s) for s in _LECTURE_SOURCES],
@@ -224,16 +409,49 @@ class LLMClient:
         Agent 先经 services.prompts.get_template() 现读模板并渲染占位符，
         再把渲染后的 prompt 交本方法。mock provider 按 agent 类型返回
         **确定性结构化输出**（无随机、无网络）；variables 仅供 mock 产出
-        与输入相关的确定性内容，真实 provider（B5-b）将忽略该参数、只发 prompt。
+        与输入相关的确定性内容，真实 provider（B5-b）忽略该参数、只发 prompt。
         """
         self._ensure_supported()
         variables = variables or {}
+        if not self.is_mock:
+            return self._deepseek_complete(prompt, agent_id)
         if agent_id == "diagnosis":
             return self._mock_diagnosis(variables)
         if agent_id == "generation":
             return self._mock_generation(variables)
         if agent_id == "critic":
             return self._mock_critic(variables)
+        raise ValueError(f"未知 agent_id：{agent_id}（固定 3 项：diagnosis/generation/critic）")
+
+    def _deepseek_complete(self, prompt: str, agent_id: str) -> dict[str, Any]:
+        """真实 Agent 补全：只发渲染后 prompt + 按 agent 类型的输出约束。"""
+        if agent_id == "generation":
+            text = llm_deepseek.chat(
+                prompt,
+                system="你是领域知识讲义生成专家。直接输出 Markdown 讲义正文，"
+                "不要输出讲义之外的解释或前后缀。",
+            )
+            return {"markdown": _strip_md_fence(text)}
+        if agent_id == "diagnosis":
+            text = llm_deepseek.chat(
+                prompt,
+                system='请仅输出 JSON：{"weakKpIds": ["知识点id"], '
+                '"summary": "一句话诊断摘要", "reasoning": "诊断依据"}',
+            )
+            data = _extract_json(text)
+            if isinstance(data, dict) and data.get("summary"):
+                weak = [str(k) for k in (data.get("weakKpIds") or []) if k]
+                return {
+                    "weakKpIds": weak,
+                    "summary": str(data["summary"]),
+                    "reasoning": str(data.get("reasoning") or ""),
+                }
+            # 非 JSON 输出 → 自由文本兜底，不中断工作流
+            return {"weakKpIds": [], "summary": text[:100], "reasoning": text}
+        if agent_id == "critic":
+            raise LLMGenerationError(
+                "critic 在真实模式走本地逐句接地校验（agents.critic_agent），不经 LLM 通道"
+            )
         raise ValueError(f"未知 agent_id：{agent_id}（固定 3 项：diagnosis/generation/critic）")
 
     @staticmethod

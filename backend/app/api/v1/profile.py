@@ -6,7 +6,8 @@
 - POST /profile/diagnosis-complete  完成诊断，写旅程
 - GET  /profile/ability-portrait    能力雷达 6 维
 
-均需登录（get_current_user）。生成调用经 LLMClient（在 service 层）。
+均需登录（get_current_user）。生成调用经 LLMClient（在 service 层）；
+真实模式 LLM 失败 → 2001 / HTTP 500（B5-b，接口文档 1.3）。
 """
 from __future__ import annotations
 
@@ -14,7 +15,8 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.envelope import success
+from app.core.envelope import fail, success
+from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.schemas.profile import DiagnosisCompleteRequest, NarrativeRequest
@@ -35,7 +37,10 @@ async def parse(
         if not f.filename:
             continue
         uploads.append((f.filename, await f.read()))
-    data = profile_service.parse_profile(user, uploads, description)
+    try:
+        data = profile_service.parse_profile(user, uploads, description)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)
 
 
@@ -45,7 +50,10 @@ async def narrative(
     user: User = Depends(get_current_user),
 ):
     """画像叙述生成（接口文档 4.2）。无材料 → data 为 null。"""
-    data = profile_service.generate_narrative(body)
+    try:
+        data = profile_service.generate_narrative(body)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)
 
 

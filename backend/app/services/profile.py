@@ -1,8 +1,9 @@
-"""画像诊断服务（B2-a，mock 数据源）。
+"""画像诊断服务（B2-a mock 数据源 / B5-b 真实抽取与叙述经 LLMClient 分支）。
 
 覆盖接口文档第 4 章：
-- 4.1 parse：multipart 材料 → pypdf/文本抽取 → LLMClient.parse_skills 输出 6 维画像；
-  无任何材料时 source=manual、不编造经历（防幻觉约束）。
+- 4.1 parse：multipart 材料 → pypdf/文本抽取 → LLMClient.extract_profile 输出
+  education/major/goal + 6 维画像（mock 确定性 / deepseek 真实抽取+契约清洗）；
+  无任何材料时 source=manual、不编造经历（防幻觉约束，真实模式也不调用 LLM）。
 - 4.2 narrative：经 LLMClient 生成两段带 sourceId 叙述；无材料时返回 None（叙述 null）。
 - 4.3 diagnosis-complete：写入 Journey（hasDiagnosed/targetJobName/matchPct）。
 - 4.4 ability-portrait：返回 6 维雷达；以最近一次 parse 结果为准，无则用基线默认。
@@ -94,15 +95,18 @@ def parse_profile(
         source = "manual"
 
     combined_text = "\n".join(doc_texts + ([desc] if desc else []))
-    skills = get_llm().parse_skills(combined_text, source=source)
+    # mock：确定性产出（B2 等价）；真实模式：LLM 抽取 + 契约清洗。
+    # 无任何材料文本时（manual）一律确定性基线，不调用 LLM 编造经历（防幻觉约束）。
+    extracted = get_llm().extract_profile(combined_text, source=source)
+    skills = extracted["skills"]
 
     # 缓存能力值供 ability-portrait 读取
     _portrait_by_user[user.id] = [int(s["level"]) for s in skills]
 
     return {
-        "education": {"value": "硕士", "source": source},
-        "major": {"value": "人工智能", "source": source},
-        "goal": {"value": "职业培训", "source": source},
+        "education": {"value": extracted["education"], "source": source},
+        "major": {"value": extracted["major"], "source": source},
+        "goal": {"value": extracted["goal"], "source": source},
         "skills": skills,
         "materials": materials,
     }

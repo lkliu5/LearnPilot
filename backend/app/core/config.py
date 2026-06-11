@@ -25,8 +25,19 @@ class Settings(BaseSettings):
     # CORS 允许来源（默认放行前端 Vite 3000/3001）
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
-    # LLM Provider（mock / deepseek / qwen / anthropic）—— B0 仅占位
+    # LLM Provider（mock / deepseek / qwen / anthropic）
     llm_provider: str = "mock"
+
+    # DeepSeek（B5-b 真实生成，OpenAI 兼容协议）：Key 经 backend/.env 注入，
+    # 缺省为空——mock 模式无任何 Key 必须能跑通全链路（CLAUDE.md 纪律）
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-chat"
+    llm_timeout_seconds: float = 60.0
+    llm_temperature: float = 0.3
+
+    # 15.3 逐句接地阈值：句子与来源切片最大 embedding 相似度低于该值 → 未接地
+    grounding_threshold: float = 0.75
 
     # 数据库（B1）：SQLite 嵌入式，相对 backend/ 工作目录
     database_url: str = "sqlite:///./zhixue.db"

@@ -1,14 +1,19 @@
-"""学习资源服务（B2-b，mock 数据源）。
+"""学习资源服务（B2-b mock 数据源 / B5-b 真实生成替换）。
 
 覆盖接口文档第 8 章前两个接口：
 - 8.1 knowledge_point_meta：知识点元信息 { id, name, description, status }，
   status 取自掌握度（未开始默认 learning，与前端资源页初始一致）。
-- 8.2 generate_lecture：自适应讲义，经 LLMClient.generate_lecture 产出
-  markdown + sources + hallucinationRate；生成讲义同时把该知识点置为 learning。
+- 8.2 generate_lecture：自适应讲义 markdown + sources + hallucinationRate；
+  生成讲义同时把该知识点置为 learning。
+  - mock：经 LLMClient.generate_lecture 确定性产出（与 B2 逐字等价，演示兜底）；
+  - 真实模式（B5-b）：run_learning_workflow「B3 混合检索+重排 → 生成 Agent →
+    审核 Agent（15.3 接地口径）」，sources 由真实命中切片回填
+    （document_title/source_location → title，文档 category → type，
+    重排分 → confidence），hallucinationRate 为逐句接地计算值。
 
-生成调用统一经 `app.core.llm.LLMClient`（CLAUDE.md 工程纪律）；B5 替换为真实
-RAG + 生成/审核 Agent，签名不变。讲义结果写入 ResourceCache（按 kp+difficulty+kind
-唯一），命中则直接返回缓存，体现「同档不重复再生成」。
+讲义结果写入 ResourceCache（按 kp+difficulty+kind 唯一），命中则直接返回缓存，
+体现「同档不重复再生成」；真实模式 kind 带 provider 后缀（lecture@deepseek），
+与 mock 缓存互不污染——切换 provider 后演示数据不串。
 """
 from __future__ import annotations
 
@@ -17,8 +22,17 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
-from app.models.entities import KnowledgePoint, ResourceCache
+from app.models.entities import KnowledgeDocument, KnowledgePoint, ResourceCache
+from app.rag.reranker import get_reranker
+from app.rag.retriever import get_retriever
 from app.services import mastery as mastery_service
+from app.workflows.learning_workflow import run_learning_workflow
+
+# 接口文档 8.2 sources[].type 合法取值；文档 category 不在其中时回落「文档」
+_SOURCE_TYPES = {"教材", "论文", "文档", "课程"}
+# 讲义检索参数：候选池与最终注入生成的切片数
+_RETRIEVE_POOL = 8
+_RETRIEVE_TOP_K = 4
 
 
 class UnknownKnowledgePoint(Exception):
@@ -50,10 +64,68 @@ def knowledge_point_meta(db: Session, user_id: str, kp_id: str) -> dict[str, Any
     }
 
 
+def _retrieve_for_lecture(
+    kp_id: str, kp_name: str, difficulty: str
+) -> list[dict[str, Any]]:
+    """讲义检索（B3 混合检索 → 重排），适配工作流 retriever 注入点签名。
+
+    返回结构对齐 B5-a 约定：{id, content, metadata, score}（score 为重排分 0-1，
+    重排降级时为 RRF 归一化分，回填 sources[].confidence）。
+    """
+    query = f"{kp_name} {difficulty}"
+    candidates = get_retriever().search(query, top_k=_RETRIEVE_POOL)
+    ranked, _used = get_reranker().rerank(query, candidates, top_k=_RETRIEVE_TOP_K)
+    return [
+        {
+            "id": c["id"],
+            "content": c["content"],
+            "metadata": c.get("metadata") or {},
+            "score": float(c.get("score", 0.0)),
+        }
+        for c in ranked
+    ]
+
+
+def _map_sources(db: Session, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """检索切片 → 接口文档 8.2 sources[]（按文档去重，取该文档最高分切片）。
+
+    title = document_title · source_location；type = 文档 category（白名单外回落
+    「文档」）；confidence = 该文档命中切片的最高重排分（0-1 截断）。
+    """
+    best_by_doc: dict[str, dict[str, Any]] = {}
+    for c in chunks:
+        meta = c.get("metadata") or {}
+        doc_id = meta.get("document_id") or c.get("id", "")
+        score = float(c.get("score", 0.0))
+        if doc_id not in best_by_doc or score > best_by_doc[doc_id]["score"]:
+            best_by_doc[doc_id] = {"meta": meta, "score": score}
+    sources: list[dict[str, Any]] = []
+    for doc_id, best in best_by_doc.items():
+        meta = best["meta"]
+        title = meta.get("document_title") or "知识库文档"
+        location = meta.get("source_location")
+        if location:
+            title = f"{title} · {location}"
+        doc = db.get(KnowledgeDocument, meta.get("document_id") or "")
+        category = doc.category if doc is not None else None
+        sources.append(
+            {
+                "title": title,
+                "type": category if category in _SOURCE_TYPES else "文档",
+                "confidence": round(min(max(best["score"], 0.0), 1.0), 2),
+            }
+        )
+    return sources
+
+
 def generate_lecture(
     db: Session, user_id: str, kp_id: str, difficulty: str
 ) -> dict[str, Any]:
-    """生成自适应讲义（接口文档 8.2）。命中缓存直接返回，否则经 LLMClient 生成。"""
+    """生成自适应讲义（接口文档 8.2）。命中缓存直接返回。
+
+    mock：LLMClient 确定性产出（B2 等价）；真实模式：RAG 检索 → 生成 Agent →
+    审核 Agent 工作流，sources/hallucinationRate 为真实计算值。
+    """
     kp = _require_kp(db, kp_id)
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
@@ -61,33 +133,53 @@ def generate_lecture(
     # 学习该知识点 → 掌握度置 learning（未开始时）
     mastery_service.ensure_learning(db, user_id, kp_id)
 
+    llm = get_llm()
+    # mock 缓存 kind 与 B2 完全一致；真实模式按 provider 隔离，互不污染
+    kind = "lecture" if llm.is_mock else f"lecture@{llm.provider}"
     cached = (
         db.query(ResourceCache)
         .filter(
             ResourceCache.kp_id == kp_id,
             ResourceCache.difficulty == difficulty,
-            ResourceCache.kind == "lecture",
+            ResourceCache.kind == kind,
         )
         .one_or_none()
     )
     if cached is not None:
         return cached.payload
 
-    generated = get_llm().generate_lecture(kp.id, kp.name, difficulty, kp.description)
+    if llm.is_mock:
+        generated = llm.generate_lecture(kp.id, kp.name, difficulty, kp.description)
+        markdown = generated["markdown"]
+        sources = generated["sources"]
+        rate = generated["hallucinationRate"]
+    else:
+        result = run_learning_workflow(
+            db,
+            user_id=user_id,
+            kp_id=kp_id,
+            difficulty=difficulty,
+            retriever=_retrieve_for_lecture,
+        )
+        final = result["finalOutput"]
+        markdown = final["markdown"]
+        sources = _map_sources(db, result["trace"]["ragContextUsed"])
+        rate = final["hallucinationRate"]
+
     payload = {
         "kpId": kp.id,
         "difficulty": difficulty,
-        "markdown": generated["markdown"],
-        "sources": generated["sources"],
-        "hallucinationRate": generated["hallucinationRate"],
+        "markdown": markdown,
+        "sources": sources,
+        "hallucinationRate": rate,
     }
     db.add(
         ResourceCache(
             kp_id=kp_id,
             difficulty=difficulty,
-            kind="lecture",
+            kind=kind,
             payload=payload,
-            hallucination_rate=generated["hallucinationRate"],
+            hallucination_rate=rate,
         )
     )
     db.commit()
