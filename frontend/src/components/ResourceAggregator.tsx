@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { USE_REAL_API } from '../services/api'
 import { getExternalResources } from '../services/resource'
-import { CURRENT_KP_ID } from '../data/knowledgePoints'
+import { getResourceKpId } from '../services/resourceNav'
 
 type ResType = '视频' | '论文' | '文档' | '课程'
 
@@ -80,13 +80,14 @@ const typeMeta: Record<ResType, { icon: string; color: string }> = {
 export default function ResourceAggregator() {
   const [active, setActive] = useState<string | null>(null)
 
-  /* 联调数据源：GET /resource/external/{kpId}（接口 21，已按相关度降序）覆盖；
+  /* 联调数据源：GET /resource/external/{kpId}（接口 21，已按相关度降序）覆盖，
+     kpId 来自 resourceNav 路由传参通道（随学习路径「开始学习/查看资源」切换）；
      mock 模式不请求，初值即本地精选示例，渲染零差异 */
   const [list, setList] = useState<ExternalResource[]>(resources)
   useEffect(() => {
     if (!USE_REAL_API) return
     let alive = true
-    getExternalResources(CURRENT_KP_ID)
+    getExternalResources(getResourceKpId())
       .then((rs) => alive && setList(rs))
       .catch((e) => console.error('[external] 加载外部资源失败', e)) // 失败保留本地示例兜底
     return () => {

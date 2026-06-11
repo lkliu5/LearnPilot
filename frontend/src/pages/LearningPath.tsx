@@ -8,6 +8,7 @@ import { lessons } from '../data/learningPath'
 import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
 import { kpByLessonSeq } from '../data/knowledgePoints'
+import { setResourceNav } from '../services/resourceNav'
 import './LearningPath.css'
 
 const milestones = [
@@ -31,6 +32,15 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
       return { ...l, status: 'in_progress' as const, progress: l.progress >= 100 ? 55 : l.progress }
     return l
   })
+
+  /* 弹窗按钮 → 资源页：经 resourceNav 通道携带该课程对应 kpId（Lesson.sequence ↔ lessonSeq 映射）。
+     开始学习落默认「定制讲义」Tab；查看资源落「资源推荐」Tab，各司其职 */
+  const openResource = (topic: string, entryTab?: string) => {
+    const lesson = pathData.find((p) => p.topic === topic)
+    const kp = lesson ? kpByLessonSeq(lesson.sequence) : undefined
+    setResourceNav(kp?.id ?? '', entryTab)
+    onNavigate?.('learning-resource')
+  }
 
   const completedCount = pathData.filter(p => p.status === 'completed').length
   const inProgressCount = pathData.filter(p => p.status === 'in_progress').length
@@ -251,10 +261,16 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
               <h2>{selectedTopic}</h2>
               <p>{pathData.find(p => p.topic === selectedTopic)?.description}</p>
               <div className="topic-modal__actions">
-                <button className="topic-modal__btn topic-modal__btn--primary">
+                <button
+                  className="topic-modal__btn topic-modal__btn--primary"
+                  onClick={() => openResource(selectedTopic)}
+                >
                   开始学习
                 </button>
-                <button className="topic-modal__btn topic-modal__btn--secondary">
+                <button
+                  className="topic-modal__btn topic-modal__btn--secondary"
+                  onClick={() => openResource(selectedTopic, 'external')}
+                >
                   查看资源
                 </button>
               </div>

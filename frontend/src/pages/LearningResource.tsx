@@ -10,6 +10,7 @@ import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { getLecture, getQuiz, submitQuiz } from '../services/resource'
+import { consumeResourceEntryTab, getResourceKpId } from '../services/resourceNav'
 import type { PageType } from '../App'
 import './LearningResource.css'
 
@@ -241,43 +242,73 @@ const TAB_GROUPS = [
 
 type Tab = (typeof TAB_GROUPS)[number]['tabs'][number]['id']
 
+const ALL_TAB_IDS = TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id))
+const isTab = (v: string | null): v is Tab => !!v && (ALL_TAB_IDS as readonly string[]).includes(v)
+
+/** 从讲义 markdown 提取标题大纲（跳过代码块内的 # 注释行），供思维导图结构化 */
+function lectureOutline(md: string): string {
+  let inFence = false
+  const lines: string[] = []
+  for (const line of md.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    if (!inFence && /^#{1,4}\s/.test(line)) lines.push(line)
+  }
+  return lines.join('\n')
+}
+
 const Loading = () => <div className="resource-loading">资源加载中…</div>
 
 export default function LearningResource({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
-  const [tab, setTab] = useState<Tab>('lecture')
+  /* 当前知识点：联调从 resourceNav 路由传参通道取（页面随导航重挂载，挂载时读取即可）；
+     mock 模式恒为 CURRENT_KP_ID——本地演示内容只有 nn 一套，避免「标题 CNN、内容 nn」错配 */
+  const kpId = USE_REAL_API ? getResourceKpId() : CURRENT_KP_ID
+  /* 落点 Tab：路径页「查看资源」落资源推荐，「开始学习」落默认讲义（一次性参数，读后即清）*/
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = consumeResourceEntryTab()
+    return isTab(t) ? t : 'lecture'
+  })
   const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
   const [regenerating, setRegenerating] = useState(false)
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
   const [trustOpen, setTrustOpen] = useState(false)
 
   /* 联调数据源（mock 模式下不使用，保持现有常量驱动）：
-     questions 来自 GET /quiz/{kp}；lectureMap 缓存各难度档 markdown */
-  const [questions, setQuestions] = useState<QuizQuestion[]>(quizQuestions)
+     questions 来自 GET /quiz/{kp}（联调初值为空，避免拉取期间闪现 nn 演示题）；
+     lectureMap 缓存各难度档 markdown */
+  const [questions, setQuestions] = useState<QuizQuestion[]>(USE_REAL_API ? [] : quizQuestions)
   const [lectureMap, setLectureMap] = useState<Record<string, string>>({})
 
   /* 知识点闭环状态：完成以"通过分阶测试(≥60%)"为唯一判定 */
-  const kpStatus = useMastery((s) => s.status[CURRENT_KP_ID] ?? 'learning')
+  const kpStatus = useMastery((s) => s.status[kpId] ?? 'learning')
   const goCheck = useMastery((s) => s.goCheck)
   const markPassed = useMastery((s) => s.markPassed)
   const loadMastery = useMastery((s) => s.load)
-  const kpName = kpById(CURRENT_KP_ID)?.name ?? '当前知识点'
+  const kpName = kpById(kpId)?.name ?? '当前知识点'
 
   /* 联调初始化：拉取后端测验题 + 当前难度讲义 + 刷新掌握度（mock 模式跳过）*/
   useEffect(() => {
     if (!USE_REAL_API) return
     loadMastery()
-    getQuiz(CURRENT_KP_ID)
+    getQuiz(kpId)
       .then((d) => setQuestions(d.questions))
       .catch((e) => console.error('[resource] 加载测验题失败', e))
-    getLecture(CURRENT_KP_ID, level)
+    getLecture(kpId, level)
       .then((d) => setLectureMap((m) => ({ ...m, [level]: d.markdown })))
       .catch((e) => console.error('[resource] 加载讲义失败', e))
-    // 仅挂载时执行一次（level 初值为「初级」）
+    // 仅挂载时执行一次（level 初值为「初级」；kpId 挂载期内不变）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /* 当前展示的讲义内容：联调取后端缓存，mock 取本地三档常量 */
   const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : lectureByLevel[level]
+
+  /* 思维导图：联调由当前讲义 markdown 实时结构化（标题大纲，与"从讲义结构化得到"的
+     设计一致；后端 8.4 导图接口未实现，讲义已按 kpId 请求故大纲随 kpId 变化）；
+     mock 保持本地大纲常量 */
+  const activeMindmap = USE_REAL_API ? lectureOutline(activeLecture) : mindmapMarkdown
 
   const handleQuizResult = (
     wrong: QuizQuestion[],
@@ -288,11 +319,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     if (!submitted) return
     if (USE_REAL_API) {
       // 提交作答给后端判分；≥60 后端联动置 passed，再拉取掌握度刷新徽章
-      submitQuiz(CURRENT_KP_ID, answers ?? {})
+      submitQuiz(kpId, answers ?? {})
         .then(() => loadMastery())
         .catch((e) => console.error('[resource] 提交测验失败', e))
     } else if ((questions.length - wrong.length) / questions.length >= 0.6) {
-      markPassed(CURRENT_KP_ID)
+      markPassed(kpId)
     }
   }
 
@@ -301,7 +332,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     if (lv === level || regenerating) return
     setRegenerating(true)
     if (USE_REAL_API) {
-      getLecture(CURRENT_KP_ID, lv)
+      getLecture(kpId, lv)
         .then((d) => {
           setLectureMap((m) => ({ ...m, [lv]: d.markdown }))
           setLevel(lv)
@@ -412,7 +443,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             <SourceTrace />
 
             <div className="lecture-body">
-              <MarkdownRenderer content={activeLecture} />
+              {activeLecture ? (
+                <MarkdownRenderer content={activeLecture} />
+              ) : (
+                <div className="resource-loading">「{kpName}」的定制讲义生成中，请稍候…</div>
+              )}
               <AnimatePresence>
                 {regenerating && (
                   <motion.div
@@ -438,7 +473,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         {tab === 'mindmap' && (
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">AI 已将讲义结构化为知识脉络图，可缩放/拖拽：</div>
-            <MindMap markdown={mindmapMarkdown} />
+            {activeMindmap ? (
+              <MindMap markdown={activeMindmap} />
+            ) : (
+              <div className="resource-loading">「{kpName}」的讲义生成后将自动结构化为思维导图…</div>
+            )}
           </Suspense>
         )}
         {tab === 'code' && (
@@ -460,7 +499,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
         {tab === 'quiz' && (
           <>
-            <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
+            {questions.length > 0 ? (
+              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
+            ) : (
+              <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
+            )}
             {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
           </>
         )}
@@ -498,7 +541,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             className="flow-next__btn"
             type="button"
             onClick={() => {
-              goCheck(CURRENT_KP_ID)
+              goCheck(kpId)
               setTab('quiz')
             }}
           >

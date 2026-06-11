@@ -4,7 +4,7 @@ import type { QuizQuestion } from './QuizRenderer'
 import QuizRenderer from './QuizRenderer'
 import { USE_REAL_API } from '../services/api'
 import { reinforce } from '../services/resource'
-import { CURRENT_KP_ID } from '../data/knowledgePoints'
+import { getResourceKpId } from '../services/resourceNav'
 
 /* 知识点 → 强化讲解 + 一道针对性练习（演示 Agent 错题驱动再生成）*/
 const reinforcementBank: Record<string, { point: string; recap: string; practice: QuizQuestion }> = {
@@ -73,7 +73,7 @@ export default function WeakPointReinforce({ wrong }: { wrong: QuizQuestion[] })
     setGenerating(true)
     if (USE_REAL_API) {
       let alive = true
-      reinforce(CURRENT_KP_ID, wrong.map((w) => w.question_id))
+      reinforce(getResourceKpId(), wrong.map((w) => w.question_id))
         .then((cards) => {
           if (!alive) return
           setRemoteItems(cards.map((c) => ({ point: c.point, recap: c.recap, practice: c.practice })))
