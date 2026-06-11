@@ -8,11 +8,14 @@ import {
   VIDEO_H,
   VIDEO_DURATION,
 } from '../remotion/LectureVideo'
+import { USE_REAL_API } from '../services/api'
+import { getVideo, type VideoNarrationLine } from '../services/resource'
+import { getResourceKpId } from '../services/resourceNav'
 
 /* 由当前帧定位旁白段落索引 */
-const segIndexAt = (frame: number) => {
+const segIndexAt = (frame: number, script: VideoNarrationLine[]) => {
   let idx = 0
-  for (let i = 0; i < NARRATION.length; i++) if (frame >= NARRATION[i].from) idx = i
+  for (let i = 0; i < script.length; i++) if (frame >= script[i].from) idx = i
   return idx
 }
 
@@ -21,6 +24,21 @@ export default function VideoLecture() {
   const [seg, setSeg] = useState(0)
   const [narration, setNarration] = useState(true)
   const spokenRef = useRef<number>(-1)
+
+  /* B7-b 联调：旁白脚本改吃 8.3 POST /resource/video 的 narration（services 层已映射
+     frame→from）；mock 模式 / 请求失败保持本地 NARRATION，朗读与点击 seek 行为不变 */
+  const [script, setScript] = useState<VideoNarrationLine[]>(NARRATION)
+  const scriptRef = useRef(script)
+  scriptRef.current = script
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    // 难度固定「初级」：与视频画面内容（封面标注 难度：初级）一致
+    getVideo(getResourceKpId(), '初级')
+      .then((d) => {
+        if (d.narration.length) setScript(d.narration)
+      })
+      .catch((e) => console.error('[video] 加载旁白脚本失败，使用本地脚本', e))
+  }, [])
 
   const speak = useCallback((text: string) => {
     if (!('speechSynthesis' in window)) return
@@ -35,7 +53,7 @@ export default function VideoLecture() {
     const p = playerRef.current
     if (!p) return
     const onFrame = (e: { detail: { frame: number } }) => {
-      const idx = segIndexAt(e.detail.frame)
+      const idx = segIndexAt(e.detail.frame, scriptRef.current)
       setSeg(idx)
     }
     const onPause = () => window.speechSynthesis?.cancel()
@@ -50,15 +68,18 @@ export default function VideoLecture() {
     }
   }, [])
 
+  /* 当前旁白段（脚本切换瞬间防越界兜底） */
+  const curLine = script[seg] ?? script[script.length - 1]
+
   // 进入新场景时朗读对应旁白（仅播放中 + 旁白开启）
   useEffect(() => {
     const p = playerRef.current
     if (!narration || !p || !p.isPlaying()) return
     if (spokenRef.current !== seg) {
       spokenRef.current = seg
-      speak(NARRATION[seg].text)
+      speak(curLine.text)
     }
-  }, [seg, narration, speak])
+  }, [seg, narration, speak, curLine])
 
   return (
     <div className="video-lecture">
@@ -74,7 +95,7 @@ export default function VideoLecture() {
           style={{ width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-glass)' }}
         />
         {/* 字幕 */}
-        <div className="video-lecture__caption">{NARRATION[seg].text}</div>
+        <div className="video-lecture__caption">{curLine.text}</div>
       </div>
 
       {/* 旁白脚本 + TTS 控制 */}
@@ -90,7 +111,7 @@ export default function VideoLecture() {
           </label>
         </div>
         <ol className="video-lecture__script">
-          {NARRATION.map((n, i) => (
+          {script.map((n, i) => (
             <li
               key={i}
               className={`video-lecture__line ${i === seg ? 'video-lecture__line--active' : ''}`}

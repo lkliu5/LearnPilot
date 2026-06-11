@@ -24,7 +24,9 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
-        changeOrigin: true
+        changeOrigin: true,
+        // 接口 28 的 WS 路径在 /api/v1/ws/ 下，代理需支持 WebSocket 升级
+        ws: true
       },
       '/ws': {
         target: 'ws://localhost:8000',

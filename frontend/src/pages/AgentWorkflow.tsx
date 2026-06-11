@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useState, useRef, useLayoutEffect, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { gsap } from 'gsap'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
@@ -7,6 +7,12 @@ import AgentStatusCard from '../components/AgentStatusCard'
 import CountUp from '../components/CountUp'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
+import { USE_REAL_API } from '../services/api'
+import {
+  executeWorkflow,
+  connectWorkflowSocket,
+  type WorkflowSnapshot,
+} from '../services/workflow'
 import './AgentWorkflow.css'
 
 gsap.registerPlugin(useGSAP, MotionPathPlugin)
@@ -54,6 +60,15 @@ export default function AgentWorkflow() {
   const [isRunning, setIsRunning] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
 
+  /* B7-b 实时通道：演示=既有 setTimeout 模拟链（评审断网兜底，原样保留）；
+     实时=11.1 execute + 11.2 WS 帧驱动既有 agents/messages/stats/phase 状态。
+     mock 模式（USE_REAL_API=false）恒为演示且不渲染开关，行为与切换前逐帧一致 */
+  const [mode, setMode] = useState<'demo' | 'live'>(USE_REAL_API ? 'live' : 'demo')
+  const [liveStats, setLiveStats] = useState({ completedAgents: 0, messageCount: 0, progress: 0 })
+  const [liveHint, setLiveHint] = useState('')
+  const socketRef = useRef<{ close: () => void } | null>(null)
+  const hintTimerRef = useRef(0)
+
   /* GSAP G1：测量节点真实坐标 → 生成曲线连线路径 → 粒子沿路径流动 */
   const networkRef = useRef<HTMLDivElement>(null)
   const [edgePaths, setEdgePaths] = useState<{ id: string; d: string }[]>([])
@@ -88,6 +103,18 @@ export default function AgentWorkflow() {
     return () => ro.disconnect()
   }, [])
 
+  /* B7-b 实时模式下粒子仅在 running 边流动：三条 Agent 边随对应节点 running 点亮，
+     rag 边随生成节点；演示模式为 null（保持全边流动，与切换前逐帧一致） */
+  const liveActiveEdges =
+    mode === 'live'
+      ? new Set([
+          ...agentConfig.filter((_, i) => agents[i].status === 'running').map((c) => c.id),
+          ...(agents[1].status === 'running' ? ['rag'] : []),
+        ])
+      : null
+  /* 实时模式 running 边集合变化时重建粒子时间线；演示模式恒为 '' 不触发额外重建 */
+  const liveEdgesKey = liveActiveEdges ? Array.from(liveActiveEdges).sort().join() : ''
+
   /* 运行态：粒子沿每条连线路径流动（淡入 → 沿路径 → 淡出，循环）*/
   useGSAP(() => {
     const net = networkRef.current
@@ -109,7 +136,7 @@ export default function AgentWorkflow() {
       })
     })
     return () => tls.forEach((t) => t.kill())
-  }, { dependencies: [isRunning, edgePaths], scope: networkRef })
+  }, { dependencies: [isRunning, edgePaths, liveEdgesKey], scope: networkRef })
 
   const simulateWorkflow = () => {
     setIsRunning(true)
@@ -204,7 +231,107 @@ export default function AgentWorkflow() {
     ])
   }
 
+  /* ---------- B7-b 实时模式（演示模式上方逻辑零改动） ---------- */
+
+  /** 轻提示（页头徽章位展示，4 秒自动消失）。 */
+  const showHint = (text: string) => {
+    setLiveHint(text)
+    window.clearTimeout(hintTimerRef.current)
+    hintTimerRef.current = window.setTimeout(() => setLiveHint(''), 4000)
+  }
+
+  const closeSocket = () => {
+    socketRef.current?.close()
+    socketRef.current = null
+  }
+
+  /** WS 帧（首帧全量、后续 messages 仅增量）→ 驱动既有状态卡 / 日志 / stats / phase。 */
+  const applyFrame = (snap: WorkflowSnapshot) => {
+    setPhase(snap.phase)
+    setCurrentStep(snap.step)
+    setLiveStats(snap.stats)
+    setAgents((prev) =>
+      agentConfig.map((cfg, i) => {
+        const a = snap.agents.find((x) => x.id === cfg.id)
+        return a ? { name: a.name, status: a.status, lastAction: a.lastAction } : prev[i]
+      })
+    )
+    setMessages((prev) => {
+      const seen = new Set(prev.map((m) => m.id))
+      const fresh = snap.messages
+        .filter((m) => !seen.has(m.id))
+        .map((m) => ({
+          id: m.id,
+          from: m.from,
+          to: m.to,
+          message: m.message,
+          type: m.type,
+          timestamp: new Date(m.timestamp),
+        }))
+      return fresh.length ? [...prev, ...fresh] : prev
+    })
+  }
+
+  /** 实时失败（execute 报错 / WS 连不上或中途断开）→ 自动回退演示模式并轻提示。 */
+  const fallbackToDemo = (reason: string) => {
+    closeSocket()
+    setMode('demo')
+    showHint(`${reason}，已自动回退演示模式`)
+    // 清掉可能残留的实时半程状态，再走原模拟链
+    setAgents([
+      { name: '学情诊断Agent', status: 'idle', lastAction: '等待用户输入' },
+      { name: '领域知识生成Agent', status: 'idle', lastAction: '等待诊断结果' },
+      { name: '内容审核Agent', status: 'idle', lastAction: '等待生成内容' }
+    ])
+    simulateWorkflow()
+  }
+
+  /** 实时模式启动：11.1 execute → 11.2 WS 订阅，节点随帧实时点亮。 */
+  const startLiveWorkflow = async () => {
+    setIsRunning(true)
+    setPhase('diagnosis')
+    setCurrentStep(0)
+    setMessages([])
+    setLiveStats({ completedAgents: 0, messageCount: 0, progress: 0 })
+    let workflowId: string
+    try {
+      workflowId = (await executeWorkflow()).workflowId
+    } catch (e) {
+      console.error('[workflow] 触发实时工作流失败', e)
+      fallbackToDemo('后端不可用')
+      return
+    }
+    socketRef.current = connectWorkflowSocket(workflowId, {
+      onFrame: applyFrame,
+      onComplete: () => {
+        socketRef.current = null
+        setIsRunning(false)
+      },
+      onFail: (reason) => {
+        console.error('[workflow] 实时通道异常：', reason)
+        socketRef.current = null
+        fallbackToDemo(reason)
+      },
+    })
+  }
+
+  const startWorkflow = () => {
+    if (mode === 'live') void startLiveWorkflow()
+    else simulateWorkflow()
+  }
+
+  /* 卸载清理：断开 WS、清提示定时器（close 不触发回退） */
+  useEffect(() => {
+    return () => {
+      socketRef.current?.close()
+      window.clearTimeout(hintTimerRef.current)
+    }
+  }, [])
+
+  /* ---------- B7-b 实时模式逻辑结束 ---------- */
+
   const resetWorkflow = () => {
+    closeSocket()
     setPhase('idle')
     setCurrentStep(0)
     setIsRunning(false)
@@ -214,6 +341,7 @@ export default function AgentWorkflow() {
       { name: '内容审核Agent', status: 'idle', lastAction: '等待生成内容' }
     ])
     setMessages([])
+    setLiveStats({ completedAgents: 0, messageCount: 0, progress: 0 })
   }
 
   const getPhaseLabel = () => {
@@ -234,6 +362,7 @@ export default function AgentWorkflow() {
         highlight="协同调度"
         subtitle="实时查看多智能体工作流执行状态与决策逻辑"
         badges={[
+          ...(liveHint ? [{ label: '联调提示', value: liveHint, tone: 'accent' as const }] : []),
           {
             label: '运行状态',
             value: isRunning ? '运行中' : phase === 'complete' ? '已完成' : '等待启动',
@@ -242,12 +371,22 @@ export default function AgentWorkflow() {
         ]}
         actions={
           <>
+            {USE_REAL_API && (
+              <button
+                className="workflow-btn workflow-btn--secondary"
+                onClick={() => setMode((m) => (m === 'live' ? 'demo' : 'live'))}
+                disabled={isRunning}
+                title="实时=后端 LangGraph 工作流 WS 推送；演示=本地模拟链（断网兜底）"
+              >
+                {mode === 'live' ? '实时模式' : '演示模式'}
+              </button>
+            )}
             <button
               className={`workflow-btn ${isRunning ? 'workflow-btn--disabled' : 'workflow-btn--primary'}`}
-              onClick={simulateWorkflow}
+              onClick={startWorkflow}
               disabled={isRunning}
             >
-              {isRunning ? '执行中...' : '启动演示'}
+              {isRunning ? '执行中...' : mode === 'live' ? '启动工作流' : '启动演示'}
             </button>
             <button className="workflow-btn workflow-btn--secondary" onClick={resetWorkflow}>
               重置状态
@@ -376,13 +515,15 @@ export default function AgentWorkflow() {
                     fill="none"
                   />
                 ))}
-                {/* GSAP MotionPath 消息粒子（运行态沿连线流动）*/}
+                {/* GSAP MotionPath 消息粒子（运行态沿连线流动；实时模式仅 running 边渲染）*/}
                 {isRunning &&
-                  edgePaths.map((p) =>
-                    [0, 1].map((di) => (
-                      <circle key={`${p.id}-${di}`} className="msg-dot" data-edge={p.id} r="3.5" />
-                    ))
-                  )}
+                  edgePaths
+                    .filter((p) => !liveActiveEdges || liveActiveEdges.has(p.id))
+                    .map((p) =>
+                      [0, 1].map((di) => (
+                        <circle key={`${p.id}-${di}`} className="msg-dot" data-edge={p.id} r="3.5" />
+                      ))
+                    )}
               </svg>
             </div>
           </div>
@@ -446,19 +587,23 @@ export default function AgentWorkflow() {
               <div className="workflow-stat">
                 <CountUp
                   className="workflow-stat__value"
-                  value={agents.filter(a => a.status === 'success').length}
+                  value={mode === 'live' ? liveStats.completedAgents : agents.filter(a => a.status === 'success').length}
                   duration={0.6}
                 />
                 <span className="workflow-stat__label">已完成Agent</span>
               </div>
               <div className="workflow-stat">
-                <CountUp className="workflow-stat__value" value={messages.length} duration={0.6} />
+                <CountUp
+                  className="workflow-stat__value"
+                  value={mode === 'live' ? liveStats.messageCount : messages.length}
+                  duration={0.6}
+                />
                 <span className="workflow-stat__label">消息交互数</span>
               </div>
               <div className="workflow-stat">
                 <CountUp
                   className="workflow-stat__value"
-                  value={phase === 'complete' ? 100 : phase === 'idle' ? 0 : currentStep * 25}
+                  value={mode === 'live' ? liveStats.progress : phase === 'complete' ? 100 : phase === 'idle' ? 0 : currentStep * 25}
                   suffix="%"
                   duration={0.6}
                 />

@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { USE_REAL_API } from '../services/api'
+import { tutorChatStream } from '../services/tutor'
+import { getResourceKpId } from '../services/resourceNav'
 
 interface Msg {
   role: 'agent' | 'user'
@@ -41,12 +44,50 @@ export default function SocraticTutor() {
     return hit ? hit.reply : fallback
   }
 
+  /* B7-b 联调：8.7/15.4 SSE 流式（逐 delta 追加既有气泡，done 后刷新 suggestions chips）。
+     首个 delta 前沿用打字三点动画；SSE 失败回退本地引导链（已渲染片段保留） */
+  const sendLive = async (text: string) => {
+    let acc = ''
+    let started = false
+    const appendDelta = (delta: string) => {
+      acc += delta
+      if (!started) {
+        started = true
+        setTyping(false)
+        setMsgs((m) => [...m, { role: 'agent', text: acc }])
+      } else {
+        setMsgs((m) => [...m.slice(0, -1), { role: 'agent', text: acc }])
+      }
+    }
+    try {
+      const done = await tutorChatStream({
+        kpId: getResourceKpId(),
+        sessionId: sessionRef.current,
+        message: text,
+        onDelta: appendDelta,
+      })
+      sessionRef.current = done.sessionId
+      if (done.suggestions.length) setChips(done.suggestions)
+      setTyping(false)
+      // 空流（无任何 delta）按失败处理，走本地引导链兜底
+      if (!started) setMsgs((m) => [...m, { role: 'agent', text: reply(text) }])
+    } catch (e) {
+      console.error('[tutor] SSE 流式失败，回退本地引导链', e)
+      setTyping(false)
+      if (!started) setMsgs((m) => [...m, { role: 'agent', text: reply(text) }])
+    }
+  }
+
   const send = () => {
     const text = input.trim()
     if (!text || typing) return
     setMsgs((m) => [...m, { role: 'user', text }])
     setInput('')
     setTyping(true)
+    if (USE_REAL_API) {
+      void sendLive(text)
+      return
+    }
     const answer = reply(text)
     window.setTimeout(() => {
       setTyping(false)
@@ -55,6 +96,9 @@ export default function SocraticTutor() {
   }
 
   const quick = ['先加权求和', '加上偏置 b', '因为要引入非线性', '反向传播+梯度下降']
+  /* 联调：done 事件返回的 suggestions 覆盖快捷 chips（mock 模式恒为本地 quick，渲染零差异） */
+  const [chips, setChips] = useState<string[]>(quick)
+  const sessionRef = useRef<string | undefined>(undefined)
 
   return (
     <div className="socratic">
@@ -90,7 +134,7 @@ export default function SocraticTutor() {
       </div>
 
       <div className="socratic__quick">
-        {quick.map((q) => (
+        {chips.map((q) => (
           <button key={q} className="socratic__chip" onClick={() => setInput(q)}>{q}</button>
         ))}
       </div>
