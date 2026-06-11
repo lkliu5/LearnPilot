@@ -36,8 +36,11 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     llm_temperature: float = 0.3
 
-    # 15.3 逐句接地阈值：句子与来源切片最大 embedding 相似度低于该值 → 未接地
-    grounding_threshold: float = 0.75
+    # 15.3 逐句接地阈值：句子与来源切片最大 embedding 相似度低于该值 → 未接地。
+    # 默认 0.6 为 bge-small-zh-v1.5 实测标定值（B5-b：逐句相似度中位数 ≈0.73，
+    # 接地句多落 0.6-0.9，文档示例 0.75 会把 ~62% 真实接地句误判为幻觉）；
+    # 按 15.3「阈值可在配置中调整」，.env 经 GROUNDING_THRESHOLD 可覆盖。
+    grounding_threshold: float = 0.6
 
     # 数据库（B1）：SQLite 嵌入式，相对 backend/ 工作目录
     database_url: str = "sqlite:///./zhixue.db"
@@ -63,6 +66,11 @@ class Settings(BaseSettings):
     rrf_dense_weight: float = 0.7
     rrf_sparse_weight: float = 0.3
     rrf_k: int = 60
+
+    # 岗位市场（B6 / 接口文档 15.5）：预置快照 JSON 目录（种子导入来源，相对 backend/）；
+    # job_market_offline=True 模拟「实时数据源不可用」→ /job-market/{id} 走 2002 降级
+    job_market_dir: str = "../frontend/public/data/job-market"
+    job_market_offline: bool = False
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -18,7 +18,10 @@ from app.api.v1 import (
     admin_metrics,
     admin_prompts,
     auth,
+    dashboard,
     health,
+    job_market,
+    knowledge_graph,
     learning_path,
     mastery,
     profile,
@@ -82,3 +85,7 @@ app.include_router(admin_kb.router, prefix=settings.api_prefix)
 # B4-b：管理端 Prompt 热更新 + 指标看板
 app.include_router(admin_prompts.router, prefix=settings.api_prefix)
 app.include_router(admin_metrics.router, prefix=settings.api_prefix)
+# B6：P1 特色——岗位市场 / 知识图谱 / 学情概览（Reinforce 在 quiz、External 在 resource）
+app.include_router(job_market.router, prefix=settings.api_prefix)
+app.include_router(knowledge_graph.router, prefix=settings.api_prefix)
+app.include_router(dashboard.router, prefix=settings.api_prefix)

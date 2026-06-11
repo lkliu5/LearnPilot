@@ -10,17 +10,29 @@
 - 6 课学习路径 sequence 1-6（接口文档 2.3）；
 - 两个用户的初始 Journey（hasDiagnosed=False / hasGeneratedPath=False）。
 
+B6 追加种子：
+- JobSnapshot：从 frontend/public/data/job-market/*.json 导入 4 岗位（接口文档 2.4/15.5）；
+- ExternalResource：6 核心知识点 × 3-4 条精选外部资源（接口文档 8.6）。
+
 运行方式：
 - 应用启动时由 main.py lifespan 调用；
 - 亦可独立执行：`python -m app.core.init_db`。
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime
+from pathlib import Path
+
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models.entities import (  # noqa: F401  确保所有表在 create_all 前注册
+    ExternalResource,
+    JobSnapshot,
     Journey,
     KnowledgePoint,
     Lesson,
@@ -126,6 +138,51 @@ _QUIZ_QUESTIONS: dict[str, list] = {
     ],
 }
 
+# 热门岗位固定顺序（接口文档 5.1 契约示例序，与前端 HOT_JOBS 一致）
+_HOT_JOB_ORDER = ["llm-app", "algo-engineer", "ml-engineer", "data-analyst"]
+
+# 精选外部资源种子（接口文档 8.6）：kp_id -> [(序号, type, title, source, url,
+# embed, duration, relevance, credibility, reason)]。nn 四条与前端
+# ResourceAggregator.tsx 演示数据对齐；其余 KP 为同口径人工精选。
+# 生产路径：聚合 Agent 接搜索 API 检索 + critic 评分后定期刷新本表（见 entities.ExternalResource 注释）。
+_EXTERNAL_RESOURCES: dict[str, list[tuple]] = {
+    "ml": [
+        (1, "视频", "李宏毅《机器学习》系列课程", "B站 · 李宏毅", "https://www.bilibili.com/video/BV1Wv411h7kN", "https://player.bilibili.com/player.html?bvid=BV1Wv411h7kN", "系列", 96, 94, "中文领域最权威的机器学习入门课，从回归到深度学习循序渐进。"),
+        (2, "课程", "Machine Learning Specialization（Andrew Ng）", "Coursera · DeepLearning.AI", "https://www.coursera.org/specializations/machine-learning-introduction", None, "系列", 94, 97, "吴恩达经典课程重制版，监督学习与正则化讲解清晰，配套练习完善。"),
+        (3, "课程", "Google 机器学习速成课程", "developers.google.com", "https://developers.google.com/machine-learning/crash-course", None, "15 小时", 90, 93, "短平快的工程视角入门，交互式可视化帮助建立损失与过拟合直觉。"),
+        (4, "文档", "scikit-learn 用户指南", "scikit-learn.org", "https://scikit-learn.org/stable/user_guide.html", None, "实操", 88, 95, "官方文档配可运行示例，把监督/无监督算法落到代码实践。"),
+    ],
+    "nn": [
+        (1, "视频", "3Blue1Brown：神经网络是什么？", "YouTube · 3Blue1Brown", "https://www.youtube.com/watch?v=aircAruvnKk", "https://www.youtube.com/embed/aircAruvnKk", "19:13", 98, 97, "可视化讲解神经元与权重，直观契合你当前「神经网络基础」知识点。"),
+        (2, "课程", "CS231n：卷积神经网络（Stanford）", "Stanford 公开课", "https://cs231n.github.io/", None, "系列", 92, 96, "权威课程，从神经网络基础平滑过渡到 CNN，匹配你的下一步学习路径。"),
+        (3, "论文", "Attention Is All You Need", "arXiv:1706.03762", "https://arxiv.org/abs/1706.03762", None, "15 页", 78, 99, "Transformer 奠基论文，作为你「待提升领域」的进阶拓展读物。"),
+        (4, "文档", "PyTorch 官方教程 · 构建神经网络", "pytorch.org", "https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html", None, "实操", 90, 95, "官方动手教程，把讲义中的前向传播落到 nn.Module 代码实践。"),
+    ],
+    "dl": [
+        (1, "视频", "3Blue1Brown：梯度下降是如何学习的", "YouTube · 3Blue1Brown", "https://www.youtube.com/watch?v=IHZwWFHWa-w", "https://www.youtube.com/embed/IHZwWFHWa-w", "21:01", 95, 96, "用可视化把梯度下降与损失曲面讲透，是反向传播的最佳直觉铺垫。"),
+        (2, "文档", "《深度学习》（花书）在线版", "deeplearningbook.org", "https://www.deeplearningbook.org/", None, "教材", 92, 98, "Goodfellow 等人的领域奠基教材，优化与正则化章节与本知识点强相关。"),
+        (3, "课程", "Deep Learning Specialization（吴恩达）", "Coursera · DeepLearning.AI", "https://www.coursera.org/specializations/deep-learning", None, "系列", 93, 96, "系统覆盖反向传播、优化器与调参实践，作业可逐步实现训练循环。"),
+        (4, "文档", "PyTorch 官方教程 · 优化模型参数", "pytorch.org", "https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html", None, "实操", 88, 95, "把损失函数、优化器与训练循环落到可运行代码，巩固梯度下降理解。"),
+    ],
+    "cnn": [
+        (1, "课程", "CS231n 笔记 · 卷积网络", "Stanford · cs231n.github.io", "https://cs231n.github.io/convolutional-networks/", None, "长文", 96, 96, "卷积/池化/感受野的权威讲义，配大量图示，是 CNN 架构的标准参考。"),
+        (2, "文档", "CNN Explainer 交互可视化", "Georgia Tech · poloclub", "https://poloclub.github.io/cnn-explainer/", None, "交互", 93, 90, "在浏览器里逐层拖动观察卷积运算，把抽象的特征图变得可见。"),
+        (3, "论文", "Deep Residual Learning（ResNet）", "arXiv:1512.03385", "https://arxiv.org/abs/1512.03385", None, "12 页", 86, 98, "经典卷积网络的里程碑，理解残差连接如何让网络更深。"),
+    ],
+    "transformer": [
+        (1, "论文", "Attention Is All You Need", "arXiv:1706.03762", "https://arxiv.org/abs/1706.03762", None, "15 页", 97, 99, "Transformer 奠基论文，自注意力与多头注意力的第一手定义。"),
+        (2, "文档", "The Illustrated Transformer", "jalammar.github.io", "https://jalammar.github.io/illustrated-transformer/", None, "图解", 96, 92, "最广为引用的图解教程，把 Q/K/V 与多头注意力拆到每一步矩阵运算。"),
+        (3, "视频", "李宏毅：Transformer 详解", "YouTube · Hung-yi Lee", "https://www.youtube.com/watch?v=ugWDIIOHtPA", "https://www.youtube.com/embed/ugWDIIOHtPA", None, 94, 95, "中文系统讲解自注意力机制与位置编码，配课件推导细致。"),
+        (4, "文档", "The Annotated Transformer", "Harvard NLP", "https://nlp.seas.harvard.edu/annotated-transformer/", None, "实操", 90, 94, "逐行代码复现原论文，读完即可亲手实现一个 Transformer。"),
+    ],
+    "finetune": [
+        (1, "论文", "LoRA: Low-Rank Adaptation of LLMs", "arXiv:2106.09685", "https://arxiv.org/abs/2106.09685", None, "13 页", 96, 98, "低秩适配微调的奠基论文，理解「冻结原权重 + 低秩增量」核心思想。"),
+        (2, "文档", "Hugging Face PEFT 官方文档", "huggingface.co", "https://huggingface.co/docs/peft", None, "实操", 94, 95, "参数高效微调的事实标准库，LoRA/Adapter/Prompt Tuning 即插即用。"),
+        (3, "课程", "Hugging Face LLM Course · 微调章节", "huggingface.co/learn", "https://huggingface.co/learn/llm-course/chapter3/1", None, "系列", 91, 94, "手把手带你完成一次完整的预训练模型微调流程。"),
+        (4, "论文", "QLoRA: Efficient Finetuning of Quantized LLMs", "arXiv:2305.14314", "https://arxiv.org/abs/2305.14314", None, "23 页", 88, 97, "量化 + LoRA 的进阶组合，单卡微调大模型的代表性工作。"),
+    ],
+}
+
 # 种子账号：(id, username, displayName, password, role)
 _USERS = [
     ("u_10000", "admin", "管理员", "admin123", "admin"),
@@ -195,8 +252,81 @@ def _seed_quiz_questions(db: Session) -> None:
             )
 
 
+def _seed_job_snapshots(db: Session) -> None:
+    """从 frontend/public/data/job-market/*.json 导入岗位快照（接口文档 2.4/15.5）。
+
+    目录缺失/单文件损坏不致命（跳过，可重复执行补齐）；fetched_at 取 payload
+    的 fetchedAt（响应中 fetchedAt 仍以 payload 为准，前端 timeAgo 渲染）。
+    """
+    source_dir = Path(settings.job_market_dir)
+    for path in sorted(source_dir.glob("*.json")) if source_dir.is_dir() else []:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        job_id = payload.get("id")
+        if not job_id or db.get(JobSnapshot, job_id) is not None:
+            continue
+        try:
+            fetched_at = datetime.fromisoformat(payload.get("fetchedAt", ""))
+        except ValueError:
+            fetched_at = None
+        order = (
+            _HOT_JOB_ORDER.index(job_id) + 1 if job_id in _HOT_JOB_ORDER else 99
+        )
+        db.add(
+            JobSnapshot(
+                id=job_id,
+                name=payload.get("name", job_id),
+                payload=payload,
+                sort_order=order,
+                **({"fetched_at": fetched_at} if fetched_at else {}),
+            )
+        )
+
+
+def _seed_external_resources(db: Session) -> None:
+    for kp_id, rows in _EXTERNAL_RESOURCES.items():
+        for seq, rtype, title, source, url, embed, duration, rel, cred, reason in rows:
+            res_id = f"{kp_id}-r{seq}"
+            if db.get(ExternalResource, res_id) is not None:
+                continue
+            db.add(
+                ExternalResource(
+                    id=res_id,
+                    kp_id=kp_id,
+                    type=rtype,
+                    title=title,
+                    source=source,
+                    url=url,
+                    embed=embed,
+                    duration=duration,
+                    relevance=rel,
+                    credibility=cred,
+                    reason=reason,
+                )
+            )
+
+
+def _migrate_b6() -> None:
+    """B6 轻量迁移：既有开发库 job_snapshots 缺 sort_order 列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。
+    """
+    inspector = inspect(engine)
+    if "job_snapshots" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("job_snapshots")}
+    if "sort_order" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE job_snapshots ADD COLUMN sort_order INTEGER DEFAULT 0")
+            )
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
+    _migrate_b6()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -204,6 +334,8 @@ def init_db() -> None:
         _seed_knowledge_points(db)
         _seed_lessons(db)
         _seed_quiz_questions(db)
+        _seed_job_snapshots(db)
+        _seed_external_resources(db)
         db.commit()
     finally:
         db.close()

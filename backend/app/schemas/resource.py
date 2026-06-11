@@ -27,3 +27,10 @@ class QuizSubmitRequest(BaseModel):
     """POST /quiz/{kpId}/submit 请求体（接口文档 9.1）。"""
 
     answers: list[QuizAnswerItem] = Field(default_factory=list)
+
+
+class ReinforceRequest(BaseModel):
+    """POST /reinforce 请求体（接口文档 9.2）。"""
+
+    kpId: str
+    wrongQuestionIds: list[str] = Field(default_factory=list)

@@ -184,11 +184,40 @@ class WorkflowTrace(Base):
 
 
 class JobSnapshot(Base):
-    """岗位市场快照（接口文档 2.4 / 15.5）。payload 存完整 JobMarket 结构。"""
+    """岗位市场快照（接口文档 2.4 / 15.5）。payload 存完整 JobMarket 结构。
+
+    B6：种子从 frontend/public/data/job-market/*.json 导入（demo 阶段后端托管
+    预置快照即数据源）；生产路径为离线采集管线定期刷新本表（写 README，不在 demo 实现）。
+    """
 
     __tablename__ = "job_snapshots"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)  # llm-app
     name: Mapped[str] = mapped_column(String(128))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)  # 热榜顺序（5.1 契约示例序）
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class ExternalResource(Base):
+    """外部精选资源（接口文档 8.6，B6 种子精选库）。
+
+    demo 阶段为人工精选种子（每核心知识点 3-4 条，relevance/credibility 为
+    审核 Agent 评分口径的预置值）；生产路径：聚合 Agent 调 YouTube Data API /
+    B 站 / arXiv / 慕课等搜索 API 检索候选 → critic Agent 按相关性 + 来源可信度
+    评分过滤 → 写回本表（接口签名不变，写 README，不在 demo 实现）。
+    """
+
+    __tablename__ = "external_resources"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # nn-r1
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    type: Mapped[str] = mapped_column(String(8))  # 视频|论文|文档|课程
+    title: Mapped[str] = mapped_column(String(256))
+    source: Mapped[str] = mapped_column(String(128))
+    url: Mapped[str] = mapped_column(String(512))
+    embed: Mapped[str | None] = mapped_column(String(512), nullable=True)  # 可嵌入播放地址
+    duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    relevance: Mapped[int] = mapped_column(Integer, default=0)  # 相关度 0-100
+    credibility: Mapped[int] = mapped_column(Integer, default=0)  # 可信度 0-100
+    reason: Mapped[str] = mapped_column(Text, default="")

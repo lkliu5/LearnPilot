@@ -22,7 +22,12 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
-from app.models.entities import KnowledgeDocument, KnowledgePoint, ResourceCache
+from app.models.entities import (
+    ExternalResource,
+    KnowledgeDocument,
+    KnowledgePoint,
+    ResourceCache,
+)
 from app.rag.reranker import get_reranker
 from app.rag.retriever import get_retriever
 from app.services import mastery as mastery_service
@@ -62,6 +67,42 @@ def knowledge_point_meta(db: Session, user_id: str, kp_id: str) -> dict[str, Any
         "description": kp.description,
         "status": status,
     }
+
+
+def external_resources(db: Session, kp_id: str) -> list[dict[str, Any]]:
+    """外部资源聚合（接口文档 8.6，B6）。按相关度降序返回精选资源种子。
+
+    demo 阶段读 ExternalResource 精选库（init_db 种子，6 核心 KP 各 3-4 条，
+    relevance/credibility 为审核 Agent 评分口径预置值）；生产路径：聚合 Agent
+    调 YouTube Data API / B 站 / arXiv / 慕课等搜索 API 检索候选 → critic Agent
+    按相关性 + 来源可信度评分过滤 → 写回 ExternalResource 表，本函数与接口签名不变。
+    embed/duration 为可选字段，仅在有值时返回（契约 8.6）。
+    """
+    _require_kp(db, kp_id)
+    rows = (
+        db.query(ExternalResource)
+        .filter(ExternalResource.kp_id == kp_id)
+        .order_by(ExternalResource.relevance.desc(), ExternalResource.id)
+        .all()
+    )
+    items: list[dict[str, Any]] = []
+    for r in rows:
+        item: dict[str, Any] = {
+            "id": r.id,
+            "type": r.type,
+            "title": r.title,
+            "source": r.source,
+            "url": r.url,
+            "relevance": r.relevance,
+            "credibility": r.credibility,
+            "reason": r.reason,
+        }
+        if r.embed:
+            item["embed"] = r.embed
+        if r.duration:
+            item["duration"] = r.duration
+        items.append(item)
+    return items
 
 
 def _retrieve_for_lecture(
