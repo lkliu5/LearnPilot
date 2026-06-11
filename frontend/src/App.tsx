@@ -8,7 +8,8 @@ import AgentWorkflow from './pages/AgentWorkflow'
 import LearningResource from './pages/LearningResource'
 import KnowledgeGraph from './pages/KnowledgeGraph'
 import AdminKB from './pages/admin/AdminKB'
-import AdminPlaceholder from './pages/admin/AdminPlaceholder'
+import AdminPrompts from './pages/admin/AdminPrompts'
+import AdminMetrics from './pages/admin/AdminMetrics'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
 import { getUser } from './services/api'
@@ -105,23 +106,9 @@ function App() {
       case 'admin-kb':
         return <AdminKB />
       case 'admin-prompts':
-        return (
-          <AdminPlaceholder
-            title="Prompt 管理"
-            highlight="Prompt"
-            subtitle="三 Agent 模板编辑 · 保存即热更新"
-            note="B4-b 阶段交付：diagnosis / generation / critic 模板编辑与版本管理（接口文档 14.5）"
-          />
-        )
+        return <AdminPrompts />
       case 'admin-metrics':
-        return (
-          <AdminPlaceholder
-            title="指标看板"
-            highlight="指标"
-            subtitle="幻觉率 · 适配率 · 覆盖率三仪表"
-            note="B4-b 阶段交付：三 gauge 仪表盘，复用 CountUp（接口文档 14.6）"
-          />
-        )
+        return <AdminMetrics />
       default:
         return <Dashboard onNavigate={navigate} />
     }

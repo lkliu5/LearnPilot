@@ -1,5 +1,5 @@
 /**
- * 管理端知识库数据获取层（接口文档第 14 章 14.1–14.4，B4-a）。
+ * 管理端数据获取层（接口文档第 14 章，B4-a 知识库 14.1–14.4 + B4-b Prompt/指标 14.5–14.6）。
  * 全部接口要求 role=admin（后端 require_admin，非管理员 → code 1003 / 403）。
  */
 import { apiGet, apiPost, apiPostForm, apiRequest } from './api'
@@ -87,4 +87,55 @@ export function deleteKbDocument(id: string): Promise<KbDeleteResult> {
 /** 14.4 检索测试：混合检索 → 重排，返回 chunk + rerank/vector/bm25 分数 + 来源定位。 */
 export function kbSearchTest(query: string, topK = 5): Promise<KbSearchResult> {
   return apiPost<KbSearchResult>('/admin/kb/search-test', { query, topK })
+}
+
+/* ===== B4-b：Prompt 模板（14.5）+ 系统指标（14.6） ===== */
+
+/** Agent 标识（与接口文档 11.2 agents[].id 对齐，固定 3 项） */
+export type AgentId = 'diagnosis' | 'generation' | 'critic'
+
+/** Agent Prompt 模板（接口文档 14.5） */
+export interface PromptTemplate {
+  agentId: AgentId
+  name: string
+  template: string
+  /** 必需占位符清单（模板中须保留 {var} 形式） */
+  variables: string[]
+  /** 每次保存自增 */
+  version: number
+  updatedAt: string | null
+}
+
+/** 14.5 PUT 响应：保存即热更新 */
+export interface PromptUpdateResult {
+  agentId: AgentId
+  version: number
+  updatedAt: string
+  hotReloaded: boolean
+}
+
+/** 系统指标（接口文档 14.6）：三比率 0-1 + 三计数 */
+export interface AdminMetrics {
+  hallucinationRate: number
+  adaptationRate: number
+  coverageRate: number
+  kbDocuments: number
+  kbChunks: number
+  generatedResources: number
+  updatedAt: string
+}
+
+/** 14.5 获取 Agent Prompt 模板。 */
+export function getPromptTemplate(agentId: AgentId): Promise<PromptTemplate> {
+  return apiGet<PromptTemplate>(`/admin/prompts/${agentId}`)
+}
+
+/** 14.5 更新模板（保存即热更新，version 自增）。缺失必需占位符 → code 1001。 */
+export function updatePromptTemplate(agentId: AgentId, template: string): Promise<PromptUpdateResult> {
+  return apiRequest<PromptUpdateResult>(`/admin/prompts/${agentId}`, { method: 'PUT', body: { template } })
+}
+
+/** 14.6 系统指标看板（三比率为 B8 前占位值，结构契约定死）。 */
+export function getAdminMetrics(): Promise<AdminMetrics> {
+  return apiGet<AdminMetrics>('/admin/metrics')
 }

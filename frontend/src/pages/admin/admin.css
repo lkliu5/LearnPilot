@@ -453,6 +453,273 @@
   max-width: 460px;
 }
 
+/* ============================================
+   B4-b · Prompt 管理（apr__）
+   ============================================ */
+
+.apr__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.apr__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--space-md) var(--space-lg);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(var(--ink-rgb), 0.08);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.apr__tab:hover {
+  box-shadow: var(--shadow-glass-hover);
+}
+
+.apr__tab--active {
+  border-color: rgba(var(--primary-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12), var(--shadow-glass-hover);
+}
+
+.apr__tab-id {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--primary-600);
+  background: rgba(var(--primary-rgb), 0.10);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+}
+
+.apr__tab strong {
+  font-size: 0.92rem;
+  color: var(--gray-800);
+}
+
+.apr__tab-desc {
+  font-size: 0.74rem;
+  color: var(--gray-500);
+}
+
+.apr__editor {
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.apr__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.apr__name {
+  font-size: var(--text-lg);
+  margin-right: 2px;
+}
+
+/* 版本徽章：mono 数字 */
+.apr__version {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--primary-600);
+  background: rgba(var(--primary-rgb), 0.10);
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+  padding: 1px 10px;
+  border-radius: var(--radius-full);
+}
+
+.apr__updated {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--gray-500);
+}
+
+.apr__dirty {
+  font-size: 0.72rem;
+  color: var(--warning-600);
+  background: var(--warning-50);
+  padding: 1px 10px;
+  border-radius: var(--radius-full);
+}
+
+.apr__vars {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.apr__vars-label {
+  font-size: 0.76rem;
+  color: var(--gray-500);
+}
+
+.apr__var {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--success-600);
+  background: var(--success-50);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  padding: 1px 8px;
+  border-radius: var(--radius-xs);
+}
+
+.apr__var--missing {
+  color: #b91c1c;
+  background: rgba(185, 28, 28, 0.08);
+  border-color: rgba(185, 28, 28, 0.3);
+}
+
+.apr__textarea {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  padding: var(--space-md);
+  border: 1px solid rgba(var(--ink-rgb), 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--gray-800);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.apr__textarea:focus {
+  border-color: rgba(var(--primary-rgb), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
+}
+
+.apr__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.apr__warn {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: #b91c1c;
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   B4-b · 指标看板（amx__）
+   ============================================ */
+
+.amx__gauges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.amx__gauge {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.amx__gauge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.amx__gauge-head h3 {
+  font-size: var(--text-lg);
+}
+
+.amx__gauge-arc {
+  position: relative;
+  margin: 0 auto;
+  width: min(220px, 100%);
+}
+
+.amx__arc-track {
+  stroke: var(--gray-200);
+}
+
+.amx__arc-value {
+  stroke: var(--primary-500, #3b82f6);
+}
+
+.amx__arc-value--warn {
+  stroke: var(--warning-500, #d97706);
+}
+
+.amx__gauge-value {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* gauge 主数字：mono + CountUp */
+.amx__gauge-num {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  letter-spacing: -0.02em;
+}
+
+.amx__gauge-target {
+  font-size: 0.72rem;
+  color: var(--gray-500);
+}
+
+.amx__gauge-desc {
+  font-size: 0.76rem;
+  color: var(--gray-500);
+  text-align: center;
+}
+
+.amx__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xl);
+  padding: var(--space-lg) var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.amx__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.amx__stat-num {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.amx__stat-label {
+  font-size: 0.76rem;
+  color: var(--gray-500);
+}
+
+.amx__stats-updated {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--gray-400);
+}
+
 @media (max-width: 720px) {
   .akb__doc {
     flex-direction: column;
@@ -461,5 +728,9 @@
   }
   .akb__search-form {
     flex-direction: column;
+  }
+  .apr__tabs,
+  .amx__gauges {
+    grid-template-columns: 1fr;
   }
 }

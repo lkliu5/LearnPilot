@@ -15,6 +15,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.v1 import (
     admin,
     admin_kb,
+    admin_metrics,
+    admin_prompts,
     auth,
     health,
     learning_path,
@@ -77,3 +79,6 @@ app.include_router(resource.router, prefix=settings.api_prefix)
 app.include_router(quiz.router, prefix=settings.api_prefix)
 # B3：管理端知识库 RAG 四件套
 app.include_router(admin_kb.router, prefix=settings.api_prefix)
+# B4-b：管理端 Prompt 热更新 + 指标看板
+app.include_router(admin_prompts.router, prefix=settings.api_prefix)
+app.include_router(admin_metrics.router, prefix=settings.api_prefix)
