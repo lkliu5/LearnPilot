@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections.abc import Iterator
 from typing import Any
 
 from app.core import llm_deepseek
@@ -73,6 +75,63 @@ _GOAL_ENUM = ("职业培训", "技能认证", "学术研究", "兴趣学习", "�
 
 # 容错 JSON 提取：取首个 { 到末个 } 的最大块（模型常在 JSON 外包裹说明文字）
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.S)
+
+# ---- 苏格拉底辅导（接口文档 8.7 / 15.4，B7-a） ---------------------------------
+
+# deepseek 真实模式 system prompt：核心约束「引导式提问、不直接给答案」
+_TUTOR_SYSTEM = (
+    "你是「{kp_name}」的苏格拉底式导学助手。规则：只用引导式提问启发学习者自己想通，"
+    "绝对不直接给出最终答案或完整结论；每次回复聚焦一个思考点并以一个问题收尾；"
+    "学习者答对时先简短肯定再追问下一层；简体中文，单次回复不超过 120 字。"
+)
+
+# mock 确定性引导链：关键词分支 →（引导回复, 快捷建议）。
+# 首条分支对齐接口文档 8.7 示例（激活函数之问 → 引导反问 + 三个 suggestions）；
+# 链路覆盖前端 SocraticTutor 演示的「加权求和→偏置→非线性→ReLU→反向传播」闭环。
+_TUTOR_BRANCHES: list[tuple[re.Pattern[str], str, list[str]]] = [
+    (
+        re.compile(r"激活函数|激活"),
+        "好问题。先想一想：如果没有激活函数，多层网络叠加后等价于什么？",
+        ["等价于线性变换", "可以拟合任意函数", "不确定"],
+    ),
+    (
+        re.compile(r"线性|等价"),
+        "对——叠加后仍是一个线性变换，这正是需要非线性的原因。那么哪个激活函数计算最快、还能缓解梯度消失？",
+        ["ReLU", "Sigmoid", "Tanh"],
+    ),
+    (
+        re.compile(r"relu", re.I),
+        "正是 ReLU。它在正区间导数恒为 1——想一想：这对反向传播中的梯度意味着什么？",
+        ["梯度不会被反复压缩", "梯度会消失", "不确定"],
+    ),
+    (
+        re.compile(r"梯度|反向|backprop|损失|下降", re.I),
+        "很好，你已经把前向与反向串起来了。试着用一句话说说：网络是如何利用梯度来更新权重的？",
+        ["沿梯度下降方向更新", "随机调整权重", "不确定"],
+    ),
+    (
+        re.compile(r"偏置|bias|\bb\b", re.I),
+        "没错，是偏置 b。那么加权求和加偏置得到 z 之后，为什么不能直接把 z 当输出？",
+        ["因为要引入非线性", "因为 z 太大", "不确定"],
+    ),
+    (
+        re.compile(r"加权|求和|相乘|权重|乘"),
+        "不错的起点。加权求和之后，为了让决策边界可以平移，还要加上一个量——它叫什么？",
+        ["偏置 b", "学习率", "损失函数"],
+    ),
+]
+_TUTOR_FALLBACK: tuple[str, list[str]] = (
+    "别急，换个角度想想：神经元的本质是把多个输入「汇总」成一个值，这个汇总最直接的数学操作是什么？",
+    ["加权求和", "取最大值", "不确定"],
+)
+
+
+def _mock_tutor_reply(message: str) -> tuple[str, list[str]]:
+    """确定性引导链：命中关键词分支返回对应引导问句，否则兜底引导。"""
+    for pattern, reply, suggestions in _TUTOR_BRANCHES:
+        if pattern.search(message or ""):
+            return reply, list(suggestions)
+    return _TUTOR_FALLBACK[0], list(_TUTOR_FALLBACK[1])
 
 
 def _extract_json(text: str) -> Any | None:
@@ -619,6 +678,54 @@ class LLMClient:
                 }
             )
         return cards, issues
+
+    # ---- 苏格拉底辅导（接口文档 8.7 / 15.4，B7-a） --------------------------
+    def tutor_chat(
+        self, *, kp_name: str, history: list[dict[str, str]], message: str
+    ) -> dict[str, Any]:
+        """整体回复（8.7 JSON 模式）：{reply, suggestions}。
+
+        mock：确定性引导链（不直接给答案，问题收尾）；
+        deepseek：真实生成（system 约束引导式），suggestions 可空（契约允许）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            reply, suggestions = _mock_tutor_reply(message)
+            return {"reply": reply, "suggestions": suggestions}
+        reply = llm_deepseek.chat(
+            message, system=_TUTOR_SYSTEM.format(kp_name=kp_name), history=history
+        )
+        return {"reply": reply, "suggestions": []}
+
+    def tutor_chat_stream(
+        self, *, kp_name: str, history: list[dict[str, str]], message: str
+    ) -> Iterator[str]:
+        """流式回复（15.4 SSE）：逐 delta 产出。
+
+        mock：确定性引导链**逐字**流式（字间延迟见 settings.tutor_stream_delay_ms，
+        打字机演示效果）；deepseek：经 llm_deepseek.chat_stream 真实流式透传。
+        """
+        self._ensure_supported()
+        if not self.is_mock:
+            return llm_deepseek.chat_stream(
+                message, system=_TUTOR_SYSTEM.format(kp_name=kp_name), history=history
+            )
+        reply, _suggestions = _mock_tutor_reply(message)
+
+        def _char_stream() -> Iterator[str]:
+            delay = settings.tutor_stream_delay_ms / 1000
+            for char in reply:
+                if delay > 0:
+                    time.sleep(delay)
+                yield char
+
+        return _char_stream()
+
+    def tutor_suggestions(self, message: str) -> list[str]:
+        """done 事件的快捷建议（15.4）：mock 按引导链分支；deepseek 可空。"""
+        if self.is_mock:
+            return _mock_tutor_reply(message)[1]
+        return []
 
     # ---- 通用补全（B5-a：供 Agent 节点调用） -------------------------------
     def complete(

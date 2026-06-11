@@ -330,35 +330,50 @@ def run_learning_workflow(
     difficulty: str = "初级",
     target_job: str = "大模型应用工程师",
     retriever: Retriever | None = None,
+    workflow_id: str | None = None,
+    on_update: Callable[[WorkflowState], None] | None = None,
 ) -> dict[str, Any]:
     """执行完整工作流并持久化 trace。
+
+    B7-a 增补（拓扑 / trace 结构不变）：
+    - workflow_id 可由调用方预分配（execute 立即返回 id、后台运行）；
+    - on_update：每个节点完成（含重试轮）后回调一次当前累积 State，
+      供 workflow_runner 组装 11.2 实时快照推 WS / 轮询。
 
     Returns:
         {workflowId, finalOutput, trace}；trace 含 11.2 的 agents/messages/stats
         + 节点日志 nodes + ragContextUsed，B7 的 /workflow/{id} 直接消费。
     """
-    workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
+    workflow_id = workflow_id or f"wf_{uuid.uuid4().hex[:12]}"
     started_at = datetime.now(timezone.utc)
     kp = db.get(KnowledgePoint, kp_id)
     kp_name = kp.name if kp is not None else kp_id
 
     app_graph = _build_graph(db, retriever or _mock_retriever)
-    final_state: WorkflowState = app_graph.invoke(
-        {
-            "user_id": user_id,
-            "kp_id": kp_id,
-            "kp_name": kp_name,
-            "difficulty": difficulty,
-            "target_job": target_job,
-            "messages": [],
-            "error_details": [],
-            "retry_count": 0,
-            "max_retries": MAX_RETRIES,
-            "workflow_status": "pending",
-            "node_execution_log": [],
-        },
-        config={"recursion_limit": 50},
-    )
+    initial_state: WorkflowState = {
+        "user_id": user_id,
+        "kp_id": kp_id,
+        "kp_name": kp_name,
+        "difficulty": difficulty,
+        "target_job": target_job,
+        "messages": [],
+        "error_details": [],
+        "retry_count": 0,
+        "max_retries": MAX_RETRIES,
+        "workflow_status": "pending",
+        "node_execution_log": [],
+    }
+    # stream(values)：每个超步（顺序图 = 每个节点）后产出累积 State，
+    # 终态与 invoke() 等价；首个产出为输入态（无 current_node），跳过不回调。
+    final_state: WorkflowState | None = None
+    for state in app_graph.stream(
+        initial_state, config={"recursion_limit": 50}, stream_mode="values"
+    ):
+        final_state = state
+        if on_update is not None and state.get("current_node"):
+            on_update(state)
+    if final_state is None or final_state.get("final_output") is None:
+        raise RuntimeError("工作流未产出 final_output")
 
     final_output = final_state["final_output"]
     degraded = bool(final_output["degraded"])

@@ -16,6 +16,21 @@ class LectureRequest(BaseModel):
     difficulty: str  # 入门|初级|高级（资源页难度档，与路径难度档不同）
 
 
+class VideoRequest(BaseModel):
+    """POST /resource/video 请求体（接口文档 8.3，B7-a）。"""
+
+    kpId: str
+    difficulty: str  # 入门|初级|高级（与讲义同档）
+
+
+class TutorChatRequest(BaseModel):
+    """POST /resource/tutor/chat 请求体（接口文档 8.7，B7-a）。"""
+
+    kpId: str
+    sessionId: str | None = None  # 可空，首轮由后端生成
+    message: str
+
+
 class QuizAnswerItem(BaseModel):
     """单题作答（接口文档 9.1）。answer：single/boolean 为 str，multiple 为 str[]。"""
 

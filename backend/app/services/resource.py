@@ -105,6 +105,63 @@ def external_resources(db: Session, kp_id: str) -> list[dict[str, Any]]:
     return items
 
 
+# ---- 视频讲解（接口文档 8.3，B7-a） --------------------------------------------
+# 视频参数与前端 Remotion 组件逐一对齐（frontend/src/remotion/LectureVideo.tsx：
+# VIDEO_FPS/W/H/DURATION 与 5 个 Sequence 场景起始帧）。videoUrl 返回 null →
+# 前端走 Remotion Player + TTS（契约 8.3）；服务端渲染 mp4 为可选加分项，
+# 生产路径：Remotion server-side rendering 产出 mp4 回填 videoUrl，写 README。
+_VIDEO_FPS = 30
+_VIDEO_WIDTH = 1280
+_VIDEO_HEIGHT = 720
+_VIDEO_DURATION_FRAMES = 900
+# 5 段帧-旁白映射的起始帧：封面/神经元三步/前向传播/激活函数/小结闭环
+_NARRATION_FRAMES = [0, 90, 300, 540, 720]
+# nn 知识点旁白与前端 LectureVideo.NARRATION 逐字一致（场景画面为 nn 定制）
+_NARRATION_NN = [
+    "欢迎学习神经网络基础。本视频由领域知识生成智能体为你定制。",
+    "一个神经元完成三步运算：加权求和、加上偏置、再经过激活函数输出。",
+    "前向传播时，输入与权重相乘求和，加偏置得到 z，再用 ReLU 激活得到输出。",
+    "常见激活函数有 ReLU、Sigmoid 和 Tanh，其中 ReLU 计算快、最常用。",
+    "神经元、前向传播、激活、反向传播更新，构成了神经网络学习的完整闭环。",
+]
+
+
+def generate_video(
+    db: Session, user_id: str, kp_id: str, difficulty: str
+) -> dict[str, Any]:
+    """生成视频讲解（接口文档 8.3）。videoUrl:null + narration[] 帧-旁白映射。
+
+    确定性产出（无 LLM 成本，不走缓存）：nn 用与前端场景逐字对齐的旁白，
+    其余知识点按相同 5 段结构模板化生成。
+    """
+    kp = _require_kp(db, kp_id)
+    if difficulty not in LECTURE_DIFFICULTIES:
+        raise InvalidDifficulty(difficulty)
+    mastery_service.ensure_learning(db, user_id, kp_id)
+
+    if kp_id == "nn":
+        texts = list(_NARRATION_NN)
+    else:
+        texts = [
+            f"欢迎学习{kp.name}。本视频由领域知识生成智能体按「{difficulty}」难度为你定制。",
+            f"我们先拆解{kp.name}的核心构成，建立整体认知框架。",
+            f"接着通过一个{difficulty}难度的典型示例，看看{kp.name}在实践中如何运作。",
+            f"再对比{kp.name}相关的常见方法与适用场景，避免典型误区。",
+            f"最后回顾要点，把{kp.name}纳入完整的学习闭环。建议完成测验巩固理解。",
+        ]
+    return {
+        "videoUrl": None,  # 无服务端渲染产物 → 前端 Remotion Player + TTS
+        "narration": [
+            {"frame": frame, "text": text}
+            for frame, text in zip(_NARRATION_FRAMES, texts)
+        ],
+        "fps": _VIDEO_FPS,
+        "width": _VIDEO_WIDTH,
+        "height": _VIDEO_HEIGHT,
+        "durationInFrames": _VIDEO_DURATION_FRAMES,
+    }
+
+
 def _retrieve_for_lecture(
     kp_id: str, kp_name: str, difficulty: str
 ) -> list[dict[str, Any]]:

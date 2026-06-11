@@ -28,6 +28,7 @@ from app.api.v1 import (
     quiz,
     resource,
     tasks,
+    workflow,
 )
 from app.core.config import settings
 from app.core.envelope import (
@@ -89,3 +90,5 @@ app.include_router(admin_metrics.router, prefix=settings.api_prefix)
 app.include_router(job_market.router, prefix=settings.api_prefix)
 app.include_router(knowledge_graph.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
+# B7-a：多智能体工作流实时通道（execute / 轮询 / WS 推送；Tutor SSE 与 Video 在 resource）
+app.include_router(workflow.router, prefix=settings.api_prefix)

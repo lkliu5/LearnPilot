@@ -1,16 +1,20 @@
-"""学习资源模块 Resource（接口文档第 8 章，B2-b；B6 追加 8.6 外部资源聚合）。
+"""学习资源模块 Resource（接口文档第 8 章，B2-b；B6 追加 8.6；B7-a 追加 8.3/8.7）。
 
-接口 16/17/21：
+接口 16/17/18/21/22：
 - GET  /resource/knowledge-point/{kpId}  知识点元信息 { id,name,description,status }
 - POST /resource/lecture                  自适应讲义（markdown+sources+hallucinationRate）
+- POST /resource/video                    视频讲解（videoUrl:null + narration[] 帧-旁白映射）
 - GET  /resource/external/{kpId}          外部精选资源（relevance/credibility/reason）
+- POST /resource/tutor/chat               苏格拉底辅导（JSON；Accept: text/event-stream
+                                          时按 15.4 切 SSE 流式：delta 逐条 + done 收尾）
 
 均需登录。生成走 service → LLMClient（mock 确定性 / deepseek 真实工作流）。
-知识点不存在 → 1004；讲义难度档非法 → 1001；LLM/Agent 生成失败 → 2001（B5-b）。
+知识点不存在 → 1004；难度档非法 → 1001；LLM/Agent 生成失败 → 2001。
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -18,8 +22,9 @@ from app.core.envelope import fail, success
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
-from app.schemas.resource import LectureRequest
+from app.schemas.resource import LectureRequest, TutorChatRequest, VideoRequest
 from app.services import resource as resource_service
+from app.services import tutor as tutor_service
 
 router = APIRouter(tags=["resource"])
 
@@ -65,6 +70,56 @@ async def generate_lecture(
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
         return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
+    return success(data)
+
+
+@router.post("/resource/video")
+async def generate_video(
+    body: VideoRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """生成视频讲解（接口文档 8.3，B7-a）。videoUrl:null → 前端 Remotion Player。"""
+    try:
+        data = resource_service.generate_video(db, user.id, body.kpId, body.difficulty)
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    except resource_service.InvalidDifficulty:
+        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+    return success(data)
+
+
+@router.post("/resource/tutor/chat")
+async def tutor_chat(
+    body: TutorChatRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """苏格拉底辅导（接口文档 8.7 + 15.4，B7-a）。
+
+    请求头携带 Accept: text/event-stream → SSE 流式（15.4：data:{"delta":..} 逐条
+    + event: done 收尾，异常 event: error）；不带该头 → 8.7 整体 JSON（向后兼容）。
+    """
+    streaming = "text/event-stream" in (request.headers.get("accept") or "")
+    try:
+        if streaming:
+            events = tutor_service.sse_stream(
+                db, kp_id=body.kpId, session_id=body.sessionId, message=body.message
+            )
+            return StreamingResponse(
+                events,
+                media_type="text/event-stream",
+                # 关闭代理缓冲，保证逐 delta 实时下发（Vite/Nginx 透传）
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+        data = tutor_service.chat(
+            db, kp_id=body.kpId, session_id=body.sessionId, message=body.message
+        )
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
     except LLMGenerationError as exc:
         return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)

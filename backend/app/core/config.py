@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     rrf_sparse_weight: float = 0.3
     rrf_k: int = 60
 
+    # B7-a 实时通道演示参数：
+    # - workflow_step_delay_ms：工作流节点间推进延迟，让 WS / 轮询能观察到 phase
+    #   渐进点亮（mock 工作流毫秒级完成，无延迟时大屏一闪而过）；0 = 不延迟（测试用）
+    # - tutor_stream_delay_ms：tutor mock 逐字流式的字间延迟（打字机演示效果）
+    workflow_step_delay_ms: int = 500
+    tutor_stream_delay_ms: int = 20
+
     # 岗位市场（B6 / 接口文档 15.5）：预置快照 JSON 目录（种子导入来源，相对 backend/）；
     # job_market_offline=True 模拟「实时数据源不可用」→ /job-market/{id} 走 2002 降级
     job_market_dir: str = "../frontend/public/data/job-market"

@@ -50,13 +50,26 @@ def _get_client():
     return _client
 
 
-def chat(prompt: str, system: str | None = None) -> str:
-    """单轮 chat 补全。任何上游异常 → LLMGenerationError（含超时）。"""
-    client = _get_client()
+def _build_messages(
+    prompt: str, system: str | None, history: list[dict[str, str]] | None
+) -> list[dict[str, str]]:
+    """组装 messages：system + 既往多轮 history（B7-a tutor 会话）+ 本轮 user。"""
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
+    messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+def chat(
+    prompt: str,
+    system: str | None = None,
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """chat 补全（history 可选，B7-a 多轮）。任何上游异常 → LLMGenerationError（含超时）。"""
+    client = _get_client()
+    messages = _build_messages(prompt, system, history)
     try:
         resp = client.chat.completions.create(
             model=settings.deepseek_model,
@@ -72,3 +85,41 @@ def chat(prompt: str, system: str | None = None) -> str:
     if not content:
         raise LLMGenerationError("DeepSeek 返回空内容")
     return content
+
+
+def chat_stream(
+    prompt: str,
+    system: str | None = None,
+    history: list[dict[str, str]] | None = None,
+):
+    """流式 chat 补全（B7-a tutor SSE）：逐 chunk 产出增量文本。
+
+    生成器：调用方逐 delta 透传给 SSE；上游异常（含流中断）统一
+    LLMGenerationError，由调用方转 event: error（15.4）。
+    """
+    client = _get_client()
+    messages = _build_messages(prompt, system, history)
+    try:
+        stream = client.chat.completions.create(
+            model=settings.deepseek_model,
+            messages=messages,
+            temperature=settings.llm_temperature,
+            stream=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("DeepSeek 流式调用失败：%s", exc)
+        raise LLMGenerationError(f"DeepSeek 流式调用失败：{exc}") from exc
+    got_content = False
+    try:
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                got_content = True
+                yield delta
+    except LLMGenerationError:
+        raise
+    except Exception as exc:  # noqa: BLE001 流中断也收敛到 2001
+        logger.warning("DeepSeek 流式传输中断：%s", exc)
+        raise LLMGenerationError(f"DeepSeek 流式传输中断：{exc}") from exc
+    if not got_content:
+        raise LLMGenerationError("DeepSeek 流式返回空内容")
