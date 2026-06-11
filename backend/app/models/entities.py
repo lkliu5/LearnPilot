@@ -157,6 +157,32 @@ class PromptTemplate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class WorkflowTrace(Base):
+    """工作流执行轨迹（B5-a）。结构满足接口文档 11.2 agents/messages 渲染，B7 直接消费。
+
+    - agents / messages：11.2 响应 data 的同名数组（驱动 AgentStatusCard / 消息日志）；
+    - node_log：每节点 {agent,name,startedAt,endedAt,durationMs,retryIndex,outputSummary,promptExcerpt}；
+    - rag_context_used：本次生成实际使用的检索切片（B5-a 为确定性 mock，B5-b 接真实检索）。
+    """
+
+    __tablename__ = "workflow_traces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # wf_xxx
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    kp_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))  # success|degraded|failed
+    degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    validation_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hallucination_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    agents: Mapped[list] = mapped_column(JSON, default=list)  # 11.2 agents[]
+    messages: Mapped[list] = mapped_column(JSON, default=list)  # 11.2 messages[]
+    node_log: Mapped[list] = mapped_column(JSON, default=list)
+    rag_context_used: Mapped[list] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class JobSnapshot(Base):
     """岗位市场快照（接口文档 2.4 / 15.5）。payload 存完整 JobMarket 结构。"""
 

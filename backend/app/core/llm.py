@@ -211,6 +211,84 @@ class LLMClient:
         )
 
 
+    # ---- 通用补全（B5-a：供 Agent 节点调用） -------------------------------
+    def complete(
+        self,
+        prompt: str,
+        *,
+        agent_id: str,
+        variables: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """通用补全入口（B5-a 工作流骨架）。
+
+        Agent 先经 services.prompts.get_template() 现读模板并渲染占位符，
+        再把渲染后的 prompt 交本方法。mock provider 按 agent 类型返回
+        **确定性结构化输出**（无随机、无网络）；variables 仅供 mock 产出
+        与输入相关的确定性内容，真实 provider（B5-b）将忽略该参数、只发 prompt。
+        """
+        self._ensure_supported()
+        variables = variables or {}
+        if agent_id == "diagnosis":
+            return self._mock_diagnosis(variables)
+        if agent_id == "generation":
+            return self._mock_generation(variables)
+        if agent_id == "critic":
+            return self._mock_critic(variables)
+        raise ValueError(f"未知 agent_id：{agent_id}（固定 3 项：diagnosis/generation/critic）")
+
+    @staticmethod
+    def _mock_diagnosis(variables: dict[str, Any]) -> dict[str, Any]:
+        """诊断 Agent mock：定位薄弱知识点（确定性：取基线最低两维对应 kp）。"""
+        target_kp = variables.get("kpId") or "attention"
+        target_name = variables.get("kpName") or target_kp
+        weak = [target_kp] + [k for k in ("transformer", "finetune") if k != target_kp]
+        return {
+            "weakKpIds": weak[:3],
+            "summary": f"检测到 {len(weak[:3])} 处知识盲区，建议优先学习「{target_name}」",
+            "reasoning": "依据画像基线与掌握度：注意力机制/Transformer/大模型微调维度偏弱。",
+        }
+
+    def _mock_generation(self, variables: dict[str, Any]) -> dict[str, Any]:
+        """生成 Agent mock：复用 B2 的确定性讲义产出（按 kpName/难度）。"""
+        kp_name = variables.get("kpName") or "神经网络"
+        difficulty = variables.get("difficulty") or "初级"
+        return {
+            "markdown": self._lecture_markdown(
+                kp_name, difficulty, variables.get("description", "")
+            ),
+        }
+
+    @staticmethod
+    def _mock_critic(variables: dict[str, Any]) -> dict[str, Any]:
+        """审核 Agent mock：默认通过；测试钩子可强制低分（验证重试/降级路径）。"""
+        if _force_critic_low:
+            return {
+                "passed": False,
+                "validationScore": 0.42,
+                "hallucinationRate": 0.18,
+                "issues": ["第 2 段「梯度直觉」未在检索上下文中找到接地来源（测试钩子注入）"],
+            }
+        return {
+            "passed": True,
+            "validationScore": 0.93,
+            "hallucinationRate": _LECTURE_HALLUCINATION_RATE,
+            "issues": [],
+        }
+
+
+# ---- 测试钩子：强制 critic 返回低分（B5-a 验证重试→降级路径） -----------------
+_force_critic_low: bool = False
+
+
+def set_force_critic_low(enabled: bool) -> None:
+    """测试钩子：True 时 mock critic 恒返回低分（validationScore=0.42）。
+
+    仅影响 mock provider；pytest 用例 finally/fixture 中必须复位 False。
+    """
+    global _force_critic_low
+    _force_critic_low = bool(enabled)
+
+
 _client: LLMClient | None = None
 
 

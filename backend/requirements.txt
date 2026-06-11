@@ -15,3 +15,5 @@ pypdf
 chromadb
 sentence-transformers
 rank_bm25
+# B5-a LangGraph 多智能体工作流骨架（纯 Mock provider，无密钥可跑）
+langgraph
