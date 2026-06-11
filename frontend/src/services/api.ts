@@ -116,6 +116,17 @@ function onUnauthorized(): void {
 
 /** 发起请求并解信封；成功返回 data，失败抛 ApiError。 */
 export async function apiRequest<T = unknown>(path: string, opts: RequestOptions = {}): Promise<T> {
+  return (await apiRequestWithCode<T>(path, opts)).data
+}
+
+/**
+ * 同 {@link apiRequest}，但连业务码一起返回：供需要感知降级码的调用方使用
+ * （如 5.1/5.2 经 okCodes 放行 2002 后，据 code 区分「正常 / 离线降级」）。
+ */
+export async function apiRequestWithCode<T = unknown>(
+  path: string,
+  opts: RequestOptions = {}
+): Promise<{ code: number; data: T }> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -146,7 +157,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOptions
   if (env.code !== 0 && !opts.okCodes?.includes(env.code)) {
     throw new ApiError(env.code, env.message || '请求失败')
   }
-  return env.data
+  return { code: env.code, data: env.data }
 }
 
 export const apiGet = <T>(path: string): Promise<T> => apiRequest<T>(path, { method: 'GET' })

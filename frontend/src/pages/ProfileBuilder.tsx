@@ -115,6 +115,9 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
   const hasImage = files.some((f) => f.kind === 'image')
   const hasInput = files.length > 0 || description.trim().length > 0
   const onSelectJob = useCallback((j: JobMarket | null) => setTargetJob(j), [])
+  /* 岗位数据离线状态（由 JobMarketPanel 上抛）：页级「联网快照」标签跟随显示 */
+  const [jobOffline, setJobOffline] = useState(false)
+  const onJobOffline = useCallback((o: boolean) => setJobOffline(o), [])
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
@@ -370,10 +373,10 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
             <div className="profile-builder__card profile-builder__card--job">
               <div className="pb-section-head">
                 <h2>目标岗位 · 实时市场画像</h2>
-                <span className="pb-badge">联网快照 · 缓存</span>
+                <span className="pb-badge">{jobOffline ? '离线快照 · 预置库' : '联网快照 · 缓存'}</span>
               </div>
               <p>选择目标岗位，其实时技能要求将作为下一步「岗位对标」的基准线</p>
-              <JobMarketPanel onSelect={onSelectJob} />
+              <JobMarketPanel onSelect={onSelectJob} onOffline={onJobOffline} />
             </div>
 
             {/* 操作区 */}

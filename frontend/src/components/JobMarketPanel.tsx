@@ -6,28 +6,40 @@ import './JobMarketPanel.css'
 interface JobMarketPanelProps {
   /** 选中岗位（含其 radar 岗位要求）回传父级，用于雷达"岗位要求"线与 Gap */
   onSelect?: (job: JobMarket | null) => void
+  /** 岗位数据离线状态回传父级（热门列表降级 或 快照降级 任一为真），供页级标签跟随 */
+  onOffline?: (offline: boolean) => void
 }
 
 /** 目标岗位 · 实时市场画像（联网快照 + 缓存 + 降级）替代静态岗位 chip */
-export default function JobMarketPanel({ onSelect }: JobMarketPanelProps) {
+export default function JobMarketPanel({ onSelect, onOffline }: JobMarketPanelProps) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [data, setData] = useState<JobMarket | null>(null)
   const [offline, setOffline] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  /* 热门岗位列表：联调走 GET /job-market/hot 覆盖；mock 保持内置 HOT_JOBS（初值即是，渲染零差异）*/
+  /* 热门岗位列表：联调走 GET /job-market/hot 覆盖（降级语义见 getHotJobs——
+     空列表/失败/2002 一律回预置 4 岗 + offline，选择器永不为空）；
+     mock 保持内置 HOT_JOBS（初值即是，渲染零差异）*/
   const [hotJobs, setHotJobs] = useState<HotJob[]>(HOT_JOBS)
+  const [hotOffline, setHotOffline] = useState(false)
   useEffect(() => {
     if (!USE_REAL_API) return
     let alive = true
-    getHotJobs()
-      .then((jobs) => alive && setHotJobs(jobs))
-      .catch((e) => console.error('[job-market] 加载热门岗位失败', e)) // 失败保留内置列表兜底
+    getHotJobs().then((r) => {
+      if (!alive) return
+      setHotJobs(r.jobs)
+      setHotOffline(r.offline)
+    })
     return () => {
       alive = false
     }
   }, [])
+
+  /* 页级离线状态：热门列表降级 或 当前快照降级，任一为真即离线 */
+  useEffect(() => {
+    onOffline?.(hotOffline || offline)
+  }, [hotOffline, offline, onOffline])
 
   const suggestions = useMemo(() => {
     const q = query.trim()

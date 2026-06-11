@@ -1,5 +1,5 @@
 import { HOT_JOBS, PRESET, type HotJob, type JobMarket } from '../data/jobMarket/preset'
-import { USE_REAL_API, apiGet, apiRequest } from './api'
+import { USE_REAL_API, apiRequest, apiRequestWithCode } from './api'
 
 export type { JobMarket, JobSkill, HotJob } from '../data/jobMarket/preset'
 export { HOT_JOBS } from '../data/jobMarket/preset'
@@ -42,10 +42,32 @@ function writeCache(id: string, data: JobMarket) {
   }
 }
 
-/** 热门岗位列表：联调走 GET /job-market/hot（接口 5.1）；mock 用内置 HOT_JOBS。 */
-export async function getHotJobs(): Promise<HotJob[]> {
-  if (!USE_REAL_API) return HOT_JOBS
-  return apiGet<HotJob[]>('/job-market/hot')
+export interface HotJobsResult {
+  jobs: HotJob[]
+  /** 是否来自离线降级（code 2002 / 空列表 / 请求失败 → 预置 4 岗兜底）*/
+  offline: boolean
+}
+
+/**
+ * 热门岗位列表（接口 5.1，含降级语义，与 5.2 快照口径一致）：
+ * - 联调正常 → 后端列表，offline=false；
+ * - code 2002（okCodes 放行，与快照接口同款白名单）→ 后端列表，offline=true；
+ * - 空列表（数据源无快照，如 job_snapshots 未种子）/ 请求失败 → 预置 4 岗，offline=true。
+ *   岗位选择器永不为空：预置库是兜底下限。
+ * - mock → 内置 HOT_JOBS，offline=false。
+ */
+export async function getHotJobs(): Promise<HotJobsResult> {
+  if (!USE_REAL_API) return { jobs: HOT_JOBS, offline: false }
+  try {
+    const { code, data } = await apiRequestWithCode<HotJob[]>('/job-market/hot', {
+      method: 'GET',
+      okCodes: [2002],
+    })
+    if (!data || data.length === 0) return { jobs: HOT_JOBS, offline: true }
+    return { jobs: data, offline: code === 2002 }
+  } catch {
+    return { jobs: HOT_JOBS, offline: true }
+  }
 }
 
 export async function getJobMarket(id: string): Promise<JobMarketResult> {
