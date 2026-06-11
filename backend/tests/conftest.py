@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import pytest
 
+# Windows 已知问题（B8）：torch DLL 在非主线程首次加载会 access violation 崩溃进程。
+# TestClient 的请求处理都在 portal 线程进行，kb/RAG 模块的惰性导入会在该线程触发
+# torch 导入 → 在 pytest 主线程先行导入 embeddings（连带 sentence_transformers/torch），
+# 之后任何线程再 import 仅命中 sys.modules 缓存，不再加载 DLL。
+from app.rag import embeddings as _warmup_embeddings  # noqa: F401  isort: skip
+
 from app.core import llm as llm_mod
 from app.core.config import settings
 

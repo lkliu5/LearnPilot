@@ -330,6 +330,8 @@ class LLMClient:
             f"goal 取值 {list(_GOAL_ENUM)}；"
             f"skills.name 必须取自固定 6 维 {ABILITY_DIMENSIONS}，level 为 0-100 整数，"
             "仅依据材料体现的能力给出，材料未体现的维度可省略；"
+            "材料明确说明某维度零基础/未接触/从未学过时，该维度必须给出且 level 取 0-10"
+            "（显式负证据不是「未体现」，省略会被默认值虚高）；"
             "禁止编造材料中不存在的经历。"
         )
         raw = llm_deepseek.chat(f"材料文本：\n{text}", system=system)

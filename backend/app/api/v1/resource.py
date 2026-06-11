@@ -1,9 +1,11 @@
 """学习资源模块 Resource（接口文档第 8 章，B2-b；B6 追加 8.6；B7-a 追加 8.3/8.7）。
 
-接口 16/17/18/21/22：
+接口 16/17/18/19/20/21/22：
 - GET  /resource/knowledge-point/{kpId}  知识点元信息 { id,name,description,status }
 - POST /resource/lecture                  自适应讲义（markdown+sources+hallucinationRate）
 - POST /resource/video                    视频讲解（videoUrl:null + narration[] 帧-旁白映射）
+- GET  /resource/mindmap/{kpId}           思维导图 { markdown }（Markmap 语法，B8 补齐）
+- GET  /resource/diagram/{kpId}           Mermaid 图解 { mermaid }（B8 补齐）
 - GET  /resource/external/{kpId}          外部精选资源（relevance/credibility/reason）
 - POST /resource/tutor/chat               苏格拉底辅导（JSON；Accept: text/event-stream
                                           时按 15.4 切 SSE 流式：delta 逐条 + done 收尾）
@@ -38,6 +40,34 @@ async def knowledge_point_meta(
     """知识点元信息（接口文档 8.1）。"""
     try:
         data = resource_service.knowledge_point_meta(db, user.id, kp_id)
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    return success(data)
+
+
+@router.get("/resource/mindmap/{kp_id}")
+async def mindmap(
+    kp_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """思维导图（接口文档 8.4）。Markmap 语法 Markdown 大纲。"""
+    try:
+        data = resource_service.mindmap(db, kp_id)
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    return success(data)
+
+
+@router.get("/resource/diagram/{kp_id}")
+async def diagram(
+    kp_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mermaid 知识图解（接口文档 8.5）。"""
+    try:
+        data = resource_service.diagram(db, kp_id)
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     return success(data)

@@ -57,6 +57,7 @@ class WorkflowState(TypedDict, total=False):
     user_id: str
     kp_id: str
     kp_name: str
+    kp_description: str  # 核心概念清单（B8：注入 generation 模板 {description}）
     difficulty: str
     target_job: str
 
@@ -194,6 +195,7 @@ def _build_graph(db: Session, retriever: Retriever):
             difficulty=state["difficulty"],
             rag_context=state.get("reranked_context") or [],
             feedback=state.get("generation_feedback"),
+            description=state.get("kp_description", ""),
         )
         markdown = res["output"]["markdown"]
         nth = f"第 {retry_index + 1} 次" if retry_index else "首次"
@@ -348,12 +350,14 @@ def run_learning_workflow(
     started_at = datetime.now(timezone.utc)
     kp = db.get(KnowledgePoint, kp_id)
     kp_name = kp.name if kp is not None else kp_id
+    kp_description = (kp.description or "") if kp is not None else ""
 
     app_graph = _build_graph(db, retriever or _mock_retriever)
     initial_state: WorkflowState = {
         "user_id": user_id,
         "kp_id": kp_id,
         "kp_name": kp_name,
+        "kp_description": kp_description,
         "difficulty": difficulty,
         "target_job": target_job,
         "messages": [],

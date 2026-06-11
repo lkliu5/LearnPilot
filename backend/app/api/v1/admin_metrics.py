@@ -3,14 +3,12 @@
 GET /admin/metrics —— 供前端三 gauge 仪表盘（CountUp）消费。
 
 结构按契约定死：三比率 + 三计数 + updatedAt。
-- 三比率（hallucinationRate/adaptationRate/coverageRate）当前为占位常量
-  （取接口文档 14.6 示例值），B8 接入真实计算（15.3 逐句接地口径 + 统计脚本），
-  仅替换取值逻辑、结构不变；
+- 三比率（hallucinationRate/adaptationRate/coverageRate）为 B8 量化指标脚本
+  （scripts/metrics/make_report.py）的最近一次实测值，明细见 docs/metrics-report.md；
+  updatedAt 即该次计算时间戳。重跑脚本后同步更新 _MEASURED_RATES / _MEASURED_AT。
 - 三计数为 DB 实时统计：知识库文档数 / 切片总数 / 已生成资源数。
 """
 from __future__ import annotations
-
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -23,11 +21,14 @@ from app.models.entities import KnowledgeDocument, ResourceCache, User
 
 router = APIRouter(tags=["admin-metrics"])
 
-# B8 前的占位比率（接口文档 14.6 示例值；目标：幻觉率 <0.05、适配率 ≥0.85、覆盖率 ≥0.90）
-_PLACEHOLDER_RATES = {
-    "hallucinationRate": 0.021,
-    "adaptationRate": 0.87,
-    "coverageRate": 0.92,
+# B8 实测比率（docs/metrics-report.md，6 KP × 3 难度共 18 份 deepseek 真实生成讲义；
+# 口径：①15.3 逐句接地 ②三档难度分有序对正确率 ③核心概念清单命中率。
+# 目标：幻觉率 <0.05 ✓、适配率 ≥0.85 ✓、覆盖率 ≥0.90 ✓）
+_MEASURED_AT = "2026-06-11T18:38:49.605386+00:00"
+_MEASURED_RATES = {
+    "hallucinationRate": 0.0297,
+    "adaptationRate": 0.9444,
+    "coverageRate": 1.0,
 }
 
 
@@ -42,10 +43,10 @@ async def get_metrics(
     generated_resources = db.query(func.count(ResourceCache.id)).scalar() or 0
     return success(
         {
-            **_PLACEHOLDER_RATES,
+            **_MEASURED_RATES,
             "kbDocuments": int(kb_documents),
             "kbChunks": int(kb_chunks),
             "generatedResources": int(generated_resources),
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": _MEASURED_AT,  # 三比率的计算时间戳（14.6）
         }
     )

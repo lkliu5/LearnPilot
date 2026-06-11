@@ -35,9 +35,11 @@ from app.workflows.learning_workflow import run_learning_workflow
 
 # 接口文档 8.2 sources[].type 合法取值；文档 category 不在其中时回落「文档」
 _SOURCE_TYPES = {"教材", "论文", "文档", "课程"}
-# 讲义检索参数：候选池与最终注入生成的切片数
-_RETRIEVE_POOL = 8
-_RETRIEVE_TOP_K = 4
+# 讲义检索参数：候选池与最终注入生成的切片数。
+# B8 调优 4→6：生成模板要求覆盖知识点全部核心概念，top-4 切片常覆盖不全，
+# 模型被迫凭自身知识补写 → 未接地句；放宽到 top-6 让概念在上下文内闭环。
+_RETRIEVE_POOL = 12
+_RETRIEVE_TOP_K = 6
 
 
 class UnknownKnowledgePoint(Exception):
@@ -103,6 +105,187 @@ def external_resources(db: Session, kp_id: str) -> list[dict[str, Any]]:
             item["duration"] = r.duration
         items.append(item)
     return items
+
+
+# ---- 思维导图 / Mermaid 图解（接口文档 8.4 / 8.5，B8 补齐） --------------------
+# 确定性内容（无 LLM 成本，不走缓存）：nn 与前端 LearningResource.tsx 本地常量
+# （mindmapMarkdown / mermaidChart）逐字对齐；其余 5 个核心知识点按相同结构
+# 领域定制。生产路径：由生成 Agent 按讲义大纲实时产出（接口签名不变）。
+_MINDMAPS: dict[str, str] = {
+    "nn": (
+        "# 神经网络基础\n"
+        "## 神经元\n"
+        "### 加权求和 Σ w·x\n"
+        "### 加偏置 +b\n"
+        "### 激活函数\n"
+        "#### ReLU\n"
+        "#### Sigmoid\n"
+        "#### Tanh\n"
+        "## 前向传播\n"
+        "### 输入层 → 隐藏层 → 输出层\n"
+        "## 反向传播\n"
+        "### 计算梯度\n"
+        "### 梯度下降\n"
+        "### 学习率 η\n"
+        "## 进阶方向\n"
+        "### CNN\n"
+        "### RNN\n"
+        "### Transformer\n"
+    ),
+    "ml": (
+        "# 机器学习基础\n"
+        "## 监督学习\n"
+        "### 分类\n"
+        "### 回归\n"
+        "## 无监督学习\n"
+        "### 聚类\n"
+        "### 降维\n"
+        "## 特征与损失\n"
+        "### 特征工程\n"
+        "### 损失函数\n"
+        "## 过拟合与正则\n"
+        "### L1 / L2 正则\n"
+        "### 早停\n"
+        "### 交叉验证\n"
+    ),
+    "dl": (
+        "# 深度学习原理\n"
+        "## 反向传播\n"
+        "### 链式法则\n"
+        "### 计算图\n"
+        "## 梯度下降与优化器\n"
+        "### SGD\n"
+        "### Adam\n"
+        "### RMSprop\n"
+        "## 正则与归一化\n"
+        "### Dropout\n"
+        "### BatchNorm\n"
+        "## 训练要点\n"
+        "### 学习率调度\n"
+        "### 梯度消失 / 爆炸\n"
+    ),
+    "cnn": (
+        "# CNN架构\n"
+        "## 卷积\n"
+        "### 卷积核\n"
+        "### 权重共享\n"
+        "### 步长与填充\n"
+        "## 池化\n"
+        "### 最大池化\n"
+        "### 平均池化\n"
+        "## 感受野\n"
+        "## 经典网络\n"
+        "### LeNet\n"
+        "### AlexNet\n"
+        "### ResNet\n"
+    ),
+    "transformer": (
+        "# Transformer架构\n"
+        "## 自注意力\n"
+        "### Query / Key / Value\n"
+        "### 缩放点积\n"
+        "## 多头注意力\n"
+        "### 并行子空间\n"
+        "## 位置编码\n"
+        "### 正弦位置编码\n"
+        "## 整体结构\n"
+        "### 编码器\n"
+        "### 解码器\n"
+        "### 残差与 LayerNorm\n"
+    ),
+    "finetune": (
+        "# 大模型微调技术\n"
+        "## 全参微调\n"
+        "### 全量参数更新\n"
+        "### 算力开销大\n"
+        "## 参数高效微调\n"
+        "### LoRA 低秩分解\n"
+        "### Adapter\n"
+        "## 指令微调\n"
+        "### SFT 监督微调\n"
+        "### 指令数据构造\n"
+        "## 对齐\n"
+        "### RLHF\n"
+        "### DPO\n"
+    ),
+}
+
+_DIAGRAMS: dict[str, str] = {
+    # nn 与前端 mermaidChart 逐字一致（神经元前向 / 反向流程）
+    "nn": (
+        "flowchart LR\n"
+        '  X["输入 x"] --> S(["加权求和<br/>Σ w·x"])\n'
+        '  W["权重 w"] --> S\n'
+        '  S --> B(["加偏置<br/>+ b"])\n'
+        '  B --> A{{"激活函数<br/>ReLU"}}\n'
+        '  A --> O["输出 a"]\n'
+        "  O -. 反向传播更新 .-> W\n"
+    ),
+    "ml": (
+        "flowchart LR\n"
+        '  D["数据集"] --> F(["特征工程"])\n'
+        '  F --> M["模型"]\n'
+        '  M --> L(["损失函数"])\n'
+        '  L --> O{{"优化器"}}\n'
+        "  O -. 参数更新 .-> M\n"
+        '  M --> E["评估<br/>泛化能力"]\n'
+    ),
+    "dl": (
+        "flowchart LR\n"
+        '  X["输入"] --> FW(["前向传播"])\n'
+        '  FW --> L["损失 L"]\n'
+        '  L --> BP(["反向传播<br/>链式法则"])\n'
+        '  BP --> G["梯度 ∂L/∂θ"]\n'
+        '  G --> U{{"梯度下降<br/>θ ← θ − η·g"}}\n'
+        "  U -. 迭代更新 .-> FW\n"
+    ),
+    "cnn": (
+        "flowchart LR\n"
+        '  I["输入图像"] --> C1(["卷积层"])\n'
+        '  C1 --> A1{{"ReLU"}}\n'
+        '  A1 --> P1(["池化层"])\n'
+        '  P1 --> C2(["卷积层 ×N"])\n'
+        '  C2 --> FC["全连接层"]\n'
+        '  FC --> O["分类输出"]\n'
+    ),
+    "transformer": (
+        "flowchart LR\n"
+        '  E["输入嵌入"] --> PE(["+ 位置编码"])\n'
+        '  PE --> MHA(["多头自注意力"])\n'
+        '  MHA --> AN1{{"Add & Norm"}}\n'
+        '  AN1 --> FFN(["前馈网络"])\n'
+        '  FFN --> AN2{{"Add & Norm"}}\n'
+        '  AN2 --> O["输出表示"]\n'
+    ),
+    "finetune": (
+        "flowchart LR\n"
+        '  PT["预训练大模型"] --> FT{{"微调策略"}}\n'
+        '  FT --> FP(["全参微调"])\n'
+        '  FT --> LR(["LoRA<br/>低秩增量"])\n'
+        '  FP --> SFT["指令微调 SFT"]\n'
+        "  LR --> SFT\n"
+        '  SFT --> AL(["对齐<br/>RLHF / DPO"])\n'
+        '  AL --> D["部署应用"]\n'
+    ),
+}
+
+
+def mindmap(db: Session, kp_id: str) -> dict[str, Any]:
+    """思维导图（接口文档 8.4）。返回 Markmap 语法 Markdown 大纲。"""
+    kp = _require_kp(db, kp_id)
+    markdown = _MINDMAPS.get(kp_id) or (
+        f"# {kp.name}\n## 核心概念\n### {kp.description}\n## 实践应用\n## 进阶方向\n"
+    )
+    return {"markdown": markdown}
+
+
+def diagram(db: Session, kp_id: str) -> dict[str, Any]:
+    """Mermaid 知识图解（接口文档 8.5）。"""
+    kp = _require_kp(db, kp_id)
+    mermaid = _DIAGRAMS.get(kp_id) or (
+        f'flowchart LR\n  A["输入"] --> B(["{kp.name}"])\n  B --> C["输出"]\n'
+    )
+    return {"mermaid": mermaid}
 
 
 # ---- 视频讲解（接口文档 8.3，B7-a） --------------------------------------------

@@ -94,10 +94,9 @@ def test_put_prompt_version_increment_and_effective(client, admin_headers):
     before = client.get(
         "/api/v1/admin/prompts/generation", headers=admin_headers
     ).json()["data"]
-    new_template = (
-        "你是领域知识讲义生成专家（契约测试改写）。\n"
-        "知识点：{kpName}\n难度：{difficulty}\n检索上下文：{ragContext}"
-    )
+    # 新模板需保留全部必需占位符（B8 起 generation 含 {description} 核心概念清单）
+    placeholders = "\n".join(f"{{{var}}}" for var in before["variables"])
+    new_template = f"你是领域知识讲义生成专家（契约测试改写）。\n{placeholders}"
     res = client.put(
         "/api/v1/admin/prompts/generation",
         headers=admin_headers,
@@ -119,6 +118,14 @@ def test_put_prompt_version_increment_and_effective(client, admin_headers):
     assert after["template"] == new_template
     assert after["version"] == before["version"] + 1
     assert after["variables"] == before["variables"]
+
+    # 复原原模板（不在 dev 库残留测试改写内容）
+    restore = client.put(
+        "/api/v1/admin/prompts/generation",
+        headers=admin_headers,
+        json={"template": before["template"]},
+    )
+    assert restore.status_code == 200, restore.text
 
 
 def test_put_prompt_missing_placeholder_400(client, admin_headers):

@@ -190,13 +190,13 @@ def test_workflow_forced_low_score_retries_then_degrades(db):
 
 def test_prompt_hot_update_takes_effect_in_workflow(client, admin_headers, db):
     sentinel = "【B5A热更新哨兵】"
-    original = client.get(
+    before = client.get(
         "/api/v1/admin/prompts/generation", headers=admin_headers
-    ).json()["data"]["template"]
-    new_template = (
-        f"{sentinel}你是领域知识讲义生成专家。\n"
-        "知识点：{kpName}\n难度：{difficulty}\n检索上下文：{ragContext}"
-    )
+    ).json()["data"]
+    original = before["template"]
+    # 新模板保留全部必需占位符（B8 起 generation 含 {description}）
+    placeholders = "\n".join(f"{{{var}}}" for var in before["variables"])
+    new_template = f"{sentinel}你是领域知识讲义生成专家。\n{placeholders}"
     try:
         res = client.put(
             "/api/v1/admin/prompts/generation",

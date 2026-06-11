@@ -328,9 +328,14 @@ def test_lecture_real_mode_workflow_sources_and_rate(db, deepseek_llm, monkeypat
     assert calls["n"] >= 2  # diagnosis + generation 至少各一次真实调用
 
     # 缓存按 provider 隔离：不污染 mock 的 kind=lecture 行
+    # （限定 difficulty：dev 库可能存有其它难度档的真实演示缓存，B8 起属正常态）
     row = (
         db.query(ResourceCache)
-        .filter(ResourceCache.kp_id == "nn", ResourceCache.kind == "lecture@deepseek")
+        .filter(
+            ResourceCache.kp_id == "nn",
+            ResourceCache.difficulty == "高级",
+            ResourceCache.kind == "lecture@deepseek",
+        )
         .one_or_none()
     )
     assert row is not None and row.payload == payload

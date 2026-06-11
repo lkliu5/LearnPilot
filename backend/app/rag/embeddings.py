@@ -21,6 +21,14 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.rag.embeddings")
 
+# Windows 已知问题（B8 修复）：torch DLL 若在**非主线程**首次加载会 access violation
+# 直接崩溃进程（kb 入库走 ThreadPoolExecutor 工作线程触发）。在模块导入期（主线程、
+# 应用启动时）先行导入 torch 栈规避；未安装时静默跳过，保持下方哈希降级路径不变。
+try:  # noqa: SIM105
+    import sentence_transformers  # noqa: F401
+except Exception:  # noqa: BLE001
+    pass
+
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[一-鿿]")
 
 
