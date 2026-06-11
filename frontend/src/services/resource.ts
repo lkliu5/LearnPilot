@@ -1,8 +1,10 @@
 /**
- * 学习资源 + 测验数据获取层（接口文档第 8 章讲义 / 第 9 章测验，接口 16/17/23/24）。
+ * 学习资源 + 测验数据获取层
+ * （接口文档第 8 章讲义/外部资源 / 第 9 章测验/错题强化，接口 16/17/21/23/24/25）。
  */
 import { apiGet, apiPost } from './api'
 import type { QuizQuestion } from '../components/QuizRenderer'
+import type { ExternalResource } from '../components/ResourceAggregator'
 
 export interface LectureData {
   kpId: string
@@ -38,4 +40,22 @@ export function submitQuiz(
 ): Promise<QuizSubmitResult> {
   const payload = Object.entries(answers).map(([question_id, answer]) => ({ question_id, answer }))
   return apiPost<QuizSubmitResult>(`/quiz/${kpId}/submit`, { answers: payload })
+}
+
+/** 8.6 外部资源聚合（聚合 Agent 检索 + 审核 Agent 评分，已按相关度降序）。 */
+export function getExternalResources(kpId: string): Promise<ExternalResource[]> {
+  return apiGet<ExternalResource[]>(`/resource/external/${kpId}`)
+}
+
+/** 9.2 错题强化卡：薄弱点 + 强化讲解 + 一道针对性追加练习。 */
+export interface ReinforceCard {
+  questionId: string
+  point: string
+  recap: string
+  practice: QuizQuestion
+}
+
+/** 9.2 错题强化生成（诊断 Agent 定位薄弱 + 生成 Agent 产出强化内容）。 */
+export function reinforce(kpId: string, wrongQuestionIds: string[]): Promise<ReinforceCard[]> {
+  return apiPost<ReinforceCard[]>('/reinforce', { kpId, wrongQuestionIds })
 }

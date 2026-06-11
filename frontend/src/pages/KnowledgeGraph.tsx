@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import { useChartTokens, withAlpha, type ChartTokens } from '../utils/chartTheme'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery } from '../store/mastery'
 import { kpByGraphNode } from '../data/knowledgePoints'
+import { USE_REAL_API } from '../services/api'
+import { getKnowledgeGraph, type KnowledgeGraphData } from '../services/graph'
 import './KnowledgeGraph.css'
 
 /* 掌握状态 → 类别（颜色随主题，从令牌取）*/
@@ -59,15 +61,33 @@ export default function KnowledgeGraph() {
   const colors = catColors(t)
   const masteryStatus = useMastery((s) => s.status)
 
-  /* 节点类别/掌握度由 mastery 派生：通过→已掌握(0)/100；学习中·待检验→学习中(1)；否则种子 */
-  const enodes = nodes.map((n) => {
+  /* 联调数据源：GET /knowledge-graph（接口 26），节点 category/value 由后端权威推导；
+     mock 模式不请求，保持本地种子 + 前端派生。掌握度变化时重取，着色随 useMastery 实时刷新 */
+  const [remote, setRemote] = useState<KnowledgeGraphData | null>(null)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    let alive = true
+    getKnowledgeGraph()
+      .then((g) => alive && setRemote(g))
+      .catch((e) => console.error('[knowledge-graph] 加载图谱失败', e)) // 失败保留本地种子兜底
+    return () => {
+      alive = false
+    }
+  }, [masteryStatus])
+
+  /* 节点类别/掌握度由 mastery 派生：通过→已掌握(0)/100；学习中·待检验→学习中(1)；否则种子
+     （仅 mock 模式使用；联调以后端推导为准，不再前端自行着色）*/
+  const derived = nodes.map((n) => {
     const kp = kpByGraphNode(n.id)
     const ms = kp ? masteryStatus[kp.id] : undefined
     if (ms === 'passed') return { ...n, category: 0, value: 100 }
     if (ms === 'learning' || ms === 'pending-check') return { ...n, category: 1, value: Math.min(n.value, 60) }
     return n
   })
-  const statusCounts = categories.map((c, i) => ({
+  const enodes = USE_REAL_API && remote ? remote.nodes : derived
+  const elinks = USE_REAL_API && remote ? remote.links : links
+  const ecats = USE_REAL_API && remote ? remote.categories : categories
+  const statusCounts = ecats.map((c, i) => ({
     name: c.name,
     count: enodes.filter((n) => n.category === i).length,
   }))
@@ -80,14 +100,14 @@ export default function KnowledgeGraph() {
       tooltip: {
         formatter: (p: any) =>
           p.dataType === 'node'
-            ? `<b>${p.data.name}</b><br/>状态：${categories[p.data.category].name}<br/>掌握度：${p.data.value}%`
+            ? `<b>${p.data.name}</b><br/>状态：${ecats[p.data.category].name}<br/>掌握度：${p.data.value}%`
             : '',
         backgroundColor: withAlpha(t.surface, 0.94),
         borderColor: withAlpha(t.primary, 0.25),
         textStyle: { color: t.ink, fontSize: 12 },
       },
       legend: [{
-        data: categories.map((c) => c.name),
+        data: ecats.map((c) => c.name),
         bottom: 8,
         textStyle: { color: t.inkSoft, fontSize: 12 },
         itemWidth: 12,
@@ -100,7 +120,7 @@ export default function KnowledgeGraph() {
         layout: 'force',
         roam: true,
         draggable: true,
-        categories: categories.map((c, i) => ({ name: c.name, itemStyle: { color: colors[i] } })),
+        categories: ecats.map((c, i) => ({ name: c.name, itemStyle: { color: colors[i] } })),
         data: enodes.map((n) => ({
           id: n.id,
           name: n.name,
@@ -116,7 +136,7 @@ export default function KnowledgeGraph() {
             borderWidth: 1.5,
           },
         })),
-        links: links.map((l) => ({
+        links: elinks.map((l) => ({
           source: l.source,
           target: l.target,
           lineStyle: { color: withAlpha(t.inkSoft, 0.4), width: 1.4, curveness: 0.12 },
@@ -137,7 +157,7 @@ export default function KnowledgeGraph() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, masteryStatus])
+  }, [t, masteryStatus, remote])
 
   return (
     <div className="kg-page">

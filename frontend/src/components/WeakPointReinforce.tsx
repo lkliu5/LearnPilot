@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { QuizQuestion } from './QuizRenderer'
 import QuizRenderer from './QuizRenderer'
+import { USE_REAL_API } from '../services/api'
+import { reinforce } from '../services/resource'
+import { CURRENT_KP_ID } from '../data/knowledgePoints'
 
 /* 知识点 → 强化讲解 + 一道针对性练习（演示 Agent 错题驱动再生成）*/
 const reinforcementBank: Record<string, { point: string; recap: string; practice: QuizQuestion }> = {
@@ -57,10 +60,35 @@ const reinforcementBank: Record<string, { point: string; recap: string; practice
 
 export default function WeakPointReinforce({ wrong }: { wrong: QuizQuestion[] }) {
   const [generating, setGenerating] = useState(true)
-  const items = wrong.map((w) => reinforcementBank[w.question_id]).filter(Boolean)
+
+  /* 联调数据源：POST /reinforce（接口 25）上报错题 id，渲染后端真实 recap + 针对性练习；
+     mock 模式不请求，沿用本地 reinforcementBank */
+  const [remoteItems, setRemoteItems] = useState<
+    { point: string; recap: string; practice: QuizQuestion }[] | null
+  >(null)
+  const localItems = wrong.map((w) => reinforcementBank[w.question_id]).filter(Boolean)
+  const items = USE_REAL_API && remoteItems ? remoteItems : localItems
 
   useEffect(() => {
     setGenerating(true)
+    if (USE_REAL_API) {
+      let alive = true
+      reinforce(CURRENT_KP_ID, wrong.map((w) => w.question_id))
+        .then((cards) => {
+          if (!alive) return
+          setRemoteItems(cards.map((c) => ({ point: c.point, recap: c.recap, practice: c.practice })))
+          setGenerating(false)
+        })
+        .catch((e) => {
+          console.error('[reinforce] 错题强化生成失败', e) // 失败回退本地题库兜底
+          if (!alive) return
+          setRemoteItems(null)
+          setGenerating(false)
+        })
+      return () => {
+        alive = false
+      }
+    }
     const t = window.setTimeout(() => setGenerating(false), 1400)
     return () => window.clearTimeout(t)
   }, [wrong])

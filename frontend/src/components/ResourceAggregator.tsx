@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { USE_REAL_API } from '../services/api'
+import { getExternalResources } from '../services/resource'
+import { CURRENT_KP_ID } from '../data/knowledgePoints'
 
 type ResType = '视频' | '论文' | '文档' | '课程'
 
-interface ExternalResource {
+export interface ExternalResource {
   id: string
   type: ResType
   title: string
@@ -76,14 +79,29 @@ const typeMeta: Record<ResType, { icon: string; color: string }> = {
 
 export default function ResourceAggregator() {
   const [active, setActive] = useState<string | null>(null)
-  const activeRes = resources.find((r) => r.id === active && r.embed)
+
+  /* 联调数据源：GET /resource/external/{kpId}（接口 21，已按相关度降序）覆盖；
+     mock 模式不请求，初值即本地精选示例，渲染零差异 */
+  const [list, setList] = useState<ExternalResource[]>(resources)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    let alive = true
+    getExternalResources(CURRENT_KP_ID)
+      .then((rs) => alive && setList(rs))
+      .catch((e) => console.error('[external] 加载外部资源失败', e)) // 失败保留本地示例兜底
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const activeRes = list.find((r) => r.id === active && r.embed)
 
   return (
     <div className="agg">
       <div className="agg__head">
         <span className="agg__head-icon">🔗</span>
         <div>
-          <div className="agg__head-title">AI 已为你精选 {resources.length} 个优质外部资源</div>
+          <div className="agg__head-title">AI 已为你精选 {list.length} 个优质外部资源</div>
           <div className="agg__head-sub">资源聚合 Agent 检索 · 审核 Agent 按相关性 + 来源可信度评分排序</div>
         </div>
       </div>
@@ -111,7 +129,7 @@ export default function ResourceAggregator() {
 
       {/* 资源卡片列表 */}
       <div className="agg__list">
-        {resources.map((r) => {
+        {list.map((r) => {
           const m = typeMeta[r.type]
           return (
             <div key={r.id} className="agg__card">

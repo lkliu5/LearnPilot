@@ -92,6 +92,11 @@ interface RequestOptions {
   body?: unknown
   /** multipart 表单体（浏览器自动设置 boundary） */
   form?: FormData
+  /**
+   * 额外视为"成功"的业务码白名单：命中时不抛 ApiError，直接返回 data。
+   * 用于"降级但携带可用数据"的契约（如 5.2 岗位快照 code 2002 + data.offline）。
+   */
+  okCodes?: number[]
 }
 
 /**
@@ -138,7 +143,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOptions
     onUnauthorized()
     throw new ApiError(1002, env.message || '未认证或登录已失效')
   }
-  if (env.code !== 0) {
+  if (env.code !== 0 && !opts.okCodes?.includes(env.code)) {
     throw new ApiError(env.code, env.message || '请求失败')
   }
   return env.data

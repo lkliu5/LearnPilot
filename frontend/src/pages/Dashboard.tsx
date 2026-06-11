@@ -10,6 +10,8 @@ import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useMastery } from '../store/mastery'
 import { useJourney } from '../store/journey'
 import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
+import { USE_REAL_API } from '../services/api'
+import { getDashboardOverview, type DashboardOverview } from '../services/dashboard'
 import type { PageType } from '../App'
 import './Dashboard.css'
 
@@ -48,7 +50,21 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   const masteryStatus = useMastery((s) => s.status)
   const masteredCore = KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').length
 
-  const profileData = {
+  /* 联调数据源：GET /dashboard/overview（接口 29）聚合综合分/强弱项/雷达/对标摘要；
+     mock 模式不请求，保持本地计算。掌握度变化时重取，保持原"随掌握度联动"行为 */
+  const [overview, setOverview] = useState<DashboardOverview | null>(null)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    let alive = true
+    getDashboardOverview()
+      .then((d) => alive && setOverview(d))
+      .catch((e) => console.error('[dashboard] 加载学情概览失败', e)) // 失败保留本地 mock 兜底
+    return () => {
+      alive = false
+    }
+  }, [masteryStatus])
+
+  const mockProfileData = {
     overall_level: '中级',
     overall_score: 72.5 + masteredCore * 2.5,
     strong_topics: [
@@ -63,16 +79,24 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
     ],
     knowledge_graph_coverage: Math.min(1, 0.65 + masteredCore * 0.05),
   }
+  const profileData = USE_REAL_API && overview ? overview : mockProfileData
 
-  const radarData = {
+  const radarData = USE_REAL_API && overview ? overview.radar : {
     dimensions: ['机器学习基础', '神经网络', '深度学习', '注意力机制', 'Transformer', '大模型微调'],
     values: [85, 72, 68, 45, 30, 20]
   }
 
+  /* 已学资源数 / 同级对比：联调取聚合接口，mock 保持原常量 */
+  const learnedResources = USE_REAL_API && overview ? overview.learned_resources : 12
+  const betterThanPct = USE_REAL_API && overview ? overview.comparison.betterThanPct : 68
+
   /* 岗位对标轻量摘要：完整对标在「画像诊断」页，首页只回显结果 + 跳转入口 */
-  const hasDiagnosed = useJourney((s) => s.hasDiagnosed)
-  const targetJobName = useJourney((s) => s.targetJobName)
-  const matchPct = useJourney((s) => s.matchPct)
+  const journeyHasDiagnosed = useJourney((s) => s.hasDiagnosed)
+  const journeyTargetJobName = useJourney((s) => s.targetJobName)
+  const journeyMatchPct = useJourney((s) => s.matchPct)
+  const hasDiagnosed = USE_REAL_API && overview ? overview.targetSummary.hasDiagnosed : journeyHasDiagnosed
+  const targetJobName = USE_REAL_API && overview ? overview.targetSummary.targetJobName : journeyTargetJobName
+  const matchPct = USE_REAL_API && overview ? overview.targetSummary.matchPct : journeyMatchPct
 
   return (
     <motion.div
@@ -118,7 +142,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
             您的AI学习旅程已开启，当前处于 <strong>{profileData.overall_level}</strong> 水平
           </p>
           <div className="dashboard__score-meta">
-            <span className="dashboard__score-comparison">超过了 68% 的同级学习者</span>
+            <span className="dashboard__score-comparison">超过了 {betterThanPct}% 的同级学习者</span>
             <svg className="dashboard__score-trend" width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M7 17L12 12L17 17" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M7 12L12 7L17 12" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -329,7 +353,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
             </svg>
           </div>
           <div className="stat-card__content">
-            <CountUp className="stat-card__value" value={12} />
+            <CountUp className="stat-card__value" value={learnedResources} />
             <span className="stat-card__label">已学资源</span>
           </div>
         </div>

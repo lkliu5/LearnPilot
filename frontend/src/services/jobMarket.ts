@@ -1,4 +1,5 @@
-import { PRESET, type JobMarket } from '../data/jobMarket/preset'
+import { HOT_JOBS, PRESET, type HotJob, type JobMarket } from '../data/jobMarket/preset'
+import { USE_REAL_API, apiGet, apiRequest } from './api'
 
 export type { JobMarket, JobSkill, HotJob } from '../data/jobMarket/preset'
 export { HOT_JOBS } from '../data/jobMarket/preset'
@@ -41,14 +42,30 @@ function writeCache(id: string, data: JobMarket) {
   }
 }
 
+/** 热门岗位列表：联调走 GET /job-market/hot（接口 5.1）；mock 用内置 HOT_JOBS。 */
+export async function getHotJobs(): Promise<HotJob[]> {
+  if (!USE_REAL_API) return HOT_JOBS
+  return apiGet<HotJob[]>('/job-market/hot')
+}
+
 export async function getJobMarket(id: string): Promise<JobMarketResult> {
   const cached = readCache(id)
   // 1) 命中未过期缓存：秒显
   if (cached && Date.now() - cached.cachedAt < TTL) {
     return { data: cached.data, offline: false }
   }
-  // 2) 取最新快照
+  // 2) 取最新快照：联调走 GET /job-market/{id}（接口 5.2），mock 读 public 静态快照
   try {
+    if (USE_REAL_API) {
+      // 后端降级契约：code 2002 + data.offline:true + 最近快照（okCodes 放行，不抛错）
+      const data = await apiRequest<JobMarket & { offline?: boolean }>(`/job-market/${id}`, {
+        method: 'GET',
+        okCodes: [2002],
+      })
+      if (data.offline) return { data, offline: true } // 离线快照不写缓存，下次仍尝试取新
+      writeCache(id, data)
+      return { data, offline: false }
+    }
     const res = await fetch(`/data/job-market/${id}.json`, { cache: 'no-store' })
     if (!res.ok) throw new Error(`snapshot ${id} not found`)
     const data = (await res.json()) as JobMarket

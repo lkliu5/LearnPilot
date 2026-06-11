@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getJobMarket, timeAgo, HOT_JOBS, type JobMarket } from '../services/jobMarket'
+import { getJobMarket, getHotJobs, timeAgo, HOT_JOBS, type HotJob, type JobMarket } from '../services/jobMarket'
+import { USE_REAL_API } from '../services/api'
 import './JobMarketPanel.css'
 
 interface JobMarketPanelProps {
@@ -15,11 +16,24 @@ export default function JobMarketPanel({ onSelect }: JobMarketPanelProps) {
   const [offline, setOffline] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  /* 热门岗位列表：联调走 GET /job-market/hot 覆盖；mock 保持内置 HOT_JOBS（初值即是，渲染零差异）*/
+  const [hotJobs, setHotJobs] = useState<HotJob[]>(HOT_JOBS)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    let alive = true
+    getHotJobs()
+      .then((jobs) => alive && setHotJobs(jobs))
+      .catch((e) => console.error('[job-market] 加载热门岗位失败', e)) // 失败保留内置列表兜底
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const suggestions = useMemo(() => {
     const q = query.trim()
-    if (!q) return HOT_JOBS
-    return HOT_JOBS.filter((j) => j.name.includes(q))
-  }, [query])
+    if (!q) return hotJobs
+    return hotJobs.filter((j) => j.name.includes(q))
+  }, [query, hotJobs])
 
   useEffect(() => {
     if (!selectedId) return
