@@ -102,7 +102,7 @@ function App() {
       case 'workflow':
         return <AgentWorkflow />
       case 'knowledge-graph':
-        return <KnowledgeGraph />
+        return <KnowledgeGraph onNavigate={navigate} />
       case 'admin-kb':
         return <AdminKB />
       case 'admin-prompts':

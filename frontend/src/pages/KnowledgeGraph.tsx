@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as echarts from 'echarts'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useChartTokens, withAlpha, type ChartTokens } from '../utils/chartTheme'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
@@ -7,7 +8,10 @@ import { useMastery } from '../store/mastery'
 import { kpByGraphNode } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { getKnowledgeGraph, type KnowledgeGraphData } from '../services/graph'
+import { setResourceNav } from '../services/resourceNav'
+import type { PageType } from '../App'
 import './KnowledgeGraph.css'
+import './admin/admin.css' // 复用 .akb__toast 轻提示样式（AdminKB/AdminPrompts 同形态），零新增样式
 
 /* 掌握状态 → 类别（颜色随主题，从令牌取）*/
 const categories = [
@@ -54,12 +58,22 @@ const links = [
   { source: 'finetune', target: 'agent' },
 ]
 
-export default function KnowledgeGraph() {
+export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const chart = useRef<echarts.ECharts | null>(null)
   const t = useChartTokens()
   const colors = catColors(t)
   const masteryStatus = useMastery((s) => s.status)
+
+  /* 节点点击轻提示（非核心 6 节点）：复用 AdminKB toast 形态，3.2s 自动消失 */
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef(0)
+  const showToast = (msg: string) => {
+    setToast(msg)
+    window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3200)
+  }
+  useEffect(() => () => window.clearTimeout(toastTimerRef.current), [])
 
   /* 联调数据源：GET /knowledge-graph（接口 26），节点 category/value 由后端权威推导；
      mock 模式不请求，保持本地种子 + 前端派生。掌握度变化时重取，着色随 useMastery 实时刷新 */
@@ -153,6 +167,22 @@ export default function KnowledgeGraph() {
     }
     chart.current.setOption(option)
 
+    /* 节点点击：核心 6 节点（注册表命中，ml/nn/dl/cnn/transformer/finetune）→ 经
+       resourceNav 通道跳转对应知识点资源页（与学习路径页同款导航）；其余节点 → 轻提示。
+       effect 随主题/掌握度重跑，先 off 再 on 防止处理器堆叠 */
+    chart.current.off('click')
+    chart.current.on('click', (p) => {
+      if ((p as { dataType?: string }).dataType !== 'node') return
+      const node = p.data as { id: string; name: string }
+      const kp = kpByGraphNode(node.id)
+      if (kp) {
+        setResourceNav(kp.id)
+        onNavigate?.('learning-resource')
+      } else {
+        showToast(`「${node.name}」暂未开通课程，作为领域拓扑参考`)
+      }
+    })
+
     const onResize = () => chart.current?.resize()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -176,6 +206,20 @@ export default function KnowledgeGraph() {
           <p className="kg-hint">提示：连线表示「前置 → 进阶」依赖关系；悬停节点查看掌握度，拖拽可调整布局。</p>
         </RevealItem>
       </RevealGroup>
+
+      {/* 非核心节点点击轻提示（复用 AdminKB toast 形态与样式） */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            className="akb__toast glass-card"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
