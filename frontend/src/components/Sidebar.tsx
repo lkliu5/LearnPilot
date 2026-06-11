@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
+import { getUser } from '../services/api'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -9,6 +10,8 @@ interface SidebarProps {
   onPageChange: (page: PageType) => void
   collapsed: boolean
   onToggle: () => void
+  /** B4-a：admin 登录时渲染「管理」分组，learner 不渲染 */
+  isAdmin?: boolean
 }
 
 /* V3.0: 彩色渐变填充图标 */
@@ -96,6 +99,48 @@ const icons = {
       <line x1="8" y1="15.5" x2="13" y2="15.5" stroke="#fff" strokeWidth="1.4" opacity="0.6" strokeLinecap="round" />
     </svg>
   ),
+  /* B4-a 管理分组图标：知识库（数据桶）/ Prompt（模板编辑）/ 指标（仪表） */
+  adminKb: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-cyan" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#67e8f9" />
+          <stop offset="1" stopColor="#0e7490" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="12" cy="5.5" rx="7" ry="2.8" fill="url(#icon-cyan)" opacity="0.9" />
+      <path d="M5 5.5v6c0 1.55 3.13 2.8 7 2.8s7-1.25 7-2.8v-6" fill="url(#icon-cyan)" opacity="0.6" />
+      <path d="M5 11.5v6c0 1.55 3.13 2.8 7 2.8s7-1.25 7-2.8v-6" fill="url(#icon-cyan)" opacity="0.35" />
+    </svg>
+  ),
+  adminPrompt: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-indigo" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#a5b4fc" />
+          <stop offset="1" stopColor="#4338ca" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="4" width="18" height="14" rx="3" fill="url(#icon-indigo)" opacity="0.55" />
+      <path d="M7 9l3 2.5L7 14" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+      <line x1="12.5" y1="14" x2="17" y2="14" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
+      <circle cx="18.5" cy="19.5" r="3" fill="url(#icon-indigo)" opacity="0.95" />
+      <path d="M17.3 19.5l.9.9 1.5-1.8" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  adminMetrics: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-lime" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#bef264" />
+          <stop offset="1" stopColor="#4d7c0f" />
+        </linearGradient>
+      </defs>
+      <path d="M4 17a8 8 0 1 1 16 0" stroke="url(#icon-lime)" strokeWidth="2.4" strokeLinecap="round" opacity="0.85" />
+      <line x1="12" y1="17" x2="16" y2="11" stroke="url(#icon-lime)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="12" cy="17" r="2" fill="url(#icon-lime)" />
+    </svg>
+  ),
 }
 
 interface MenuItem {
@@ -123,7 +168,14 @@ const toolItems: MenuItem[] = [
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
 ]
 
-export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle }: SidebarProps) {
+/** 管理（仅 admin 渲染，B4 阶段）*/
+const adminItems: MenuItem[] = [
+  { id: 'admin-kb', icon: icons.adminKb, label: '知识库管理', description: '文档入库 · 检索测试' },
+  { id: 'admin-prompts', icon: icons.adminPrompt, label: 'Prompt管理', description: 'Agent模板热更新' },
+  { id: 'admin-metrics', icon: icons.adminMetrics, label: '指标看板', description: '幻觉率 · 适配 · 覆盖' },
+]
+
+export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle, isAdmin = false }: SidebarProps) {
   const hasDiagnosed = useJourney((s) => s.hasDiagnosed)
   const hasGeneratedPath = useJourney((s) => s.hasGeneratedPath)
   const resetJourney = useJourney((s) => s.resetJourney)
@@ -251,6 +303,14 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
 
         {!collapsed && <p className="sidebar__nav-group-title">总览与工具</p>}
         {toolItems.map((item, i) => renderItem(item, mainlineItems.length + i))}
+
+        {isAdmin && (
+          <>
+            <div className="sidebar__nav-divider" />
+            {!collapsed && <p className="sidebar__nav-group-title">管理</p>}
+            {adminItems.map((item, i) => renderItem(item, mainlineItems.length + toolItems.length + i))}
+          </>
+        )}
       </nav>
 
       {/* 用户资料区 - 毛玻璃卡片 */}
@@ -263,12 +323,12 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
           whileHover={{ y: -2 }}
         >
           <div className="sidebar__user-avatar">
-            <span>学</span>
+            <span>{isAdmin ? '管' : '学'}</span>
             <div className="sidebar__user-avatar-glow" />
           </div>
           <div className="sidebar__user-info">
-            <span className="sidebar__user-name">学习者_001</span>
-            <span className="sidebar__user-level">中级 · AI领域</span>
+            <span className="sidebar__user-name">{getUser()?.displayName ?? '学习者_001'}</span>
+            <span className="sidebar__user-level">{isAdmin ? '管理员 · 系统运营' : '中级 · AI领域'}</span>
           </div>
           <motion.svg
             className="sidebar__user-arrow"
