@@ -18,6 +18,18 @@ export async function login(username: string, password: string, remember = true)
   return data.user
 }
 
+/**
+ * 注册（接口文档 16.1）。成功即自动登录：落 token/user 并返回 user
+ * （role=learner、hasDiagnosed=false）。用户名已存在 / 密码过弱由后端返回
+ * code 1001（抛 ApiError，调用方据 message 提示）。
+ */
+export async function register(username: string, password: string): Promise<AuthUser> {
+  const data = await apiPost<LoginResponse>('/auth/register', { username, password })
+  setToken(data.token)
+  setUser(data.user)
+  return data.user
+}
+
 /** 退出（接口文档 3.3）。无论后端是否成功都清本地登录态。 */
 export async function logout(): Promise<void> {
   try {

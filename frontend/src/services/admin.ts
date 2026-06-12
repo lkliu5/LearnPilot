@@ -139,3 +139,59 @@ export function updatePromptTemplate(agentId: AgentId, template: string): Promis
 export function getAdminMetrics(): Promise<AdminMetrics> {
   return apiGet<AdminMetrics>('/admin/metrics')
 }
+
+/* ===== B9：管理端用户管理（接口文档 16.2–16.4） ===== */
+
+/** 用户列表行（接口文档 16.2） */
+export interface AdminUserRow {
+  userId: string
+  username: string
+  role: 'learner' | 'admin'
+  /** false 表示已禁用，登录受阻 */
+  isActive: boolean
+  hasDiagnosed: boolean
+  /** 已通过（passed）知识点数 */
+  passedKpCount: number
+  createdAt: string | null
+  /** 最近登录时间；从未登录为 null */
+  lastActiveAt: string | null
+}
+
+export interface AdminUserPage {
+  items: AdminUserRow[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** 16.3 重置进度结果 */
+export interface ResetProgressResult {
+  userId: string
+  hasDiagnosed: boolean
+  masteryCleared: number
+}
+
+/** 16.4 启停结果 */
+export interface ToggleActiveResult {
+  userId: string
+  isActive: boolean
+}
+
+/** 16.2 用户列表（分页）。 */
+export function listAdminUsers(params: { page?: number; pageSize?: number } = {}): Promise<AdminUserPage> {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set('page', String(params.page))
+  if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+  const suffix = qs.toString()
+  return apiGet<AdminUserPage>(`/admin/users${suffix ? `?${suffix}` : ''}`)
+}
+
+/** 16.3 重置用户学习进度（清空掌握度 + 复位旅程，幂等）。对 admin 目标 → code 1003。 */
+export function resetUserProgress(userId: string): Promise<ResetProgressResult> {
+  return apiPost<ResetProgressResult>(`/admin/users/${userId}/reset-progress`)
+}
+
+/** 16.4 启用/禁用账号（翻转 isActive）。对 admin 目标 → code 1003。 */
+export function toggleUserActive(userId: string): Promise<ToggleActiveResult> {
+  return apiPost<ToggleActiveResult>(`/admin/users/${userId}/toggle-active`)
+}

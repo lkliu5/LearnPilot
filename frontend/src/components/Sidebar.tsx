@@ -141,6 +141,21 @@ const icons = {
       <circle cx="12" cy="17" r="2" fill="url(#icon-lime)" />
     </svg>
   ),
+  /* B9 用户管理：双人轮廓 */
+  adminUsers: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-slate" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#94a3b8" />
+          <stop offset="1" stopColor="#475569" />
+        </linearGradient>
+      </defs>
+      <circle cx="9" cy="8" r="3.4" fill="url(#icon-slate)" opacity="0.9" />
+      <path d="M3 20c0-3.2 2.7-5.6 6-5.6s6 2.4 6 5.6" fill="url(#icon-slate)" opacity="0.55" />
+      <circle cx="17.5" cy="9" r="2.6" fill="url(#icon-slate)" opacity="0.7" />
+      <path d="M15.5 14.6c3 .15 5 2.3 5 5.4" stroke="url(#icon-slate)" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
+    </svg>
+  ),
 }
 
 interface MenuItem {
@@ -173,6 +188,7 @@ const adminItems: MenuItem[] = [
   { id: 'admin-kb', icon: icons.adminKb, label: '知识库管理', description: '文档入库 · 检索测试' },
   { id: 'admin-prompts', icon: icons.adminPrompt, label: 'Prompt管理', description: 'Agent模板热更新' },
   { id: 'admin-metrics', icon: icons.adminMetrics, label: '指标看板', description: '幻觉率 · 适配 · 覆盖' },
+  { id: 'admin-users', icon: icons.adminUsers, label: '用户管理', description: '账号 · 进度 · 启停' },
 ]
 
 export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle, isAdmin = false }: SidebarProps) {

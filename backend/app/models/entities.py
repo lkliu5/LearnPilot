@@ -43,6 +43,9 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(64))
     password_hash: Mapped[str] = mapped_column(String(256))
     role: Mapped[str] = mapped_column(String(16), default="learner")  # learner | admin
+    # B9：账号启停（禁用 → 登录受阻，接口文档 16.0/16.4）；最近活跃 = 最近登录时间（16.2）
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

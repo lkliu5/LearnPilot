@@ -324,9 +324,27 @@ def _migrate_b6() -> None:
             )
 
 
+def _migrate_b9() -> None:
+    """B9 轻量迁移：既有开发库 users 表缺 is_active / last_active_at 列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。
+    既有行 is_active 默认 1（启用），last_active_at 为 NULL（从未登录）。
+    """
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("users")}
+    with engine.begin() as conn:
+        if "is_active" not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+        if "last_active_at" not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
+    _migrate_b9()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

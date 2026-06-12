@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Silk from '@/components/Silk/Silk'
-import { USE_REAL_API } from '../services/api'
-import { login } from '../services/auth'
+import { USE_REAL_API, ApiError } from '../services/api'
+import { login, register } from '../services/auth'
 import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
 import './Login.css'
 
 interface LoginProps {
-  onLogin: () => void
+  /** 登录/注册成功回调；注册新学习者时 toProfile=true → 进入画像诊断引导（B9） */
+  onLogin: (opts?: { toProfile?: boolean }) => void
 }
+
+type AuthMode = 'login' | 'register'
 
 /* 绸缎背景的两套护眼配色：鼠尾草 → 低饱和鼠尾绿；墨纸 → 低饱和靛蓝灰 */
 const SILK_COLORS = {
@@ -43,29 +46,54 @@ const features = [
   { icon: '◈', text: '个性化学习路径动态规划' },
 ]
 
+const LOGIN_DEFAULTS = { username: '学习者_001', password: '••••••••' } as const
+
 export default function Login({ onLogin }: LoginProps) {
-  const [username, setUsername] = useState('学习者_001')
-  const [password, setPassword] = useState('••••••••')
+  const [mode, setMode] = useState<AuthMode>('login')
+  const [username, setUsername] = useState<string>(LOGIN_DEFAULTS.username)
+  const [password, setPassword] = useState<string>(LOGIN_DEFAULTS.password)
   const [loading, setLoading] = useState(false)
   const theme = useThemeName()
+  const isRegister = mode === 'register'
+
+  /** 切换登录/注册：进入注册清空预填，回到登录恢复演示默认（零新设计语言，复用同表单） */
+  const switchMode = (next: AuthMode) => {
+    if (loading) return
+    setMode(next)
+    if (next === 'register') {
+      setUsername('')
+      setPassword('')
+    } else {
+      setUsername(LOGIN_DEFAULTS.username)
+      setPassword(LOGIN_DEFAULTS.password)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
     setLoading(true)
-    // mock 模式：模拟鉴权（前端演示），1s 后进入系统（行为与联调前一致）
+    // mock 模式：模拟鉴权（前端演示），1s 后进入系统（注册 → 进入画像诊断引导）
     if (!USE_REAL_API) {
-      setTimeout(onLogin, 1000)
+      setTimeout(() => onLogin(isRegister ? { toProfile: true } : undefined), 1000)
       return
     }
-    // 联调模式：真实登录 → 落 token → 拉取旅程 / 掌握度权威态 → 进入系统
+    // 联调模式：真实登录/注册 → 落 token → 拉取旅程 / 掌握度权威态 → 进入系统
     try {
-      await login(username.trim(), password)
-      await Promise.all([useJourney.getState().loadJourney(), useMastery.getState().load()])
-      onLogin()
+      if (isRegister) {
+        await register(username.trim(), password)
+        await Promise.all([useJourney.getState().loadJourney(), useMastery.getState().load()])
+        onLogin({ toProfile: true }) // 新学习者直达画像诊断
+      } else {
+        await login(username.trim(), password)
+        await Promise.all([useJourney.getState().loadJourney(), useMastery.getState().load()])
+        onLogin()
+      }
     } catch (err) {
       setLoading(false)
-      window.alert('登录失败：' + (err instanceof Error ? err.message : '请检查用户名或密码'))
+      const msg =
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : '请检查输入'
+      window.alert((isRegister ? '注册失败：' : '登录失败：') + msg)
     }
   }
 
@@ -171,8 +199,10 @@ export default function Login({ onLogin }: LoginProps) {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
         >
-          <h2 className="login__form-title">欢迎回来</h2>
-          <p className="login__form-hint">登录以进入你的个性化学习空间</p>
+          <h2 className="login__form-title">{isRegister ? '创建账号' : '欢迎回来'}</h2>
+          <p className="login__form-hint">
+            {isRegister ? '注册一个学习者账号，立即开始画像诊断' : '登录以进入你的个性化学习空间'}
+          </p>
 
           <form className="login__form" onSubmit={handleSubmit}>
             <label className="login__field">
@@ -183,6 +213,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
+                placeholder={isRegister ? '设置一个用户名' : undefined}
               />
             </label>
 
@@ -193,22 +224,33 @@ export default function Login({ onLogin }: LoginProps) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
+                autoComplete={isRegister ? 'new-password' : 'current-password'}
+                placeholder={isRegister ? '至少 6 位' : undefined}
               />
             </label>
 
-            <div className="login__row">
-              <label className="login__remember">
-                <input type="checkbox" defaultChecked /> 记住我
-              </label>
-              <a className="login__forgot" href="#">忘记密码？</a>
-            </div>
+            {!isRegister && (
+              <div className="login__row">
+                <label className="login__remember">
+                  <input type="checkbox" defaultChecked /> 记住我
+                </label>
+                <a className="login__forgot" href="#">忘记密码？</a>
+              </div>
+            )}
 
             <button className={`login__submit ${loading ? 'login__submit--loading' : ''}`} type="submit">
-              {loading ? '正在进入…' : '进入系统'}
+              {loading ? (isRegister ? '正在注册…' : '正在进入…') : isRegister ? '注册并进入' : '进入系统'}
             </button>
 
-            <p className="login__demo-tip">演示模式 · 任意账号密码均可进入</p>
+            <p className="login__demo-tip">
+              {isRegister ? (
+                <>已有账号？<a href="#" onClick={(e) => { e.preventDefault(); switchMode('login') }}>返回登录</a></>
+              ) : USE_REAL_API ? (
+                <>还没有账号？<a href="#" onClick={(e) => { e.preventDefault(); switchMode('register') }}>注册账号</a></>
+              ) : (
+                <>演示模式 · 任意账号密码均可进入 · <a href="#" onClick={(e) => { e.preventDefault(); switchMode('register') }}>注册账号</a></>
+              )}
+            </p>
           </form>
         </motion.div>
       </motion.div>

@@ -10,6 +10,7 @@ import KnowledgeGraph from './pages/KnowledgeGraph'
 import AdminKB from './pages/admin/AdminKB'
 import AdminPrompts from './pages/admin/AdminPrompts'
 import AdminMetrics from './pages/admin/AdminMetrics'
+import AdminUsers from './pages/admin/AdminUsers'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
 import { getUser } from './services/api'
@@ -25,6 +26,7 @@ export type PageType =
   | 'admin-kb'
   | 'admin-prompts'
   | 'admin-metrics'
+  | 'admin-users'
 type Stage = 'landing' | 'login' | 'app'
 
 /** B4-a 管理端：hash 深链 ↔ 页面映射（learner 直接敲 URL 时由守卫拦回首页） */
@@ -32,11 +34,13 @@ const ADMIN_HASH_TO_PAGE: Record<string, PageType> = {
   '#/admin/kb': 'admin-kb',
   '#/admin/prompts': 'admin-prompts',
   '#/admin/metrics': 'admin-metrics',
+  '#/admin/users': 'admin-users',
 }
 const ADMIN_PAGE_TO_HASH: Partial<Record<PageType, string>> = {
   'admin-kb': '#/admin/kb',
   'admin-prompts': '#/admin/prompts',
   'admin-metrics': '#/admin/metrics',
+  'admin-users': '#/admin/users',
 }
 const isAdminPage = (page: PageType) => page.startsWith('admin-')
 
@@ -79,11 +83,13 @@ function App() {
     return () => window.removeEventListener('hashchange', applyHash)
   }, [stage, isAdmin])
 
-  const handleLogin = () => {
+  /** 登录/注册成功回调。注册新学习者时 toProfile=true → 直接进入画像诊断引导（B9）。 */
+  const handleLogin = (opts?: { toProfile?: boolean }) => {
     const user = getUser()
     const nextRole = user?.role === 'admin' ? 'admin' : 'learner'
     setRole(nextRole)
-    setCurrentPage(nextRole === 'admin' ? 'admin-kb' : 'dashboard')
+    if (nextRole === 'admin') setCurrentPage('admin-kb')
+    else setCurrentPage(opts?.toProfile ? 'profile' : 'dashboard')
     setStage('app')
   }
 
@@ -109,6 +115,8 @@ function App() {
         return <AdminPrompts />
       case 'admin-metrics':
         return <AdminMetrics />
+      case 'admin-users':
+        return <AdminUsers />
       default:
         return <Dashboard onNavigate={navigate} />
     }

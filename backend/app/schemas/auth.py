@@ -14,5 +14,13 @@ class LoginRequest(BaseModel):
     remember: bool = False  # 可选
 
 
+class RegisterRequest(BaseModel):
+    """注册请求（接口文档 16.1）。强度/查重校验在服务层（返回业务码 1001），
+    此处仅约束非空——空串由 min_length 触发 422→1001，与服务层口径一致。"""
+
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(min_length=1)

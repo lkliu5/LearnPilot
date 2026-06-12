@@ -680,6 +680,111 @@ def test_36_admin_metrics(client, admin):
     assert data["coverageRate"] >= 0.90
 
 
+# ============================== Admin Users / Register（16.1–16.4，B9） =========
+
+@pytest.fixture(scope="module", autouse=True)
+def cleanup_b9_users(client):
+    """B9：模块结束清理所有 b9snap_* 一次性账号及其旅程/掌握度（不污染 dev 库）。"""
+    yield
+    db = SessionLocal()
+    stale = db.query(User).filter(User.username.like("b9snap_%")).all()
+    for u in stale:
+        db.query(Mastery).filter(Mastery.user_id == u.id).delete()
+        db.query(Journey).filter(Journey.user_id == u.id).delete()
+        db.delete(u)
+    db.commit()
+    db.close()
+
+
+def test_37_register(client):
+    """16.1 注册：结构与 login 同构（token+user）；查重/弱密码 → 1001。"""
+    body = {"username": "b9snap_user", "password": "snap123456"}
+    data = _data(client.post(f"{API}/auth/register", json=body))
+    _exact(data, {"token", "expiresIn", "user"})
+    assert isinstance(data["token"], str) and data["token"]
+    assert isinstance(data["expiresIn"], int)
+    user = data["user"]
+    _exact(user, {"userId", "username", "displayName", "role",
+                  "hasDiagnosed", "hasGeneratedPath"})
+    assert user["role"] == "learner"  # 注册账号固定 learner（16.1）
+    assert user["hasDiagnosed"] is False and user["hasGeneratedPath"] is False
+    shared["b9_user_id"] = user["userId"]
+    shared["b9_headers"] = {"Authorization": f"Bearer {data['token']}"}
+    shared["b9_login"] = body
+    # 重复用户名 → 1001
+    _data(client.post(f"{API}/auth/register", json=body), code=1001, status=400)
+    # 弱密码（<6）→ 1001
+    _data(client.post(f"{API}/auth/register",
+                      json={"username": "b9snap_weak", "password": "123"}),
+          code=1001, status=400)
+
+
+def test_38_admin_users_list(client, admin):
+    """16.2 用户列表：分页结构 + 行精确字段集；定位注册账号。"""
+    data = _data(client.get(f"{API}/admin/users", headers=admin,
+                            params={"page": 1, "pageSize": 100}))
+    _exact(data, {"items", "total", "page", "pageSize"})
+    assert data["page"] == 1 and data["pageSize"] == 100
+    assert isinstance(data["total"], int) and data["total"] >= 2  # 至少种子 admin+learner
+    for item in data["items"]:
+        _exact(item, {"userId", "username", "role", "isActive", "hasDiagnosed",
+                      "passedKpCount", "createdAt", "lastActiveAt"})
+        assert item["role"] in {"learner", "admin"}
+        assert isinstance(item["isActive"], bool)
+        assert isinstance(item["hasDiagnosed"], bool)
+        assert isinstance(item["passedKpCount"], int) and item["passedKpCount"] >= 0
+        assert item["createdAt"] is None or isinstance(item["createdAt"], str)
+        assert item["lastActiveAt"] is None or isinstance(item["lastActiveAt"], str)
+    ours = [i for i in data["items"] if i["userId"] == shared["b9_user_id"]]
+    assert ours and ours[0]["isActive"] is True
+
+
+def test_39_admin_reset_progress(client, admin):
+    """16.3 重置进度：清空掌握度 + 复位旅程；禁对 admin → 1003；未知 → 1004。"""
+    headers = shared["b9_headers"]
+    # 先让账号产生一条 passed 掌握度
+    client.post(f"{API}/resource/lecture", headers=headers,
+                json={"kpId": "nn", "difficulty": "入门"})
+    _data(client.post(f"{API}/mastery/nn/pass", headers=headers))
+    data = _data(client.post(
+        f"{API}/admin/users/{shared['b9_user_id']}/reset-progress", headers=admin))
+    _exact(data, {"userId", "hasDiagnosed", "masteryCleared"})
+    assert data["userId"] == shared["b9_user_id"]
+    assert data["hasDiagnosed"] is False
+    assert isinstance(data["masteryCleared"], int) and data["masteryCleared"] >= 1
+    # 复位生效：掌握度清空
+    assert _data(client.get(f"{API}/mastery", headers=headers))["status"] == {}
+    # 幂等：再次重置 masteryCleared = 0
+    again = _data(client.post(
+        f"{API}/admin/users/{shared['b9_user_id']}/reset-progress", headers=admin))
+    assert again["masteryCleared"] == 0
+    # 禁对 admin 角色 → 1003；未知用户 → 1004
+    _data(client.post(f"{API}/admin/users/u_10000/reset-progress", headers=admin),
+          code=1003, status=403)
+    _data(client.post(f"{API}/admin/users/u_nope/reset-progress", headers=admin),
+          code=1004, status=404)
+
+
+def test_40_admin_toggle_active(client, admin):
+    """16.4 启停：翻转 isActive；禁用账号登录 → 1002；禁对 admin → 1003。"""
+    uid = shared["b9_user_id"]
+    data = _data(client.post(f"{API}/admin/users/{uid}/toggle-active", headers=admin))
+    _exact(data, {"userId", "isActive"})
+    assert data["userId"] == uid and data["isActive"] is False
+    # 禁用后登录被拦 → 1002
+    _data(client.post(f"{API}/auth/login", json=shared["b9_login"]),
+          code=1002, status=401)
+    # 再翻转回启用 → 登录恢复
+    back = _data(client.post(f"{API}/admin/users/{uid}/toggle-active", headers=admin))
+    assert back["isActive"] is True
+    _data(client.post(f"{API}/auth/login", json=shared["b9_login"]))
+    # 禁对 admin 角色 → 1003；未知用户 → 1004
+    _data(client.post(f"{API}/admin/users/u_10000/toggle-active", headers=admin),
+          code=1003, status=403)
+    _data(client.post(f"{API}/admin/users/u_nope/toggle-active", headers=admin),
+          code=1004, status=404)
+
+
 # ============================== 错误信封抽查 =====================================
 
 def test_error_envelopes(client, learner):
@@ -687,3 +792,9 @@ def test_error_envelopes(client, learner):
     _data(client.get(f"{API}/journey"), code=1002, status=401)  # 未带 token
     _data(client.get(f"{API}/admin/metrics", headers=learner),
           code=1003, status=403)  # learner 访问管理端
+    # B9：learner 访问管理端用户管理三接口 → 1003
+    _data(client.get(f"{API}/admin/users", headers=learner), code=1003, status=403)
+    _data(client.post(f"{API}/admin/users/u_10001/reset-progress", headers=learner),
+          code=1003, status=403)
+    _data(client.post(f"{API}/admin/users/u_10001/toggle-active", headers=learner),
+          code=1003, status=403)
