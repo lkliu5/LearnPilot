@@ -376,18 +376,20 @@ def _map_sources(db: Session, chunks: list[dict[str, Any]]) -> list[dict[str, An
     best_by_doc: dict[str, dict[str, Any]] = {}
     for c in chunks:
         meta = c.get("metadata") or {}
-        doc_id = meta.get("document_id") or c.get("id", "")
+        # 兼容两种切片元数据形状：真实检索（document_id/document_title）与
+        # 工作流确定性 mock 检索（docId/title，见 learning_workflow._mock_retriever）。
+        doc_id = meta.get("document_id") or meta.get("docId") or c.get("id", "")
         score = float(c.get("score", 0.0))
         if doc_id not in best_by_doc or score > best_by_doc[doc_id]["score"]:
             best_by_doc[doc_id] = {"meta": meta, "score": score}
     sources: list[dict[str, Any]] = []
     for doc_id, best in best_by_doc.items():
         meta = best["meta"]
-        title = meta.get("document_title") or "知识库文档"
+        title = meta.get("document_title") or meta.get("title") or "知识库文档"
         location = meta.get("source_location")
         if location:
             title = f"{title} · {location}"
-        doc = db.get(KnowledgeDocument, meta.get("document_id") or "")
+        doc = db.get(KnowledgeDocument, meta.get("document_id") or meta.get("docId") or "")
         category = doc.category if doc is not None else None
         sources.append(
             {
@@ -427,8 +429,14 @@ def generate_lecture(
         .one_or_none()
     )
     if cached is not None:
-        return cached.payload
+        # 旧缓存（B10 前）可能缺 workflowId 键，统一补 null 后返回（向后兼容）。
+        data = dict(cached.payload)
+        data.setdefault("workflowId", None)
+        return data
 
+    # workflowId（B10）：标识产出该份讲义的工作流 trace，供前端「查看生成过程」回放。
+    # mock 直接生成（不经工作流）→ null；真实模式由工作流预分配 id 并落 WorkflowTrace。
+    workflow_id: str | None = None
     if llm.is_mock:
         generated = llm.generate_lecture(kp.id, kp.name, difficulty, kp.description)
         markdown = generated["markdown"]
@@ -446,6 +454,7 @@ def generate_lecture(
         markdown = final["markdown"]
         sources = _map_sources(db, result["trace"]["ragContextUsed"])
         rate = final["hallucinationRate"]
+        workflow_id = result["workflowId"]
 
     payload = {
         "kpId": kp.id,
@@ -453,6 +462,7 @@ def generate_lecture(
         "markdown": markdown,
         "sources": sources,
         "hallucinationRate": rate,
+        "workflowId": workflow_id,
     }
     db.add(
         ResourceCache(
@@ -463,5 +473,67 @@ def generate_lecture(
             hallucination_rate=rate,
         )
     )
+    db.commit()
+    return payload
+
+
+def cache_lecture_from_workflow(
+    db: Session, *, kp_id: str, difficulty: str, result: dict[str, Any]
+) -> dict[str, Any] | None:
+    """工作流产物回写讲义缓存（B10，打通「工作流产物 → 学习资源」闭环）。
+
+    /workflow/execute 跑完一轮后调用：工作流 **complete 且未降级** 时，把产物
+    （markdown + sources + hallucinationRate + workflowId）写入该 kp+难度对应的
+    讲义缓存键并**覆盖旧缓存**——使资源页讲义 Tab 与大屏工作流产物一致、workflowId
+    一致。降级（degraded）产物**不覆盖缓存**，只保留 WorkflowTrace（旧讲义维持原样）。
+
+    kind 与 generate_lecture 同口径（mock=lecture / 真实=lecture@<provider>），
+    保证 /resource/lecture 缓存命中能取到本次回写的产物。
+
+    Returns:
+        回写后的讲义 payload；降级或难度档非法时返回 None（不写缓存）。
+    """
+    final = result.get("finalOutput") or {}
+    if final.get("degraded"):
+        return None  # 降级产物不覆盖缓存，仅留 trace（旧讲义保留）
+    if difficulty not in LECTURE_DIFFICULTIES:
+        return None  # 防御：仅按合法讲义难度档回写
+
+    llm = get_llm()
+    kind = "lecture" if llm.is_mock else f"lecture@{llm.provider}"
+    markdown = final.get("markdown") or ""
+    sources = _map_sources(db, result.get("trace", {}).get("ragContextUsed") or [])
+    rate = final.get("hallucinationRate")
+    payload = {
+        "kpId": kp_id,
+        "difficulty": difficulty,
+        "markdown": markdown,
+        "sources": sources,
+        "hallucinationRate": rate,
+        "workflowId": result.get("workflowId"),
+    }
+
+    row = (
+        db.query(ResourceCache)
+        .filter(
+            ResourceCache.kp_id == kp_id,
+            ResourceCache.difficulty == difficulty,
+            ResourceCache.kind == kind,
+        )
+        .one_or_none()
+    )
+    if row is not None:
+        row.payload = payload  # 覆盖旧缓存
+        row.hallucination_rate = rate or 0.0
+    else:
+        db.add(
+            ResourceCache(
+                kp_id=kp_id,
+                difficulty=difficulty,
+                kind=kind,
+                payload=payload,
+                hallucination_rate=rate or 0.0,
+            )
+        )
     db.commit()
     return payload

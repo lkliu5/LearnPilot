@@ -1,18 +1,37 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import QuizRenderer, { type QuizQuestion } from '../components/QuizRenderer'
-import SourceTrace from '../components/SourceTrace'
+import SourceTrace, { type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
-import { getLecture, getQuiz, submitQuiz } from '../services/resource'
+import { getLecture, getQuiz, submitQuiz, type LectureData } from '../services/resource'
+import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
 import { consumeResourceEntryTab, getResourceKpId } from '../services/resourceNav'
+import { setWorkflowReplay } from '../services/workflowNav'
 import type { PageType } from '../App'
 import './LearningResource.css'
+
+/* B10：工作流阶段 → 迷你进度文案（资源页重新生成时内嵌展示） */
+const REGEN_PHASE_LABEL: Record<string, string> = {
+  idle: '排队中',
+  diagnosis: '学情诊断',
+  generation: '资源生成',
+  validation: '内容审核',
+  complete: '已完成',
+}
+
+/* 后端讲义 sources（confidence 0-1）→ SourceTrace 展示口径（0-100） */
+const toSourceRefs = (sources: LectureData['sources']): SourceRef[] =>
+  sources.map((s) => ({
+    title: s.title,
+    type: s.type as SourceRef['type'],
+    confidence: Math.round(s.confidence * 100),
+  }))
 
 /* 重型多模态组件按需懒加载（打开对应 Tab 才加载，保持页面轻量）*/
 const MindMap = lazy(() => import('../components/MindMap'))
@@ -280,6 +299,21 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
      lectureMap 缓存各难度档 markdown */
   const [questions, setQuestions] = useState<QuizQuestion[]>(USE_REAL_API ? [] : quizQuestions)
   const [lectureMap, setLectureMap] = useState<Record<string, string>>({})
+  /* B10：各难度档讲义的真实溯源 sources 与产出工作流 id（联调用，驱动溯源徽章/「查看生成过程」）*/
+  const [lectureSources, setLectureSources] = useState<Record<string, SourceRef[]>>({})
+  const [lectureWf, setLectureWf] = useState<Record<string, string | null>>({})
+  /* B10：讲义「重新生成」闭环（仅联调）：确认弹层 / 实时进行中 / 迷你进度阶段文案 */
+  const [regenConfirm, setRegenConfirm] = useState(false)
+  const [regenRunning, setRegenRunning] = useState(false)
+  const [regenPhase, setRegenPhase] = useState('诊断')
+  const regenSocketRef = useRef<{ close: () => void } | null>(null)
+
+  /* 联调：把一份讲义回包写入三个缓存映射（markdown / sources / workflowId） */
+  const applyLecture = (lv: string, d: LectureData) => {
+    setLectureMap((m) => ({ ...m, [lv]: d.markdown }))
+    setLectureSources((m) => ({ ...m, [lv]: toSourceRefs(d.sources) }))
+    setLectureWf((m) => ({ ...m, [lv]: d.workflowId }))
+  }
 
   /* 知识点闭环状态：完成以"通过分阶测试(≥60%)"为唯一判定 */
   const kpStatus = useMastery((s) => s.status[kpId] ?? 'learning')
@@ -296,11 +330,14 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       .then((d) => setQuestions(d.questions))
       .catch((e) => console.error('[resource] 加载测验题失败', e))
     getLecture(kpId, level)
-      .then((d) => setLectureMap((m) => ({ ...m, [level]: d.markdown })))
+      .then((d) => applyLecture(level, d))
       .catch((e) => console.error('[resource] 加载讲义失败', e))
     // 仅挂载时执行一次（level 初值为「初级」；kpId 挂载期内不变）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* 卸载清理：断开可能在跑的重新生成 WS（不触发回退） */
+  useEffect(() => () => regenSocketRef.current?.close(), [])
 
   /* 当前展示的讲义内容：联调取后端缓存，mock 取本地三档常量 */
   const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : lectureByLevel[level]
@@ -334,7 +371,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     if (USE_REAL_API) {
       getLecture(kpId, lv)
         .then((d) => {
-          setLectureMap((m) => ({ ...m, [lv]: d.markdown }))
+          applyLecture(lv, d)
           setLevel(lv)
           setRegenerating(false)
         })
@@ -349,6 +386,61 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       setLevel(lv)
       setRegenerating(false)
     }, 1100)
+  }
+
+  /* ---------- B10：讲义「重新生成」闭环（仅联调；mock 模式不渲染入口） ---------- */
+
+  /** 重新生成完成后轮询讲义直至命中本次工作流产物（后台 complete 后才提交回写）。 */
+  const finishRegen = async (wfId: string) => {
+    for (let i = 0; i < 15; i++) {
+      try {
+        const d = await getLecture(kpId, level)
+        if (d.workflowId === wfId || i === 14) {
+          applyLecture(level, d)
+          break
+        }
+      } catch (e) {
+        console.error('[resource] 重新生成后刷新讲义失败', e)
+        break
+      }
+      await new Promise((r) => window.setTimeout(r, 400))
+    }
+    setRegenRunning(false)
+  }
+
+  /** 确认后触发：11.1 execute（当前 kp+难度）→ 11.2 WS 迷你进度 → complete 刷新讲义。 */
+  const confirmRegen = async () => {
+    setRegenConfirm(false)
+    setRegenRunning(true)
+    setRegenPhase('诊断')
+    let wfId: string
+    try {
+      wfId = (await executeWorkflow({ kpId, difficulty: level })).workflowId
+    } catch (e) {
+      console.error('[resource] 触发重新生成失败', e)
+      setRegenRunning(false)
+      return
+    }
+    regenSocketRef.current = connectWorkflowSocket(wfId, {
+      onFrame: (snap) => setRegenPhase(REGEN_PHASE_LABEL[snap.phase] ?? snap.phase),
+      onComplete: () => {
+        regenSocketRef.current = null
+        void finishRegen(wfId)
+      },
+      onFail: (reason) => {
+        console.error('[resource] 重新生成实时通道异常：', reason)
+        regenSocketRef.current = null
+        setRegenRunning(false)
+      },
+    })
+  }
+
+  /** 跳转大屏回放产出当前讲义的工作流（查看生成过程）。 */
+  const viewGenerationProcess = () => {
+    const wf = lectureWf[level]
+    if (!wf) return
+    setWorkflowReplay(wf)
+    onNavigate?.('workflow')
   }
 
   return (
@@ -440,7 +532,36 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               <span className="level-switch__hint">切换难度，AI 实时重生成讲义</span>
             </div>
 
-            <SourceTrace />
+            {/* B10：讲义重新生成闭环（仅联调）——重新生成 + 迷你进度 + 查看生成过程 */}
+            {USE_REAL_API && (
+              <div className="lecture-regen-bar">
+                <button
+                  type="button"
+                  className="lecture-regen-bar__btn"
+                  onClick={() => setRegenConfirm(true)}
+                  disabled={regenRunning || regenerating}
+                >
+                  {regenRunning ? '工作流生成中…' : '🔄 重新生成'}
+                </button>
+                {regenRunning && (
+                  <span className="lecture-regen-bar__progress">
+                    <span className="lecture-regen-bar__orb" />
+                    多智能体工作流 · {regenPhase}…
+                  </span>
+                )}
+                {!regenRunning && lectureWf[level] && (
+                  <button
+                    type="button"
+                    className="lecture-regen-bar__link"
+                    onClick={viewGenerationProcess}
+                  >
+                    查看生成过程 →
+                  </button>
+                )}
+              </div>
+            )}
+
+            <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
 
             <div className="lecture-body">
               {activeLecture ? (
@@ -550,6 +671,52 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
       </RevealItem>
       </RevealGroup>
+
+      {/* B10：重新生成确认弹层（约需 20 秒提示） */}
+      <AnimatePresence>
+        {regenConfirm && (
+          <motion.div
+            className="regen-modal"
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setRegenConfirm(false)}
+          >
+            <motion.div
+              className="regen-modal__card"
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h4 className="regen-modal__title">重新生成讲义</h4>
+              <p className="regen-modal__text">
+                将调用<strong>多智能体工作流</strong>为「{kpName} · {level}」重新生成讲义
+                （学情诊断 → 检索生成 → 内容审核），<strong>约需 20 秒</strong>。完成后讲义内容与
+                溯源徽章将自动刷新。
+              </p>
+              <div className="regen-modal__actions">
+                <button
+                  type="button"
+                  className="regen-modal__btn regen-modal__btn--ghost"
+                  onClick={() => setRegenConfirm(false)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="regen-modal__btn regen-modal__btn--primary"
+                  onClick={() => void confirmRegen()}
+                >
+                  确定生成
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

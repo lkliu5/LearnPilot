@@ -28,6 +28,7 @@ from app.core.database import SessionLocal
 from app.models.entities import WorkflowTrace
 from app.workflows.learning_workflow import (
     AGENT_ORDER,
+    Retriever,
     WorkflowState,
     run_learning_workflow,
 )
@@ -196,9 +197,14 @@ def start_workflow(
     kp_id: str,
     target_job: str,
     difficulty: str = "初级",
+    retriever: Retriever | None = None,
     loop: asyncio.AbstractEventLoop,
 ) -> str:
-    """预分配 workflowId 并后台线程执行，立即返回（11.1）。"""
+    """预分配 workflowId 并后台线程执行，立即返回（11.1）。
+
+    retriever：B10 起由 execute 端按 provider 注入（真实模式传讲义检索器，使大屏
+    工作流产物与 /resource/lecture 同源；mock 传 None → 工作流用确定性 mock 检索）。
+    """
     workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
     run = WorkflowRun(workflow_id, loop)
     _runs[workflow_id] = run
@@ -206,7 +212,7 @@ def start_workflow(
         _runs.popitem(last=False)
     threading.Thread(
         target=_worker,
-        args=(run, user_id, kp_id, difficulty, target_job),
+        args=(run, user_id, kp_id, difficulty, target_job, retriever),
         daemon=True,
         name=f"workflow-{workflow_id}",
     ).start()
@@ -214,9 +220,18 @@ def start_workflow(
 
 
 def _worker(
-    run: WorkflowRun, user_id: str, kp_id: str, difficulty: str, target_job: str
+    run: WorkflowRun,
+    user_id: str,
+    kp_id: str,
+    difficulty: str,
+    target_job: str,
+    retriever: Retriever | None = None,
 ) -> None:
-    """后台线程：自管 DB 会话，逐节点发布快照帧（演示延迟见 config）。"""
+    """后台线程：自管 DB 会话，逐节点发布快照帧（演示延迟见 config）。
+
+    工作流跑完且未降级时，把产物回写讲义缓存（B10 闭环）——回写失败不影响已
+    实时交付的工作流结果（不向 WS 抛错帧）。
+    """
 
     def _delay() -> None:
         if settings.workflow_step_delay_ms > 0:
@@ -232,15 +247,28 @@ def _worker(
     try:
         # 起跑帧（诊断 running）已在 __init__ 置入快照；留一个轮询观察窗
         _delay()
-        run_learning_workflow(
+        result = run_learning_workflow(
             db,
             user_id=user_id,
             kp_id=kp_id,
             difficulty=difficulty,
             target_job=target_job,
+            retriever=retriever,
             workflow_id=run.workflow_id,
             on_update=on_update,
         )
+        # B10：工作流产物 → 学习资源闭环（complete 且未降级时覆盖讲义缓存）。
+        # 失败仅记日志、不向 WS 抛错帧（工作流本身已成功交付实时结果）。
+        try:
+            from app.services import resource as resource_service
+
+            resource_service.cache_lecture_from_workflow(
+                db, kp_id=kp_id, difficulty=difficulty, result=result
+            )
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("工作流产物回写讲义缓存失败")
     except Exception as exc:  # noqa: BLE001 兜底失败帧（messages 追加 error）
         snapshot = {key: value for key, value in run.snapshot.items()}
         messages = list(snapshot["messages"])

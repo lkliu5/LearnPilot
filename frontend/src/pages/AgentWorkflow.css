@@ -533,3 +533,72 @@
   color: var(--gray-500);
   margin-top: 2px;
 }
+/* ============ B10：实时模式目标选择 + 回放/完成提示 ============ */
+.workflow-live-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: 10px 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--gray-50);
+}
+.workflow-live-bar__target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.workflow-live-bar__label { font-size: 0.78rem; font-weight: 600; color: var(--gray-600); }
+.workflow-live-bar__select {
+  padding: 6px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-size: 0.8rem;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.workflow-live-bar__select:disabled { cursor: not-allowed; opacity: 0.6; }
+.workflow-live-bar__replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--purple-600);
+}
+.workflow-live-bar__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--purple-500);
+  animation: regen-orb-pulse 1.3s ease-in-out infinite;
+}
+@keyframes regen-orb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.45); transform: scale(1); }
+  50% { box-shadow: 0 0 0 7px rgba(124, 58, 237, 0); transform: scale(1.15); }
+}
+.workflow-live-bar__toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(37, 99, 235, 0.12));
+  border: 1px solid var(--success-200, rgba(16, 185, 129, 0.35));
+}
+.workflow-live-bar__toast-text { font-size: 0.8rem; font-weight: 600; color: var(--success-700, #047857); }
+.workflow-live-bar__toast-btn {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-600);
+  cursor: pointer;
+}
+.workflow-live-bar__toast-btn:hover { text-decoration: underline; }

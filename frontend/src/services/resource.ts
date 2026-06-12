@@ -12,6 +12,8 @@ export interface LectureData {
   markdown: string
   sources: { title: string; type: string; confidence: number }[]
   hallucinationRate: number
+  /** B10：产出该份讲义的工作流 trace id（直出 mock 为 null，工作流回写后为字符串）。 */
+  workflowId: string | null
 }
 
 /** 8.2 生成自适应讲义（difficulty: 入门|初级|高级）。 */

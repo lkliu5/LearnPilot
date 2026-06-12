@@ -106,7 +106,7 @@ function App() {
       case 'learning-resource':
         return <LearningResource onNavigate={navigate} />
       case 'workflow':
-        return <AgentWorkflow />
+        return <AgentWorkflow onNavigate={navigate} />
       case 'knowledge-graph':
         return <KnowledgeGraph onNavigate={navigate} />
       case 'admin-kb':

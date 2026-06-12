@@ -18,15 +18,19 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
 from app.core.envelope import envelope, fail, success
+from app.core.llm import LECTURE_DIFFICULTIES, get_llm
 from app.core.security import get_current_user
 from app.models.entities import JobSnapshot, KnowledgePoint, User, WorkflowTrace
 from app.services import workflow_runner
+from app.services.resource import _retrieve_for_lecture
 
 router = APIRouter(tags=["workflow"])
 
-# 11.1 请求体两字段均可选：kpId 缺省用演示主线知识点，目标岗位缺省与工作流默认一致
+# 11.1 请求体三字段均可选：kpId 缺省用演示主线知识点，目标岗位缺省与工作流默认一致，
+# difficulty 缺省「初级」（B10：产物按该难度档回写讲义缓存，需为合法讲义难度档）
 _DEFAULT_KP = "nn"
 _DEFAULT_TARGET_JOB = "大模型应用工程师"
+_DEFAULT_DIFFICULTY = "初级"
 
 
 class WorkflowExecuteRequest(BaseModel):
@@ -34,6 +38,7 @@ class WorkflowExecuteRequest(BaseModel):
 
     targetJobId: str | None = None
     kpId: str | None = None
+    difficulty: str | None = None  # 入门|初级|高级（B10：产物回写讲义缓存的难度档）
 
 
 @router.post("/workflow/execute")
@@ -42,20 +47,32 @@ async def execute_workflow(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """触发工作流执行（接口文档 11.1）。后台线程运行，立即返回 workflowId。"""
+    """触发工作流执行（接口文档 11.1）。后台线程运行，立即返回 workflowId。
+
+    B10：difficulty 入参（缺省「初级」）决定产物回写讲义缓存的难度档；工作流
+    complete 且未降级时，产物覆盖该 kp+难度的讲义缓存（见 workflow_runner._worker）。
+    """
     kp_id = body.kpId or _DEFAULT_KP
     if db.get(KnowledgePoint, kp_id) is None:
         return fail(code=1004, message="知识点不存在", status_code=404)
+    difficulty = body.difficulty or _DEFAULT_DIFFICULTY
+    if difficulty not in LECTURE_DIFFICULTIES:
+        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
     target_job = _DEFAULT_TARGET_JOB
     if body.targetJobId:
         job = db.get(JobSnapshot, body.targetJobId)
         if job is None:
             return fail(code=1004, message="目标岗位不存在", status_code=404)
         target_job = job.name
+    # 真实模式注入讲义检索器，使大屏工作流产物与 /resource/lecture 同源（同检索→同生成）；
+    # mock 模式传 None → 工作流用确定性 mock 检索（演示快、可复现）。
+    retriever = None if get_llm().is_mock else _retrieve_for_lecture
     workflow_id = workflow_runner.start_workflow(
         user_id=user.id,
         kp_id=kp_id,
         target_job=target_job,
+        difficulty=difficulty,
+        retriever=retriever,
         loop=asyncio.get_running_loop(),
     )
     return success({"workflowId": workflow_id})

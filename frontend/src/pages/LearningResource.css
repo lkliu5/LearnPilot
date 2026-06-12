@@ -1017,3 +1017,121 @@
 .weak__recap strong { color: var(--primary-700); }
 
 .weak__practice { margin-top: var(--space-sm); }
+
+/* ============ B10：讲义重新生成闭环（仅联调渲染） ============ */
+.lecture-regen-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+.lecture-regen-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-full);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.lecture-regen-bar__btn:hover:not(:disabled) {
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+}
+.lecture-regen-bar__btn:disabled { cursor: progress; opacity: 0.7; }
+.lecture-regen-bar__progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  color: var(--primary-600);
+  font-weight: 600;
+}
+.lecture-regen-bar__orb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
+  box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5);
+  animation: regen-orb-pulse 1.3s ease-in-out infinite;
+}
+@keyframes regen-orb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); transform: scale(1); }
+  50% { box-shadow: 0 0 0 7px rgba(37, 99, 235, 0); transform: scale(1.15); }
+}
+.lecture-regen-bar__link {
+  border: none;
+  background: none;
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--purple-600);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.lecture-regen-bar__link:hover { color: var(--purple-700); text-decoration: underline; }
+
+.regen-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+.regen-modal__card {
+  width: min(440px, 100%);
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  padding: var(--space-lg);
+}
+.regen-modal__title {
+  margin: 0 0 var(--space-sm);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+.regen-modal__text {
+  margin: 0 0 var(--space-lg);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+.regen-modal__text strong { color: var(--primary-700); }
+.regen-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+.regen-modal__btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.regen-modal__btn--ghost {
+  border: 1px solid var(--gray-300);
+  background: #fff;
+  color: var(--gray-600);
+}
+.regen-modal__btn--ghost:hover { background: var(--gray-50); }
+.regen-modal__btn--primary {
+  border: none;
+  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.32);
+}
+.regen-modal__btn--primary:hover { filter: brightness(1.05); }

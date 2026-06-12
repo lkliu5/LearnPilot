@@ -351,9 +351,20 @@ def test_lecture_real_mode_workflow_sources_and_rate(db, deepseek_llm, monkeypat
 
 # ---- mock 模式三接口与 B2 等价（前端演示兜底） ----------------------------------
 
-def test_lecture_mock_mode_unchanged(client, learner_headers):
-    """mock：三档讲义契约与 B2 逐字一致（确定性 markdown + 占位 sources/rate）。"""
+def test_lecture_mock_mode_unchanged(client, db, learner_headers):
+    """mock：三档讲义契约与 B2 逐字一致（确定性 markdown + 占位 sources/rate）。
+
+    B10 起 /workflow/execute 会把工作流产物覆盖写入 kind=lecture 缓存（mock 下
+    markdown 与 B2 逐字一致，但 sources 取真实检索映射、并带 workflowId）。本用例
+    断言的是「直出生成」契约，故先清掉 nn 三档讲义缓存，确保走确定性新生成。
+    """
     from app.core.llm import _LECTURE_HALLUCINATION_RATE, _LECTURE_SOURCES, LLMClient
+    from app.models.entities import ResourceCache
+
+    db.query(ResourceCache).filter(
+        ResourceCache.kp_id == "nn", ResourceCache.kind == "lecture"
+    ).delete()
+    db.commit()
 
     for difficulty in ("入门", "初级", "高级"):
         res = client.post(

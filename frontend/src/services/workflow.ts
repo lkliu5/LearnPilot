@@ -6,7 +6,7 @@
  *   重试/降级时推同结构增量帧（messages 仅含新增、agents/stats/phase 为当前全量），
  *   每帧套统一信封 {code, message, data, traceId}，complete 帧后服务端正常关闭。
  */
-import { apiPost } from './api'
+import { apiGet, apiPost } from './api'
 
 export type WorkflowAgentStatus = 'idle' | 'running' | 'success' | 'error'
 
@@ -42,11 +42,17 @@ export interface WorkflowSnapshot {
   stats: WorkflowStats
 }
 
-/** 11.1 触发工作流执行（targetJobId / kpId 均可选，后端缺省 kpId=nn）。 */
+/** 11.1 触发工作流执行（targetJobId / kpId / difficulty 均可选，后端缺省 kpId=nn / 初级）。
+ *  B10：difficulty 决定产物回写讲义缓存的难度档（complete 且未降级时覆盖）。 */
 export function executeWorkflow(
-  body: { targetJobId?: string; kpId?: string } = {}
+  body: { targetJobId?: string; kpId?: string; difficulty?: string } = {}
 ): Promise<{ workflowId: string }> {
   return apiPost<{ workflowId: string }>('/workflow/execute', body)
+}
+
+/** 11.2 轮询取一帧工作流快照（B10：供大屏回放已完成工作流，无需建 WS）。 */
+export function getWorkflowSnapshot(workflowId: string): Promise<WorkflowSnapshot> {
+  return apiGet<WorkflowSnapshot>(`/workflow/${workflowId}`)
 }
 
 interface WorkflowSocketHandlers {

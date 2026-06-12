@@ -11,9 +11,17 @@ import { USE_REAL_API } from '../services/api'
 import {
   executeWorkflow,
   connectWorkflowSocket,
+  getWorkflowSnapshot,
   type WorkflowSnapshot,
 } from '../services/workflow'
+import { consumeWorkflowReplay } from '../services/workflowNav'
+import { setResourceNav } from '../services/resourceNav'
+import { KNOWLEDGE_POINTS, CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import type { PageType } from '../App'
 import './AgentWorkflow.css'
+
+/* B10：大屏实时模式可选目标难度档（与资源页讲义三档一致） */
+const DIFFICULTIES = ['入门', '初级', '高级'] as const
 
 gsap.registerPlugin(useGSAP, MotionPathPlugin)
 
@@ -49,7 +57,7 @@ const agentConfig = [
   { id: 'critic', name: '内容审核Agent', icon: '✓' }
 ]
 
-export default function AgentWorkflow() {
+export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const [phase, setPhase] = useState<WorkflowPhase>('idle')
   const [agents, setAgents] = useState<AgentState[]>([
     { name: '学情诊断Agent', status: 'idle', lastAction: '等待用户输入' },
@@ -68,6 +76,14 @@ export default function AgentWorkflow() {
   const [liveHint, setLiveHint] = useState('')
   const socketRef = useRef<{ close: () => void } | null>(null)
   const hintTimerRef = useRef(0)
+
+  /* B10：实时模式目标知识点 + 难度（默认沿用现有演示参数 nn / 初级）；
+     完成后给出「已更新至学习资源」入口；回放则展示某已完成工作流的完成态。 */
+  const [targetKp, setTargetKp] = useState(CURRENT_KP_ID)
+  const [targetDiff, setTargetDiff] = useState<(typeof DIFFICULTIES)[number]>('初级')
+  const [completed, setCompleted] = useState<{ kpId: string; degraded: boolean } | null>(null)
+  const [replaying, setReplaying] = useState(false)
+  const lastFrameRef = useRef<WorkflowSnapshot | null>(null)
 
   /* GSAP G1：测量节点真实坐标 → 生成曲线连线路径 → 粒子沿路径流动 */
   const networkRef = useRef<HTMLDivElement>(null)
@@ -247,6 +263,7 @@ export default function AgentWorkflow() {
 
   /** WS 帧（首帧全量、后续 messages 仅增量）→ 驱动既有状态卡 / 日志 / stats / phase。 */
   const applyFrame = (snap: WorkflowSnapshot) => {
+    lastFrameRef.current = snap
     setPhase(snap.phase)
     setCurrentStep(snap.step)
     setLiveStats(snap.stats)
@@ -286,16 +303,19 @@ export default function AgentWorkflow() {
     simulateWorkflow()
   }
 
-  /** 实时模式启动：11.1 execute → 11.2 WS 订阅，节点随帧实时点亮。 */
+  /** 实时模式启动：11.1 execute（目标 kp+难度）→ 11.2 WS 订阅，节点随帧实时点亮。 */
   const startLiveWorkflow = async () => {
     setIsRunning(true)
     setPhase('diagnosis')
     setCurrentStep(0)
     setMessages([])
     setLiveStats({ completedAgents: 0, messageCount: 0, progress: 0 })
+    setCompleted(null)
+    setReplaying(false)
+    lastFrameRef.current = null
     let workflowId: string
     try {
-      workflowId = (await executeWorkflow()).workflowId
+      workflowId = (await executeWorkflow({ kpId: targetKp, difficulty: targetDiff })).workflowId
     } catch (e) {
       console.error('[workflow] 触发实时工作流失败', e)
       fallbackToDemo('后端不可用')
@@ -306,6 +326,11 @@ export default function AgentWorkflow() {
       onComplete: () => {
         socketRef.current = null
         setIsRunning(false)
+        // B10：未降级 → 产物已回写学习资源（critic 红灯=降级则旧资源保留）
+        const critic = lastFrameRef.current?.agents.find((a) => a.id === 'critic')
+        const degraded = critic?.status === 'error'
+        setCompleted({ kpId: targetKp, degraded })
+        if (degraded) showHint('工作流降级，学习资源保留上一版本')
       },
       onFail: (reason) => {
         console.error('[workflow] 实时通道异常：', reason)
@@ -313,6 +338,13 @@ export default function AgentWorkflow() {
         fallbackToDemo(reason)
       },
     })
+  }
+
+  /** B10：完成后跳转学习资源页查看回写产物（设目标 kp 后导航）。 */
+  const goToResource = () => {
+    if (!completed) return
+    setResourceNav(completed.kpId)
+    onNavigate?.('learning-resource')
   }
 
   const startWorkflow = () => {
@@ -328,6 +360,24 @@ export default function AgentWorkflow() {
     }
   }, [])
 
+  /* B10：从资源页「查看生成过程」进入 → 回放该已完成工作流（取完成态快照渲染）。 */
+  useEffect(() => {
+    const replayId = consumeWorkflowReplay()
+    if (!replayId) return
+    setReplaying(true)
+    getWorkflowSnapshot(replayId)
+      .then((snap) => {
+        applyFrame(snap)
+        setIsRunning(false)
+      })
+      .catch((e) => {
+        console.error('[workflow] 回放工作流失败', e)
+        setReplaying(false)
+      })
+    // 仅挂载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /* ---------- B7-b 实时模式逻辑结束 ---------- */
 
   const resetWorkflow = () => {
@@ -335,6 +385,9 @@ export default function AgentWorkflow() {
     setPhase('idle')
     setCurrentStep(0)
     setIsRunning(false)
+    setCompleted(null)
+    setReplaying(false)
+    lastFrameRef.current = null
     setAgents([
       { name: '学情诊断Agent', status: 'idle', lastAction: '等待用户输入' },
       { name: '领域知识生成Agent', status: 'idle', lastAction: '等待诊断结果' },
@@ -394,6 +447,64 @@ export default function AgentWorkflow() {
           </>
         }
       />
+
+      {/* B10：实时模式目标选择 + 回放/完成提示（仅联调实时模式渲染，演示模式零变化） */}
+      {USE_REAL_API && mode === 'live' && (
+        <div className="workflow-live-bar">
+          {replaying ? (
+            <span className="workflow-live-bar__replay">
+              <span className="workflow-live-bar__dot" />
+              正在回放已完成工作流 · 展示完成态轨迹
+            </span>
+          ) : (
+            <div className="workflow-live-bar__target">
+              <span className="workflow-live-bar__label">目标知识点</span>
+              <select
+                className="workflow-live-bar__select"
+                value={targetKp}
+                onChange={(e) => setTargetKp(e.target.value)}
+                disabled={isRunning}
+              >
+                {KNOWLEDGE_POINTS.map((kp) => (
+                  <option key={kp.id} value={kp.id}>
+                    {kp.name}
+                  </option>
+                ))}
+              </select>
+              <span className="workflow-live-bar__label">难度</span>
+              <select
+                className="workflow-live-bar__select"
+                value={targetDiff}
+                onChange={(e) => setTargetDiff(e.target.value as (typeof DIFFICULTIES)[number])}
+                disabled={isRunning}
+              >
+                {DIFFICULTIES.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <AnimatePresence>
+            {completed && !completed.degraded && (
+              <motion.div
+                className="workflow-live-bar__toast"
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+              >
+                <span className="workflow-live-bar__toast-text">
+                  ✓ 生成结果已更新至学习资源（{kpById(completed.kpId)?.name ?? completed.kpId}）
+                </span>
+                <button className="workflow-live-bar__toast-btn" onClick={goToResource}>
+                  去学习资源查看 →
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       <RevealGroup>
       {/* Phase Indicator */}

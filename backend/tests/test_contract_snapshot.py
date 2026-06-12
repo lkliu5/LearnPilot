@@ -388,7 +388,8 @@ def test_16_knowledge_point_meta(client, learner):
 def test_17_lecture(client, learner):
     data = _data(client.post(f"{API}/resource/lecture", headers=learner,
                              json={"kpId": "nn", "difficulty": "初级"}))
-    _exact(data, {"kpId", "difficulty", "markdown", "sources", "hallucinationRate"})
+    _exact(data, {"kpId", "difficulty", "markdown", "sources",
+                  "hallucinationRate", "workflowId"})
     assert data["kpId"] == "nn" and data["difficulty"] == "初级"
     assert isinstance(data["markdown"], str) and data["markdown"].startswith("# ")
     assert isinstance(data["sources"], list) and data["sources"]
@@ -397,6 +398,9 @@ def test_17_lecture(client, learner):
         assert source["type"] in SOURCE_TYPES
         assert 0 <= source["confidence"] <= 1
     assert 0 <= data["hallucinationRate"] <= 1
+    # B10：workflowId 标识产出该份讲义的工作流 trace（直出 mock 为 null，
+    # 工作流回写后为字符串）；供前端「查看生成过程」回放
+    assert data["workflowId"] is None or isinstance(data["workflowId"], str)
     # 难度档非法 → 1001（资源页三档：入门|初级|高级）
     _data(client.post(f"{API}/resource/lecture", headers=learner,
                       json={"kpId": "nn", "difficulty": "中级"}),
