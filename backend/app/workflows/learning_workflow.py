@@ -150,7 +150,9 @@ def _msg(sender: str, to: str, message: str, type_: str = "response") -> dict[st
 
 # ---- 图构建（节点为闭包，捕获 db / retriever） ---------------------------------
 
-def _build_graph(db: Session, retriever: Retriever):
+def _build_graph(db: Session, retriever: Retriever, disable_critic: bool = False):
+    # disable_critic 仅供 B11 消融实验脚本使用（业务路径恒为 False）：True 时审核节点
+    # 直接放行首版生成、不做接地校验与重试/降级，用于度量「去掉审核闭环」的幻觉率。
     def diagnostic_node(state: WorkflowState) -> dict:
         started, t0 = _now_iso(), time.perf_counter()
         res = run_diagnostic(
@@ -215,6 +217,21 @@ def _build_graph(db: Session, retriever: Retriever):
         started, t0 = _now_iso(), time.perf_counter()
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", MAX_RETRIES)
+        if disable_critic:
+            # 消融「去审核」：不做接地校验，直接接受首版生成（无重试、无降级）。
+            summary = "审核已禁用（消融实验），首版生成直接交付"
+            return {
+                "validation_result": {
+                    "passed": True, "validationScore": None,
+                    "hallucinationRate": None, "issues": [], "action": "accept",
+                },
+                "hallucination_rate": None,
+                "current_node": "validation",
+                "messages": [_msg("内容审核校验Agent", "领域知识生成Agent", summary)],
+                "node_execution_log": [
+                    _node_entry("critic", "内容审核校验Agent", started, t0, retry_count, summary)
+                ],
+            }
         res = run_critic(
             db,
             draft_content=state.get("generated_content") or "",
@@ -334,8 +351,14 @@ def run_learning_workflow(
     retriever: Retriever | None = None,
     workflow_id: str | None = None,
     on_update: Callable[[WorkflowState], None] | None = None,
+    max_retries: int = MAX_RETRIES,
+    disable_critic: bool = False,
 ) -> dict[str, Any]:
     """执行完整工作流并持久化 trace。
+
+    B11 消融实验参数（**仅实验脚本可用，业务接口恒用默认值**，不进生产配置）：
+    - retriever 传空检索器 → 去 RAG；disable_critic=True → 去审核闭环（首版直接交付）；
+    - max_retries=0 → 去重试（低分即降级，不再回炉）。
 
     B7-a 增补（拓扑 / trace 结构不变）：
     - workflow_id 可由调用方预分配（execute 立即返回 id、后台运行）；
@@ -352,7 +375,7 @@ def run_learning_workflow(
     kp_name = kp.name if kp is not None else kp_id
     kp_description = (kp.description or "") if kp is not None else ""
 
-    app_graph = _build_graph(db, retriever or _mock_retriever)
+    app_graph = _build_graph(db, retriever or _mock_retriever, disable_critic=disable_critic)
     initial_state: WorkflowState = {
         "user_id": user_id,
         "kp_id": kp_id,
@@ -363,7 +386,7 @@ def run_learning_workflow(
         "messages": [],
         "error_details": [],
         "retry_count": 0,
-        "max_retries": MAX_RETRIES,
+        "max_retries": max_retries,
         "workflow_status": "pending",
         "node_execution_log": [],
     }

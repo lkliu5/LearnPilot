@@ -21,13 +21,15 @@ from app.models.entities import KnowledgeDocument, ResourceCache, User
 
 router = APIRouter(tags=["admin-metrics"])
 
-# B8 实测比率（docs/metrics-report.md，6 KP × 3 难度共 18 份 deepseek 真实生成讲义；
-# 口径：①15.3 逐句接地 ②三档难度分有序对正确率 ③核心概念清单命中率。
-# 目标：幻觉率 <0.05 ✓、适配率 ≥0.85 ✓、覆盖率 ≥0.90 ✓）
-_MEASURED_AT = "2026-06-11T18:38:49.605386+00:00"
+# B11 实测比率（docs/metrics-report.md v2，30+ 文档规模化口径，6 KP × 3 难度共 18 份
+# deepseek 真实生成讲义；口径与 B8 一致未改动：①15.3 逐句接地 ②三档难度分有序对正确率
+# ③核心概念清单命中率。目标：幻觉率 <0.05 ✓、适配率 ≥0.85 ✓、覆盖率 ≥0.90 ✓。
+# 知识库由 4 份扩至 30 份（23→153 切片）后三指标仍全部达标，难度适配升至 1.0。
+# 重跑 scripts/metrics/make_report_v2.py 后同步本处。）
+_MEASURED_AT = "2026-06-12T09:32:51.790457+00:00"
 _MEASURED_RATES = {
-    "hallucinationRate": 0.0297,
-    "adaptationRate": 0.9444,
+    "hallucinationRate": 0.0428,
+    "adaptationRate": 1.0,
     "coverageRate": 1.0,
 }
 
