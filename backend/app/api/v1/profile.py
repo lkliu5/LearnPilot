@@ -11,7 +11,8 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,8 +20,14 @@ from app.core.envelope import fail, success
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
-from app.schemas.profile import DiagnosisCompleteRequest, NarrativeRequest
+from app.schemas.profile import (
+    DialogueRequest,
+    DiagnosisCompleteRequest,
+    NarrativeRequest,
+)
 from app.services import profile as profile_service
+from app.services import profile_dialogue as dialogue_service
+from app.services import student_portrait as portrait_service
 
 router = APIRouter(tags=["profile"])
 
@@ -72,4 +79,53 @@ async def diagnosis_complete(
 async def ability_portrait(user: User = Depends(get_current_user)):
     """能力雷达数据（接口文档 4.4）。"""
     data = profile_service.ability_portrait(user)
+    return success(data)
+
+
+@router.post("/profile/dialogue")
+async def dialogue(
+    body: DialogueRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """对话式画像诊断（接口文档 17.1，C1-b）。
+
+    请求头携带 Accept: text/event-stream → SSE 流式（delta 逐句 + event: portrait
+    维度增量 + event: done，异常 event: error）；不带该头 → 整体 JSON（向后兼容）。
+    与既有 4.4 ability-portrait 并存，构建独立的异质学生画像（17.2）。
+    """
+    streaming = "text/event-stream" in (request.headers.get("accept") or "")
+    if streaming:
+        events = dialogue_service.sse_stream(
+            user_id=user.id,
+            session_id=body.sessionId,
+            message=body.message,
+            context=body.context,
+        )
+        return StreamingResponse(
+            events,
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    try:
+        data = dialogue_service.dialogue(
+            db,
+            user_id=user.id,
+            session_id=body.sessionId,
+            message=body.message,
+            context=body.context,
+        )
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
+    return success(data)
+
+
+@router.get("/profile/student-portrait")
+async def student_portrait(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取异质学生动态画像（接口文档 17.3）。无数据 → 空画像占位（dimensions:[]）。"""
+    data = portrait_service.get_portrait(db, user.id)
     return success(data)

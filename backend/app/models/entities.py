@@ -186,6 +186,25 @@ class WorkflowTrace(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class StudentPortrait(Base):
+    """异质学生动态画像（接口文档 17.2 / 17.3，C1-b）。
+
+    每用户一行，dimensions 存 PortraitDimension[]（contract camelCase 形态：
+    key/label/value/score?/confidence/source/updatedAt）。由对话式诊断（17.1）
+    增量构建、随学习/测验更新（随学随新）；与 ability-portrait（4.4 固定 6 知识点
+    雷达）并存、互不替换。空画像 dimensions=[]（17.3「尚未开始诊断」占位）。
+    """
+
+    __tablename__ = "student_portraits"
+
+    user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id"), primary_key=True
+    )
+    dimensions: Mapped[list] = mapped_column(JSON, default=list)  # PortraitDimension[]
+    version: Mapped[str] = mapped_column(String(16), default="v1")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class JobSnapshot(Base):
     """岗位市场快照（接口文档 2.4 / 15.5）。payload 存完整 JobMarket 结构。
 

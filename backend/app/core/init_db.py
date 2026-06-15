@@ -37,6 +37,7 @@ from app.models.entities import (  # noqa: F401  确保所有表在 create_all �
     KnowledgePoint,
     Lesson,
     QuizQuestion,
+    StudentPortrait,
     User,
 )
 

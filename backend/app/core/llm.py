@@ -54,6 +54,23 @@ _MOCK_BASELINE: list[int] = [85, 72, 68, 45, 30, 20]
 # 讲义资源页难度档（接口文档 8.2 备注：入门|初级|高级，与路径难度档不同）
 LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "高级"]
 
+# 异质学生画像维度（接口文档 17.2，C1-b）：(key, 中文 label)，顺序即对话探查顺序。
+# 与 4.4 固定 6 知识点雷达「并存、互不替换」（key 稳定，后端可扩展更多维度）。
+PORTRAIT_DIMENSIONS: list[tuple[str, str]] = [
+    ("knowledge_base", "知识基础"),
+    ("prior_experience", "先验经验"),
+    ("learning_goal", "学习目标"),
+    ("cognitive_style", "认知风格"),
+    ("learning_pace", "学习节奏"),
+    ("error_preference", "易错点偏好"),
+]
+_PORTRAIT_LABELS: dict[str, str] = dict(PORTRAIT_DIMENSIONS)
+_PORTRAIT_KEYS: tuple[str, ...] = tuple(k for k, _ in PORTRAIT_DIMENSIONS)
+# source 枚举（17.1 防幻觉约束）：dialogue 明确陈述 / manual 显式填写 / inferred 间接推断
+_PORTRAIT_SOURCES: tuple[str, ...] = ("dialogue", "manual", "inferred")
+# inferred（推断）维度 confidence 上限（17.1：inferred 须给较低 confidence）
+_INFERRED_CONFIDENCE_CAP: float = 0.6
+
 # mock 讲义的 RAG 来源（接口文档 8.2 sources；type∈教材|论文|文档|课程，confidence 0-1）。
 # B5 接入真实 RAG 后由检索命中切片回填，此处为确定性占位。
 _LECTURE_SOURCES: list[dict[str, Any]] = [
@@ -132,6 +149,131 @@ def _mock_tutor_reply(message: str) -> tuple[str, list[str]]:
         if pattern.search(message or ""):
             return reply, list(suggestions)
     return _TUTOR_FALLBACK[0], list(_TUTOR_FALLBACK[1])
+
+
+# ---- 对话式画像诊断（接口文档 17.1 / 17.2，C1-b） ------------------------------
+
+
+def _sanitize_portrait_updates(updates: Any) -> list[dict[str, Any]]:
+    """画像维度增量契约清洗（17.1/17.2 防幻觉约束，mock 与 deepseek 共用）。
+
+    - key 必须取自固定维度集（PORTRAIT_DIMENSIONS），未知 key 丢弃（不编造维度）；
+    - label 回正为该 key 的中文名；value 必须非空字符串；
+    - score（可选）截断 0-100 整数；confidence 截断 0-1；
+    - source ∈ dialogue|manual|inferred（非法回落 inferred）；
+    - inferred（推断）维度 confidence 上限 0.6（17.1：推断须给较低 confidence）；
+    - 同 key 去重（后者覆盖，保持稳定顺序）。
+    """
+    if not isinstance(updates, list):
+        return []
+    by_key: dict[str, dict[str, Any]] = {}
+    for item in updates:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key")
+        if key not in _PORTRAIT_KEYS:
+            continue  # 防幻觉：不接受固定维度集之外的 key
+        value = str(item.get("value") or "").strip()
+        if not value:
+            continue
+        source = item.get("source")
+        if source not in _PORTRAIT_SOURCES:
+            source = "inferred"
+        try:
+            confidence = float(item.get("confidence"))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, confidence))
+        if source == "inferred":
+            confidence = min(confidence, _INFERRED_CONFIDENCE_CAP)
+        cleaned: dict[str, Any] = {
+            "key": key,
+            "label": _PORTRAIT_LABELS[key],
+            "value": value,
+            "confidence": round(confidence, 2),
+            "source": source,
+        }
+        score = item.get("score")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            cleaned["score"] = max(0, min(100, int(score)))
+        by_key[key] = cleaned
+    return list(by_key.values())
+
+
+# 关键词 → 画像维度的确定性抽取规则（mock 模式；deepseek 走真实抽取）。
+# 仅在文本出现明确信号时产出维度，无信号不编造（17.1 防幻觉）。
+def _mock_extract_portrait(
+    message: str, context: dict[str, Any] | None, first_turn: bool
+) -> list[dict[str, Any]]:
+    """确定性画像抽取（mock）：命中关键词产出维度增量，无信号则不产出。"""
+    text = message or ""
+    low = text.lower()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(key: str, value: str, confidence: float, source: str, score: int | None = None) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        item: dict[str, Any] = {"key": key, "value": value, "confidence": confidence, "source": source}
+        if score is not None:
+            item["score"] = score
+        out.append(item)
+
+    # 先验经验
+    if "爬虫" in text:
+        add("prior_experience", "有Python工程实践(爬虫)", 0.8, "dialogue")
+    elif "python" in low and any(k in text for k in ("做过", "项目", "开发", "工程", "实践")):
+        add("prior_experience", "有Python工程实践经验", 0.8, "dialogue")
+    elif any(k in text for k in ("项目", "实践", "做过", "工作", "经验", "开发", "实习")):
+        add("prior_experience", "有相关项目/工程实践经验", 0.75, "dialogue")
+    # 知识基础（含可量化 score）
+    if any(k in text for k in ("精通", "扎实", "很熟", "熟练")):
+        add("knowledge_base", "扎实", 0.7, "dialogue", score=85)
+    elif any(k in text for k in ("零基础", "没学过", "不会", "没接触", "薄弱", "刚入门", "不熟")):
+        add("knowledge_base", "薄弱", 0.7, "dialogue", score=30)
+    elif any(k in text for k in ("本科", "硕士", "博士", "学过", "了解", "科班", "计算机")):
+        add("knowledge_base", "一般", 0.7, "dialogue", score=65)
+    # 学习目标
+    if any(k in text for k in ("转", "求职", "找工作", "岗位", "工程师", "职业", "入职", "面试")):
+        if "大模型" in text:
+            add("learning_goal", "转大模型应用方向", 0.9, "dialogue")
+        else:
+            add("learning_goal", "职业转型/求职", 0.9, "dialogue")
+    elif any(k in text for k in ("考试", "认证", "考研", "考证")):
+        add("learning_goal", "考试/认证", 0.85, "dialogue")
+    elif "兴趣" in text:
+        add("learning_goal", "兴趣学习", 0.8, "dialogue")
+    # 认知风格
+    if any(k in text for k in ("动手", "实践", "代码", "做项目", "上手")) or "爬虫" in text:
+        add("cognitive_style", "偏实践/动手型", 0.6, "dialogue")
+    elif any(k in text for k in ("理论", "原理", "推导", "数学", "公式", "证明")):
+        add("cognitive_style", "偏理论/推导型", 0.6, "dialogue")
+    # 学习节奏
+    if any(k in text for k in ("时间紧", "快速", "突破", "尽快", "赶")):
+        add("learning_pace", "偏快(集中突破)", 0.6, "dialogue")
+    elif any(k in text for k in ("充裕", "稳", "扎实", "慢慢", "系统")):
+        add("learning_pace", "稳扎稳打", 0.6, "dialogue")
+    elif "适中" in text:
+        add("learning_pace", "适中", 0.6, "dialogue")
+    # 易错点偏好（多为推断，低 confidence）
+    if any(k in text for k in ("概念", "混淆", "记不住")):
+        add("error_preference", "概念易混淆", 0.5, "inferred")
+    elif any(k in text for k in ("推导", "公式", "计算题")):  # 避开「计算机」误命中
+        add("error_preference", "计算/推导易错", 0.5, "inferred")
+    elif any(k in text for k in ("代码", "实现", "编程", "调试", "报错")):
+        add("error_preference", "代码实现易卡壳", 0.5, "inferred")
+
+    # 首轮已知上下文（表单显式填写 → source=manual）：仅补对话未覆盖的维度
+    if first_turn and context:
+        goal = str(context.get("goal") or "").strip()
+        if goal:
+            add("learning_goal", goal, 0.9, "manual")
+        major = str(context.get("major") or "").strip()
+        if major:
+            add("knowledge_base", f"{major}专业背景", 0.6, "manual", score=65)
+
+    return _sanitize_portrait_updates(out)
 
 
 def _extract_json(text: str) -> Any | None:
@@ -728,6 +870,50 @@ class LLMClient:
         if self.is_mock:
             return _mock_tutor_reply(message)[1]
         return []
+
+    # ---- 对话式画像抽取（接口文档 17.1，C1-b） ------------------------------
+    def extract_portrait(
+        self,
+        *,
+        message: str,
+        context: dict[str, Any] | None,
+        first_turn: bool,
+    ) -> list[dict[str, Any]]:
+        """从单轮自然语言抽取画像维度增量（接口文档 17.1 portraitUpdates）。
+
+        返回 PortraitDimension[]（已契约清洗：key 白名单、source 枚举、
+        inferred 低 confidence、无信号不编造）。
+        - mock：确定性关键词抽取（无随机、无网络）；
+        - deepseek：真实抽取 + 契约清洗（防幻觉 system 约束）。
+        供 DialogueDiagnosticAgent 调用；问题编排策略在 Agent 侧（确定性）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return _mock_extract_portrait(message, context, first_turn)
+        return self._deepseek_extract_portrait(message, context)
+
+    def _deepseek_extract_portrait(
+        self, message: str, context: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        """真实画像维度抽取 + 契约清洗（17.1 防幻觉约束）。"""
+        system = (
+            "你是对话式学习画像抽取专家。从学生的自然语言中抽取**可确定**的画像维度，"
+            '仅输出 JSON：{"updates":[{"key":"...","label":"...","value":"...",'
+            '"score":0,"confidence":0.0,"source":"dialogue|inferred"}]}。'
+            f"key 只能取自固定维度集 {list(_PORTRAIT_KEYS)}，label 用对应中文名；"
+            "value 为简短中文描述；仅 knowledge_base 等可量化维度给 score（0-100 整数），"
+            "其余维度省略 score；confidence 为 0-1 小数；"
+            "学生明确陈述的维度用 source=dialogue，由上下文间接推断的用 source=inferred "
+            "且 confidence≤0.6；无法从文本判断的维度一律不要输出（禁止编造）。"
+        )
+        payload = {"studentMessage": message, "knownContext": context or {}}
+        raw = llm_deepseek.chat(
+            json.dumps(payload, ensure_ascii=False), system=system
+        )
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("画像维度抽取输出无法解析为契约 JSON")
+        return _sanitize_portrait_updates(data.get("updates"))
 
     # ---- 通用补全（B5-a：供 Agent 节点调用） -------------------------------
     def complete(
