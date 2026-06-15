@@ -24,3 +24,11 @@ class RegisterRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(min_length=1)
+
+
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求（接口文档 3.4）。需登录态；旧密码校验与新密码强度校验在服务层
+    （返回业务码 1001），此处仅约束非空——空串由 min_length 触发 422→1001。"""
+
+    oldPassword: str = Field(min_length=1)
+    newPassword: str = Field(min_length=1)

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.models.entities import Journey, Mastery, User
 from app.services.mastery import STATUS_PASSED
 
@@ -63,6 +63,22 @@ def create_learner(db: Session, username: str, password: str) -> User:
     db.add(user)
     # 初始旅程：未诊断、未生成路径（Mastery 为空 = 全部未开始）
     db.add(Journey(user_id=user.id, has_diagnosed=False, has_generated_path=False))
+    db.commit()
+    return user
+
+
+def change_password(db: Session, user: User, old_password: str, new_password: str) -> User:
+    """修改当前用户口令（接口文档 3.4）。
+
+    - 旧密码不符 → 1001（与登录侧 verify_password 同一哈希校验逻辑，复用既有用户表）；
+    - 新密码强度 ≥6（过弱 → 1001，与注册 16.1 同口径）；
+    - 通过则以同一 hash_password 写回 password_hash（pbkdf2_sha256，无外部依赖/Key）。
+    """
+    if not verify_password(old_password, user.password_hash):
+        raise UserServiceError(1001, "旧密码错误", 400)
+    if len(new_password) < _MIN_PASSWORD_LEN:
+        raise UserServiceError(1001, "密码长度至少为 6 位", 400)
+    user.password_hash = hash_password(new_password)
     db.commit()
     return user
 

@@ -15,11 +15,17 @@ from app.core.envelope import fail, success
 from app.core.security import (
     _current_payload,
     create_access_token,
+    get_current_user,
     revoke_token,
     verify_password,
 )
 from app.models.entities import Journey, User
-from app.schemas.auth import ForgotPasswordRequest, LoginRequest, RegisterRequest
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+)
 from app.services import users as users_service
 
 router = APIRouter(tags=["auth"])
@@ -71,6 +77,21 @@ async def register(body: RegisterRequest, db: Session = Depends(get_db)):
 async def forgot_password(body: ForgotPasswordRequest):
     """找回密码占位（不泄露账号是否存在）。"""
     return success({"sent": True})
+
+
+@router.post("/auth/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """修改密码（接口文档 3.4）。需登录态（get_current_user：无/失效 token → 1002）。
+    旧密码错误 / 新密码过弱 → 1001（400）；成功返回 {userId, changed:true}。"""
+    try:
+        users_service.change_password(db, user, body.oldPassword, body.newPassword)
+    except users_service.UserServiceError as err:
+        return fail(code=err.code, message=err.message, status_code=err.status_code)
+    return success({"userId": user.id, "changed": True})
 
 
 @router.post("/auth/logout")
