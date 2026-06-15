@@ -29,3 +29,5 @@ Thumbs.db
 
 # Playwright MCP scratch artifacts (screenshots / console logs / snapshots)
 .playwright-mcp/
+backend/zhixue.db.bak
+*.db.bak
