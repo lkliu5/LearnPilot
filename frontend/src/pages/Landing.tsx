@@ -3,8 +3,7 @@ import { motion } from 'framer-motion'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
-import ParticleVortex from '../components/ParticleVortex'
-import GhostCursor from '@/components/GhostCursor/GhostCursor'
+import Lightfall from '@/components/Lightfall'
 import BlurText from '@/components/BlurText/BlurText'
 import './Landing.css'
 
@@ -76,34 +75,21 @@ export default function Landing({ onEnter }: LandingProps) {
 
   return (
     <div className="landing" ref={root}>
-      {/* 幽灵光标拖尾（固定全屏覆盖层，pointer-events:none 不拦截操作）*/}
-      <div key={`cursor-${hero.themeKey}`} style={{ position: 'fixed', inset: 0, zIndex: 9, pointerEvents: 'none' }}>
-        <GhostCursor
-          color={hero.primary}
-          trailLength={26}
-          inertia={0.42}
-          brightness={0.85}
-          bloomStrength={0.07}
-          bloomRadius={0.5}
-          maxDevicePixelRatio={1}
-          mixBlendMode="screen"
-          zIndex={9}
-        />
-      </div>
-
-      {/* 背景（固定层：贯穿整页，滚动时持续）*/}
+      {/* 背景（固定层：贯穿整页，滚动时持续）· React Bits Lightfall 光瀑 */}
       <div className="landing__bg">
-        <div className="landing__grid" />
-        <div className="landing__orb landing__orb--1" />
-        <div className="landing__orb landing__orb--2" />
-        {/* three.js 粒子漩涡 - 全页持续背景（颜色随主题，切换时按 key 重建上色）*/}
-        <ParticleVortex
-          key={`particles-${hero.themeKey}`}
-          className="landing__particles"
-          primary={hero.primary}
-          accent={hero.accent}
-          light={hero.light}
-        />
+        {/* Lightfall WebGL 光瀑背景（颜色取自 --hero-* 主题令牌，随切换器按 key 重建；
+            关闭鼠标交互——已移除幽灵光标拖尾，背景不跟随鼠标）*/}
+        <div className="landing__particles">
+          <Lightfall
+            key={`lightfall-${hero.themeKey}`}
+            colors={[hero.primary, hero.accent, hero.light]}
+            backgroundColor={hero.primary}
+            mouseInteraction={false}
+            speed={0.4}
+            streakCount={4}
+            opacity={0.92}
+          />
+        </div>
         {/* 全局可读性遮罩：中心竖带轻微压暗，保证标题/巨字清晰 */}
         <div className="landing__scrim" />
       </div>

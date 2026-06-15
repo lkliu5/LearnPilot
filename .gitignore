@@ -26,3 +26,6 @@ backend/data/
 .DS_Store
 Thumbs.db
 .claude/
+
+# Playwright MCP scratch artifacts (screenshots / console logs / snapshots)
+.playwright-mcp/
