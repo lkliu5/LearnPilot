@@ -2,7 +2,7 @@
  * 认证数据获取层（接口文档第 3 章）。登录成功后落 token + user 到 localStorage，
  * 后续请求由 api.ts 自动附带 Authorization。
  */
-import { apiPost, clearAuth, setToken, setUser, type AuthUser } from './api'
+import { USE_REAL_API, apiPost, clearAuth, setToken, setUser, type AuthUser } from './api'
 
 interface LoginResponse {
   token: string
@@ -28,6 +28,21 @@ export async function register(username: string, password: string): Promise<Auth
   setToken(data.token)
   setUser(data.user)
   return data.user
+}
+
+/**
+ * 修改密码（接口文档 3.4）。需登录态；旧密码错误 / 新密码过弱后端共用 code 1001，
+ * 调用方据抛出的 ApiError.message（后端文案）区分提示，前端不臆测。
+ *
+ * Mock-first：无后端（USE_REAL_API=false）时模拟成功，保证离线演示可走通表单交互；
+ * 「旧密码错误」等服务端校验需联调真实后端方可触发。
+ */
+export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  if (!USE_REAL_API) {
+    await new Promise((r) => setTimeout(r, 400))
+    return
+  }
+  await apiPost('/auth/change-password', { oldPassword, newPassword })
 }
 
 /** 退出（接口文档 3.3）。无论后端是否成功都清本地登录态。 */

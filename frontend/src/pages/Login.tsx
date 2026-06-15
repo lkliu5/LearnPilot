@@ -46,27 +46,20 @@ const features = [
   { icon: '◈', text: '个性化学习路径动态规划' },
 ]
 
-const LOGIN_DEFAULTS = { username: '学习者_001', password: '••••••••' } as const
-
 export default function Login({ onLogin }: LoginProps) {
   const [mode, setMode] = useState<AuthMode>('login')
-  const [username, setUsername] = useState<string>(LOGIN_DEFAULTS.username)
-  const [password, setPassword] = useState<string>(LOGIN_DEFAULTS.password)
+  const [username, setUsername] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const theme = useThemeName()
   const isRegister = mode === 'register'
 
-  /** 切换登录/注册：进入注册清空预填，回到登录恢复演示默认（零新设计语言，复用同表单） */
+  /** 切换登录/注册：两种模式均以空表单起步，由用户自行输入（零新设计语言，复用同表单） */
   const switchMode = (next: AuthMode) => {
     if (loading) return
     setMode(next)
-    if (next === 'register') {
-      setUsername('')
-      setPassword('')
-    } else {
-      setUsername(LOGIN_DEFAULTS.username)
-      setPassword(LOGIN_DEFAULTS.password)
-    }
+    setUsername('')
+    setPassword('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -213,7 +206,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                placeholder={isRegister ? '设置一个用户名' : undefined}
+                placeholder={isRegister ? '设置一个用户名' : '请输入用户名'}
               />
             </label>
 
@@ -225,7 +218,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
-                placeholder={isRegister ? '至少 6 位' : undefined}
+                placeholder={isRegister ? '至少 6 位' : '请输入密码'}
               />
             </label>
 

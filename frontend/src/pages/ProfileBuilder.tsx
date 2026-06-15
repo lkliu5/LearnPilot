@@ -5,9 +5,12 @@ import PageHeader from '../components/PageHeader'
 import RadarChart from '../components/charts/RadarChart'
 import JobMarketPanel from '../components/JobMarketPanel'
 import { revealItem } from '../components/Reveal'
+import ProfileDialogue from '../components/ProfileDialogue'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
+import { usePortrait } from '../store/portrait'
 import type { JobMarket } from '../services/jobMarket'
+import type { PortraitDimension } from '../services/profileDialogue'
 import { generateNarrative, type Narrative, type SourceRef } from '../services/profileNarrative'
 import { USE_REAL_API } from '../services/api'
 import { generateNarrativeApi, parseProfile } from '../services/profile'
@@ -97,6 +100,9 @@ const STEP_LABELS = ['信息采集', '确认画像', '岗位对标']
 
 export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const completeDiagnosis = useJourney((s) => s.completeDiagnosis)
+  const setPortrait = usePortrait((s) => s.setPortrait)
+  /* 主路径=对话式诊断（功能 1：摒弃繁琐表单）；form=次要入口（传统表单 + 材料上传，保留不删） */
+  const [view, setView] = useState<'dialogue' | 'form'>('dialogue')
   const [step, setStep] = useState<Step>('collect')
 
   /* Step1 采集状态（raw 为真实 File，仅联调上传用，不参与 UI 渲染）*/
@@ -243,17 +249,53 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     materials.find((m) => m.id === activeSource)?.label
 
   const finish = () => {
+    // 表单入口：仅写学情概览快照（不弹确认弹窗）——把能力自评映射为画像维度，供首页合成真实概览
+    if (draft) {
+      const snapshot: PortraitDimension[] = draft.skills.map((s) => ({
+        key: s.name,
+        label: s.name,
+        value: `自评 ${s.level}`,
+        score: s.level,
+        confidence: 0.7,
+        source: s.source === 'manual' ? 'manual' : 'dialogue',
+      }))
+      setPortrait(snapshot)
+    }
     completeDiagnosis(targetJob ? { targetJobName: targetJob.name, matchPct } : undefined)
     onNavigate?.('learning-path')
   }
 
   return (
-    <div className="profile-builder">
+    <div className={`profile-builder ${view === 'dialogue' ? 'profile-builder--wide' : ''}`}>
       <PageHeader
         title="学习者画像诊断"
         highlight="画像"
-        subtitle="多模态采集你的能力信息，结构化确认后与目标岗位实时对标，生成针对性学习路径"
+        subtitle={
+          view === 'dialogue'
+            ? '摒弃繁琐表单——用自然语言对话自动抽取特征，右侧动态画像随聊随长'
+            : '多模态采集你的能力信息，结构化确认后与目标岗位实时对标，生成针对性学习路径'
+        }
       />
+
+      {/* ============ 主路径：对话式诊断 ============ */}
+      {view === 'dialogue' && (
+        <>
+          <ProfileDialogue onFinish={finish} />
+          <div className="pb-secondary">
+            <span className="pb-secondary__hint">更习惯填表，或想补充材料？</span>
+            <button className="pb-secondary__link" onClick={() => setView('form')}>
+              快速填写 / 补充画像（传统表单 · 简历 / 图片上传）→
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ============ 次要入口：传统表单 + 材料上传（保留原 3 步流程） ============ */}
+      {view === 'form' && (
+      <>
+      <button className="pb-backto-dialogue" onClick={() => setView('dialogue')}>
+        ← 返回对话诊断
+      </button>
 
       {/* 三步进度条 */}
       <div className="profile-builder__progress">
@@ -679,6 +721,8 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
           </motion.div>
         )}
       </AnimatePresence>
+      </>
+      )}
     </div>
   )
 }

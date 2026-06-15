@@ -1,8 +1,11 @@
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
+import { usePortrait } from '../store/portrait'
 import { getUser } from '../services/api'
+import ChangePasswordForm from './ChangePasswordForm'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -12,6 +15,8 @@ interface SidebarProps {
   onToggle: () => void
   /** B4-a：admin 登录时渲染「管理」分组，learner 不渲染 */
   isAdmin?: boolean
+  /** 退出登录：清票 + 跳回登录页（由 App 提供） */
+  onLogout?: () => void
 }
 
 /* V3.0: 彩色渐变填充图标 */
@@ -191,11 +196,33 @@ const adminItems: MenuItem[] = [
   { id: 'admin-users', icon: icons.adminUsers, label: '用户管理', description: '账号 · 进度 · 启停' },
 ]
 
-export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle, isAdmin = false }: SidebarProps) {
+export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle, isAdmin = false, onLogout }: SidebarProps) {
   const hasDiagnosed = useJourney((s) => s.hasDiagnosed)
   const hasGeneratedPath = useJourney((s) => s.hasGeneratedPath)
   const resetJourney = useJourney((s) => s.resetJourney)
   const resetMastery = useMastery((s) => s.reset)
+  const resetPortrait = usePortrait((s) => s.reset)
+
+  /* 左下角用户菜单：展开「设置 / 退出登录」；点外部或 Esc 关闭 */
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /* 设置面板内「修改密码」表单展开态 */
+  const [pwOpen, setPwOpen] = useState(false)
+  const userWrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      if (userWrapRef.current && !userWrapRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false)
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   const isLocked = (item: MenuItem) => {
     if (item.requires === 'hasDiagnosed') return !hasDiagnosed
@@ -250,6 +277,7 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
   }
 
   return (
+    <>
     <motion.aside
       className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}
       initial={{ x: -20, opacity: 0 }}
@@ -329,43 +357,93 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
         )}
       </nav>
 
-      {/* 用户资料区 - 毛玻璃卡片 */}
+      {/* 用户资料区 - 毛玻璃卡片 + 下拉菜单 */}
       {!collapsed && (
-        <motion.div
-          className="sidebar__user"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-          whileHover={{ y: -2 }}
-        >
-          <div className="sidebar__user-avatar">
-            <span>{isAdmin ? '管' : '学'}</span>
-            <div className="sidebar__user-avatar-glow" />
-          </div>
-          <div className="sidebar__user-info">
-            <span className="sidebar__user-name">{getUser()?.displayName ?? '学习者_001'}</span>
-            <span className="sidebar__user-level">{isAdmin ? '管理员 · 系统运营' : '中级 · AI领域'}</span>
-          </div>
-          <motion.svg
-            className="sidebar__user-arrow"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            whileHover={{ x: 2 }}
+        <div className="sidebar__user-wrap" ref={userWrapRef}>
+          <motion.button
+            type="button"
+            className={`sidebar__user ${menuOpen ? 'sidebar__user--open' : ''}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.4 }}
+            whileHover={{ y: -2 }}
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
           >
-            <path d="M9 18l6-6-6-6" />
-          </motion.svg>
-        </motion.div>
+            <div className="sidebar__user-avatar">
+              <span>{isAdmin ? '管' : '学'}</span>
+              <div className="sidebar__user-avatar-glow" />
+            </div>
+            <div className="sidebar__user-info">
+              <span className="sidebar__user-name">{getUser()?.displayName ?? '学习者_001'}</span>
+              <span className="sidebar__user-level">{isAdmin ? '管理员 · 系统运营' : '中级 · AI领域'}</span>
+            </div>
+            <motion.svg
+              className="sidebar__user-arrow"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              animate={{ rotate: menuOpen ? -90 : 0 }}
+            >
+              <path d="M9 18l6-6-6-6" />
+            </motion.svg>
+          </motion.button>
+
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                className="sidebar__user-menu"
+                role="menu"
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                transition={{ duration: 0.16 }}
+              >
+                <button
+                  className="sidebar__user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setSettingsOpen(true)
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  设置
+                </button>
+                <div className="sidebar__user-menu-divider" />
+                <button
+                  className="sidebar__user-menu-item sidebar__user-menu-item--danger"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onLogout?.()
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  退出登录
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {/* 演示用：重置闭环进度，回到新用户首屏引导 */}
       {!collapsed && (
-        <button className="sidebar__reset" onClick={() => { resetJourney(); resetMastery() }} title="清除进度，回到新用户引导">
+        <button className="sidebar__reset" onClick={() => { resetJourney(); resetMastery(); resetPortrait() }} title="清除进度，回到新用户引导">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.7 3" />
             <path d="M3 3v5h5" />
@@ -374,5 +452,72 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
         </button>
       )}
     </motion.aside>
+
+    {/* 设置面板（骨架占位：改密码下会话接入） */}
+    <AnimatePresence>
+      {settingsOpen && (
+        <motion.div
+          className="settings-mask"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => { setSettingsOpen(false); setPwOpen(false) }}
+        >
+          <motion.div
+            className="settings-panel"
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="settings-panel__close" aria-label="关闭" onClick={() => { setSettingsOpen(false); setPwOpen(false) }}>
+              ×
+            </button>
+            <h3 className="settings-panel__title">设置</h3>
+            <p className="settings-panel__sub">账户与偏好设置（持续完善中）</p>
+
+            <div className="settings-panel__section">
+              <div className="settings-panel__row">
+                <div className="settings-panel__row-text">
+                  <span className="settings-panel__row-label">账户</span>
+                  <span className="settings-panel__row-value">{getUser()?.displayName ?? '学习者_001'}</span>
+                </div>
+              </div>
+              <div className="settings-panel__row">
+                <div className="settings-panel__row-text">
+                  <span className="settings-panel__row-label">修改密码</span>
+                  <span className="settings-panel__row-value">更换登录密码</span>
+                </div>
+                <button
+                  className="settings-panel__row-btn settings-panel__row-btn--active"
+                  onClick={() => setPwOpen((o) => !o)}
+                  aria-expanded={pwOpen}
+                >
+                  {pwOpen ? '收起' : '修改'}
+                </button>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {pwOpen && (
+                  <motion.div
+                    className="settings-panel__pw"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.22 }}
+                  >
+                    <ChangePasswordForm />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <p className="settings-panel__note">更多设置项（通知 / 主题 / 隐私）将于后续版本陆续开放。</p>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   )
 }

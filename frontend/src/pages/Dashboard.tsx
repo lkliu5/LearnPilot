@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import RadarChart from '../components/charts/RadarChart'
 import LearningPathCard from '../components/LearningPathCard'
@@ -9,9 +9,10 @@ import GuideCard from '../components/GuideCard'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useMastery } from '../store/mastery'
 import { useJourney } from '../store/journey'
+import { usePortrait } from '../store/portrait'
 import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
-import { getDashboardOverview, type DashboardOverview } from '../services/dashboard'
+import { getDashboardOverview, synthesizeOverview, type DashboardOverview } from '../services/dashboard'
 import type { PageType } from '../App'
 import './Dashboard.css'
 
@@ -46,57 +47,83 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
   const dateStr = `${time.getFullYear()}年${time.getMonth() + 1}月${time.getDate()}日 ${weekDays[time.getDay()]}`
 
-  /* 学情概览随掌握度同步：每通过一个核心知识点，综合评分与图谱覆盖率上调一次 */
+  /* 学情概览随掌握度同步：每通过一个核心知识点，图谱覆盖率 / 已学资源真实增长 */
   const masteryStatus = useMastery((s) => s.status)
   const masteredCore = KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').length
 
+  /* 门控：学情概览数据须来自「真实诊断结果 / 画像」，无则视为未诊断（问题 4）。
+     Mock 模式以本地画像快照为准（确认画像后写入）；联调以后端 journey.hasDiagnosed 为准。 */
+  const journeyHasDiagnosed = useJourney((s) => s.hasDiagnosed)
+  const portraitDims = usePortrait((s) => s.dims)
+  const diagnosed = journeyHasDiagnosed && (USE_REAL_API || portraitDims.length > 0)
+
   /* 联调数据源：GET /dashboard/overview（接口 29）聚合综合分/强弱项/雷达/对标摘要；
-     mock 模式不请求，保持本地计算。掌握度变化时重取，保持原"随掌握度联动"行为 */
+     未诊断不请求。掌握度变化时重取，保持"随掌握度联动"行为 */
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   useEffect(() => {
-    if (!USE_REAL_API) return
+    if (!USE_REAL_API || !diagnosed) return
     let alive = true
     getDashboardOverview()
       .then((d) => alive && setOverview(d))
-      .catch((e) => console.error('[dashboard] 加载学情概览失败', e)) // 失败保留本地 mock 兜底
+      .catch((e) => console.error('[dashboard] 加载学情概览失败', e)) // 失败回退本地画像合成
     return () => {
       alive = false
     }
-  }, [masteryStatus])
+  }, [masteryStatus, diagnosed])
 
-  const mockProfileData = {
-    overall_level: '中级',
-    overall_score: 72.5 + masteredCore * 2.5,
-    strong_topics: [
-      { name: '数据预处理', mastery: 92 },
-      { name: '特征工程', mastery: 88 },
-      { name: '模型评估', mastery: 81 },
-    ],
-    weak_topics: [
-      { name: 'Transformer架构', mastery: 28 },
-      { name: '注意力机制', mastery: 22 },
-      { name: '模型优化', mastery: 18 },
-    ],
-    knowledge_graph_coverage: Math.min(1, 0.65 + masteredCore * 0.05),
-  }
-  const profileData = USE_REAL_API && overview ? overview : mockProfileData
+  /* 由真实画像合成的概览（综合分/水平/雷达/强弱项）——确认弹窗同源，口径一致 */
+  const synth = useMemo(() => synthesizeOverview(portraitDims), [portraitDims])
+  const profileData = USE_REAL_API && overview ? overview : synth
+  const radarData = USE_REAL_API && overview ? overview.radar : synth.radar
 
-  const radarData = USE_REAL_API && overview ? overview.radar : {
-    dimensions: ['机器学习基础', '神经网络', '深度学习', '注意力机制', 'Transformer', '大模型微调'],
-    values: [85, 72, 68, 45, 30, 20]
-  }
-
-  /* 已学资源数 / 同级对比：联调取聚合接口，mock 保持原常量 */
-  const learnedResources = USE_REAL_API && overview ? overview.learned_resources : 12
-  const betterThanPct = USE_REAL_API && overview ? overview.comparison.betterThanPct : 68
+  /* 图谱覆盖率 / 已学资源属「学习活动」指标：随真实 Mastery 增长，刚诊断未做题=0/空，绝不由画像臆造 */
+  const knowledgeGraphCoverage =
+    USE_REAL_API && overview ? overview.knowledge_graph_coverage : masteredCore / KNOWLEDGE_POINTS.length
+  const learnedResources = USE_REAL_API && overview ? overview.learned_resources : masteredCore
+  /* 同级对比同属队列统计：仅联调由后端给出，Mock 下无真实样本则不展示该行 */
+  const betterThanPct = USE_REAL_API && overview ? overview.comparison.betterThanPct : null
 
   /* 岗位对标轻量摘要：完整对标在「画像诊断」页，首页只回显结果 + 跳转入口 */
-  const journeyHasDiagnosed = useJourney((s) => s.hasDiagnosed)
   const journeyTargetJobName = useJourney((s) => s.targetJobName)
   const journeyMatchPct = useJourney((s) => s.matchPct)
   const hasDiagnosed = USE_REAL_API && overview ? overview.targetSummary.hasDiagnosed : journeyHasDiagnosed
   const targetJobName = USE_REAL_API && overview ? overview.targetSummary.targetJobName : journeyTargetJobName
   const matchPct = USE_REAL_API && overview ? overview.targetSummary.matchPct : journeyMatchPct
+
+  /* 未诊断：学情概览不展示任何数据，仅留引导态（问题 4）——避免新用户首登即见假数据 */
+  if (!diagnosed) {
+    return (
+      <motion.div
+        className="dashboard dashboard--empty"
+        ref={rootRef}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants}>
+          <GuideCard onNavigate={onNavigate} />
+        </motion.div>
+
+        <motion.div className="dashboard__empty" variants={itemVariants}>
+          <div className="dashboard__empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4" />
+              <path d="M12 16h.01" />
+            </svg>
+          </div>
+          <h2 className="dashboard__empty-title">学情概览尚未生成</h2>
+          <p className="dashboard__empty-desc">
+            综合评分、知识雷达、优势与盲区都来自你的<strong>真实学习画像</strong>。
+            先完成一次画像诊断，AI 才能据此生成你的专属学情概览。
+          </p>
+          <button className="dashboard__empty-cta" type="button" onClick={() => onNavigate?.('profile')}>
+            先完成画像诊断 →
+          </button>
+        </motion.div>
+      </motion.div>
+    )
+  }
 
   return (
     <motion.div
@@ -141,13 +168,15 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
           <p className="dashboard__subtitle">
             您的AI学习旅程已开启，当前处于 <strong>{profileData.overall_level}</strong> 水平
           </p>
-          <div className="dashboard__score-meta">
-            <span className="dashboard__score-comparison">超过了 {betterThanPct}% 的同级学习者</span>
-            <svg className="dashboard__score-trend" width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M7 17L12 12L17 17" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7 12L12 7L17 12" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
+          {betterThanPct !== null && (
+            <div className="dashboard__score-meta">
+              <span className="dashboard__score-comparison">超过了 {betterThanPct}% 的同级学习者</span>
+              <svg className="dashboard__score-trend" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M7 17L12 12L17 17" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M7 12L12 7L17 12" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          )}
         </div>
 
         {/* 中栏：立体发光仪表盘 */}
@@ -260,7 +289,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
             </svg>
           </div>
           <div className="stat-card__content">
-            <CountUp className="stat-card__value" value={Math.round(profileData.knowledge_graph_coverage * 100)} suffix="%" />
+            <CountUp className="stat-card__value" value={Math.round(knowledgeGraphCoverage * 100)} suffix="%" />
             <span className="stat-card__label">知识图谱覆盖</span>
           </div>
         </div>
@@ -424,7 +453,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
               <div className="ability-action">
                 <p className="ability-action__tip">
                   <span className="ability-action__tip-icon">✦</span>
-                  建议优先攻克 <strong>{profileData.weak_topics[0].name}</strong>，预计 3 节课可提升
+                  {profileData.weak_topics.length ? (
+                    <>建议优先攻克 <strong>{profileData.weak_topics[0].name}</strong>，预计 3 节课可提升</>
+                  ) : (
+                    <>各维度较均衡，建议按学习路径稳步推进</>
+                  )}
                 </p>
                 <button className="ability-action__cta" type="button">生成针对性练习 →</button>
               </div>

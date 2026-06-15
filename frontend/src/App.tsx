@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './components/Sidebar'
+import ScrollToTop from './components/ScrollToTop'
 import Dashboard from './pages/Dashboard'
 import ProfileBuilder from './pages/ProfileBuilder'
 import LearningPath from './pages/LearningPath'
@@ -13,7 +14,7 @@ import AdminMetrics from './pages/admin/AdminMetrics'
 import AdminUsers from './pages/admin/AdminUsers'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
-import { getUser } from './services/api'
+import { getUser, clearAuth } from './services/api'
 import './styles/App.css'
 
 export type PageType =
@@ -51,6 +52,8 @@ function App() {
   /** 登录响应 role（15.1）：admin 进管理端视图；mock 模式无登录态时按 learner 处理 */
   const [role, setRole] = useState<'learner' | 'admin'>('learner')
   const isAdmin = role === 'admin'
+  /** 主滚动容器引用：页面切换时由 ScrollToTop 归零 */
+  const mainRef = useRef<HTMLElement>(null)
 
   /** 统一导航入口：非 admin 访问管理页一律拦回首页；管理页同步 hash 深链 */
   const navigate = (page: PageType) => {
@@ -91,6 +94,14 @@ function App() {
     if (nextRole === 'admin') setCurrentPage('admin-kb')
     else setCurrentPage(opts?.toProfile ? 'profile' : 'dashboard')
     setStage('app')
+  }
+
+  /** 退出登录：清 JWT/用户态 → 复位视图 → 跳回登录页。 */
+  const handleLogout = () => {
+    clearAuth()
+    setRole('learner')
+    setCurrentPage('dashboard')
+    setStage('login')
   }
 
   const renderPage = () => {
@@ -150,10 +161,14 @@ function App() {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         isAdmin={isAdmin}
+        onLogout={handleLogout}
       />
 
+      {/* 页面切换时主滚动容器归零，避免停在上一页中部 */}
+      <ScrollToTop dep={currentPage} containerRef={mainRef} />
+
       {/* Main Content */}
-      <main className={`app__main ${sidebarCollapsed ? 'app__main--expanded' : ''}`}>
+      <main ref={mainRef} className={`app__main ${sidebarCollapsed ? 'app__main--expanded' : ''}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={currentPage}

@@ -1,13 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useRef } from 'react'
 import { USE_REAL_API } from '../services/api'
 import { tutorChatStream } from '../services/tutor'
 import { getResourceKpId } from '../services/resourceNav'
-
-interface Msg {
-  role: 'agent' | 'user'
-  text: string
-}
+import ChatPanel, { type ChatMsg as Msg } from './ChatPanel'
 
 /* 苏格拉底式导学：用引导式提问而非直接喂答案。
    规则驱动的演示版（命中关键词走对应引导链；生产环境替换为 Agent 流式回复）。*/
@@ -33,11 +28,6 @@ export default function SocraticTutor() {
   const [msgs, setMsgs] = useState<Msg[]>([{ role: 'agent', text: OPENING }])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [msgs, typing])
 
   const reply = (userText: string) => {
     const hit = branches.find((b) => b.match.test(userText))
@@ -101,53 +91,19 @@ export default function SocraticTutor() {
   const sessionRef = useRef<string | undefined>(undefined)
 
   return (
-    <div className="socratic">
-      <div className="socratic__head">
-        <span className="socratic__avatar">🦉</span>
-        <div>
-          <div className="socratic__title">苏格拉底导学助手</div>
-          <div className="socratic__sub">引导式提问 · 不直接给答案，帮你自己想通</div>
-        </div>
-      </div>
-
-      <div className="socratic__chat">
-        <AnimatePresence initial={false}>
-          {msgs.map((m, i) => (
-            <motion.div
-              key={i}
-              className={`socratic__msg socratic__msg--${m.role}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              {m.role === 'agent' && <span className="socratic__msg-avatar">🦉</span>}
-              <span className="socratic__bubble">{m.text}</span>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {typing && (
-          <div className="socratic__msg socratic__msg--agent">
-            <span className="socratic__msg-avatar">🦉</span>
-            <span className="socratic__bubble socratic__bubble--typing"><i /><i /><i /></span>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <div className="socratic__quick">
-        {chips.map((q) => (
-          <button key={q} className="socratic__chip" onClick={() => setInput(q)}>{q}</button>
-        ))}
-      </div>
-
-      <div className="socratic__input">
-        <input
-          value={input}
-          placeholder="说说你的想法，我来引导你…"
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-        />
-        <button onClick={send} disabled={!input.trim() || typing}>发送</button>
-      </div>
-    </div>
+    <ChatPanel
+      avatar="🦉"
+      title="苏格拉底导学助手"
+      subtitle="引导式提问 · 不直接给答案，帮你自己想通"
+      msgs={msgs}
+      typing={typing}
+      chips={chips}
+      onChip={setInput}
+      input={input}
+      onInput={setInput}
+      onSend={send}
+      placeholder="说说你的想法，我来引导你…"
+      sending={typing}
+    />
   )
 }

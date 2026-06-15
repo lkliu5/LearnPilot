@@ -23,6 +23,14 @@ import './AgentWorkflow.css'
 /* B10：大屏实时模式可选目标难度档（与资源页讲义三档一致） */
 const DIFFICULTIES = ['入门', '初级', '高级'] as const
 
+/* 工作流完成产物 → 资源页对应 Tab（id 与 LearningResource 的 TAB_GROUPS 对齐） */
+const WORKFLOW_ARTIFACTS = [
+  { tab: 'lecture', emoji: '📖', label: '定制讲义', desc: '分阶知识讲义，按目标难度生成' },
+  { tab: 'mindmap', emoji: '🧠', label: '思维导图', desc: '由讲义结构化的知识脑图' },
+  { tab: 'video', emoji: '🎬', label: '讲解视频', desc: '配套讲解视频脚本与播放' },
+  { tab: 'quiz', emoji: '✍️', label: '分阶测试题', desc: '巩固检验的分阶测验题' },
+] as const
+
 gsap.registerPlugin(useGSAP, MotionPathPlugin)
 
 /* 连线定义：源节点 → 目标节点（用于测量真实坐标并生成曲线路径）*/
@@ -82,6 +90,8 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
   const [targetKp, setTargetKp] = useState(CURRENT_KP_ID)
   const [targetDiff, setTargetDiff] = useState<(typeof DIFFICULTIES)[number]>('初级')
   const [completed, setCompleted] = useState<{ kpId: string; degraded: boolean } | null>(null)
+  /* 工作流完成弹窗：done 事件触发，列出本次产物 + 跳转资源页对应 Tab */
+  const [resultModal, setResultModal] = useState<{ kpId: string } | null>(null)
   const [replaying, setReplaying] = useState(false)
   const lastFrameRef = useRef<WorkflowSnapshot | null>(null)
 
@@ -158,6 +168,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
     setIsRunning(true)
     setPhase('diagnosis')
     setMessages([])
+    setResultModal(null)
 
     // Phase 1: Diagnosis
     setAgents(prev => [
@@ -230,6 +241,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
       setPhase('complete')
       setCurrentStep(4)
       setIsRunning(false)
+      setResultModal({ kpId: targetKp })
     }, 6000)
   }
 
@@ -311,6 +323,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
     setMessages([])
     setLiveStats({ completedAgents: 0, messageCount: 0, progress: 0 })
     setCompleted(null)
+    setResultModal(null)
     setReplaying(false)
     lastFrameRef.current = null
     let workflowId: string
@@ -331,6 +344,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
         const degraded = critic?.status === 'error'
         setCompleted({ kpId: targetKp, degraded })
         if (degraded) showHint('工作流降级，学习资源保留上一版本')
+        else setResultModal({ kpId: targetKp })
       },
       onFail: (reason) => {
         console.error('[workflow] 实时通道异常：', reason)
@@ -344,6 +358,14 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
   const goToResource = () => {
     if (!completed) return
     setResourceNav(completed.kpId)
+    onNavigate?.('learning-resource')
+  }
+
+  /** 完成弹窗：跳转资源页对应 Tab（缺省落讲义）。 */
+  const goToResourceTab = (tab?: string) => {
+    const kpId = resultModal?.kpId ?? targetKp
+    setResourceNav(kpId, tab)
+    setResultModal(null)
     onNavigate?.('learning-resource')
   }
 
@@ -386,6 +408,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
     setCurrentStep(0)
     setIsRunning(false)
     setCompleted(null)
+    setResultModal(null)
     setReplaying(false)
     lastFrameRef.current = null
     setAgents([
@@ -725,6 +748,63 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
         </div>
       </RevealItem>
       </RevealGroup>
+
+      {/* 工作流完成弹窗：done 触发，列出本次产物 + 跳转资源页对应 Tab */}
+      <AnimatePresence>
+        {resultModal && (
+          <motion.div
+            className="wf-result-mask"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setResultModal(null)}
+          >
+            <motion.div
+              className="wf-result"
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button className="wf-result__close" aria-label="关闭" onClick={() => setResultModal(null)}>
+                ×
+              </button>
+              <div className="wf-result__head">
+                <span className="wf-result__badge">✓</span>
+                <div>
+                  <h3 className="wf-result__title">工作流执行完成</h3>
+                  <p className="wf-result__sub">
+                    已为「{kpById(resultModal.kpId)?.name ?? resultModal.kpId}」生成下列学习产物
+                  </p>
+                </div>
+              </div>
+
+              <div className="wf-result__list">
+                {WORKFLOW_ARTIFACTS.map((a) => (
+                  <button key={a.tab} className="wf-result__item" onClick={() => goToResourceTab(a.tab)}>
+                    <span className="wf-result__item-emoji">{a.emoji}</span>
+                    <span className="wf-result__item-text">
+                      <span className="wf-result__item-label">{a.label}</span>
+                      <span className="wf-result__item-desc">{a.desc}</span>
+                    </span>
+                    <span className="wf-result__item-arrow">→</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="wf-result__actions">
+                <button className="wf-result__btn wf-result__btn--ghost" onClick={() => setResultModal(null)}>
+                  留在工作流
+                </button>
+                <button className="wf-result__btn wf-result__btn--primary" onClick={() => goToResourceTab()}>
+                  查看生成内容 →
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

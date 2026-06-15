@@ -25,9 +25,12 @@ export function getResourceKpId(): string {
   return kpId
 }
 
-/** 资源页落点 Tab（一次性：读取后即清空）。 */
+/** 资源页落点 Tab（一次性：读取后清空）。
+ * 清空延后到微任务执行：React StrictMode（dev）会同步双调用 useState 初始化器，
+ * 若读时立即清空，第二次调用拿到 null → 落点 Tab 丢失。延后清空使同一同步批次内
+ * 两次读取拿到相同值，真实的后续导航（远晚于微任务）仍读到已清空的 null。 */
 export function consumeResourceEntryTab(): string | null {
   const t = entryTab
-  entryTab = null
+  if (t !== null) queueMicrotask(() => { entryTab = null })
   return t
 }
