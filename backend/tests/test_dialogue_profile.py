@@ -172,6 +172,38 @@ def test_multi_turn_accumulation_and_completion(client):
         _assert_dim_contract(dim)
 
 
+def test_new_session_runs_dialogue_even_with_completed_portrait(client):
+    """回归：已有完整持久化画像的返回用户，开新会话仍正常多轮对话，不每轮即收尾。
+
+    诊断收敛进度按「本会话已抽取维度」判定，与历史持久化画像解耦；否则库内画像已
+    ≥ 阈值的用户一开口即被判完成，助手永远只回固定收尾语。
+    """
+    headers = _fresh_headers(client)
+    # 会话 A：先把画像采集到收敛完成（≥5 维）
+    turns = [
+        "我是计算机专业本科毕业",
+        "平时做过一些Python项目",
+        "想转行进入大模型应用方向",
+        "我比较喜欢动手实践、做中学",
+        "时间比较紧，想尽快突破",
+    ]
+    sid = None
+    last = None
+    for m in turns:
+        last = _dialogue(client, headers, m, session_id=sid)
+        sid = last["sessionId"]
+    assert last["diagnosisComplete"] is True  # 会话 A 已收敛
+    portrait_keys = {d["key"] for d in _get_portrait(client, headers)["dimensions"]}
+    assert len(portrait_keys) >= 5  # 库内画像已完整
+
+    # 会话 B（全新 sessionId）：一句简单问候不应被直接判完成，应继续追问
+    fresh = _dialogue(client, headers, "你好")  # 无 sessionId → 新会话
+    assert fresh["sessionId"] != sid
+    assert fresh["diagnosisComplete"] is False, "新会话首轮不应因历史画像即被判完成"
+    assert fresh["reply"] and "接下来就可以进入个性化学习路径" not in fresh["reply"]
+    assert isinstance(fresh["suggestions"], list) and fresh["suggestions"]
+
+
 def test_first_turn_context_is_manual_source(client):
     """首轮 context（表单显式填写）→ source=manual（17.1 防幻觉口径）。"""
     headers = _fresh_headers(client)

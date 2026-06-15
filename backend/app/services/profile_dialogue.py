@@ -62,6 +62,7 @@ def _get_session(session_id: str | None, user_id: str) -> dict[str, Any]:
         "userId": user_id,
         "history": [],
         "asked": [],  # 已追问过的维度 key（推进对话，避免重复追问）
+        "collected": set(),  # 本会话已抽取的维度 key（诊断收敛进度，与历史持久化画像解耦）
         "expiresAt": time.monotonic() + SESSION_TTL_SECONDS,
     }
     _sessions[sid] = session
@@ -76,20 +77,25 @@ def _append_turn(session: dict[str, Any], message: str, reply: str) -> None:
 def _run_turn(
     db: Session, session: dict[str, Any], message: str, context: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """单轮诊断：读当前画像 → Agent 抽取/追问 → 写回画像增量 → 记会话历史。"""
+    """单轮诊断：Agent 抽取/追问 → 写回画像增量 → 记会话历史。
+
+    诊断收敛进度以「本会话已抽取维度」（session["collected"]）为准，**不读取历史
+    持久化画像**：否则返回用户（其库内画像已 ≥ 阈值）每轮一开口即被判定收尾，对话
+    永远只回固定收尾语。画像本身仍随每轮抽取增量累积入库（随学随新）。
+    """
     first_turn = not session["history"]
-    portrait = student_portrait.get_portrait(db, session["userId"])
-    known_keys = [d["key"] for d in portrait["dimensions"]]
+    collected: set[str] = session["collected"]
     result = dialogue_agent.respond(
         context=context,
         history=list(session["history"]),
         message=message,
-        known_keys=known_keys,
+        known_keys=list(collected),
         asked_keys=list(session["asked"]),
         first_turn=first_turn,
     )
-    if result["updates"]:  # 随学随新：抽取增量即时落库
+    if result["updates"]:  # 随学随新：抽取增量即时落库，并计入本会话采集进度
         student_portrait.apply_updates(db, session["userId"], result["updates"])
+        collected.update(u["key"] for u in result["updates"])
     if result["focus"]:  # 记录本轮追问维度，推进对话
         session["asked"].append(result["focus"])
     _append_turn(session, message, result["reply"])
