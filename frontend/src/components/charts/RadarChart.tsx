@@ -21,6 +21,17 @@ export default function RadarChart({ data, target, targetName }: RadarChartProps
   useEffect(() => {
     if (!chartRef.current) return
 
+    /* 数据未就绪守卫：echarts 雷达 indicator 为空（或 values 与维度数不一致）会在
+       radarLayout 阶段抛 "reading 'push'" 崩溃，且因父级无 error boundary 会连带
+       卸载整个页面 → 首屏白屏。首帧 overview 尚未加载（dimensions=[]）时跳过渲染，
+       待数据到达再画（仍保留已有实例，避免闪烁）。 */
+    const dims = data?.dimensions ?? []
+    const vals = data?.values ?? []
+    if (dims.length === 0 || vals.length !== dims.length) {
+      chartInstance.current?.clear()
+      return
+    }
+
     if (!chartInstance.current) {
       chartInstance.current = echarts.init(chartRef.current)
     }
