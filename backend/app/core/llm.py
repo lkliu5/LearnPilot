@@ -57,6 +57,9 @@ _MOCK_BASELINE: list[int] = [85, 72, 68, 45, 30, 20]
 # 讲义资源页难度档（接口文档 8.2 备注：入门|初级|高级，与路径难度档不同）
 LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "高级"]
 
+# 学习路径难度阶梯（接口文档 2.3 Lesson.difficulty）：规划 Agent 按画像基础上下浮动
+PATH_DIFFICULTIES: list[str] = ["入门", "初级", "中级", "高级", "精通"]
+
 # 异质学生画像维度（接口文档 17.2，C1-b）：(key, 中文 label)，顺序即对话探查顺序。
 # 与 4.4 固定 6 知识点雷达「并存、互不替换」（key 稳定，后端可扩展更多维度）。
 PORTRAIT_DIMENSIONS: list[tuple[str, str]] = [
@@ -1058,6 +1061,111 @@ class LLMClient:
         if not isinstance(data, dict):
             raise LLMGenerationError("画像维度抽取输出无法解析为契约 JSON")
         return _sanitize_portrait_updates(data.get("updates"))
+
+    # ---- 学习路径规划（接口文档 6.2，真实规划 Agent 的叙述层） ----------------
+    def plan_path(
+        self, *, profile: dict[str, Any], steps: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """为已排序的路径步骤生成「为什么这样排」的理由 + 整体摘要。
+
+        排序/优先级由 agents.planner_agent 按画像+掌握度确定性计算（科学排程），
+        本方法只负责把每步的排程信号（signals）转成可读理由：
+        - mock：按信号确定性模板（无随机、无网络，不同画像/掌握度 → 不同理由）；
+        - deepseek：真实生成 + 契约清洗（reason 按 kpId 回填，缺失回落模板），
+          解析失败/上游异常 → 回落 mock，保证演示稳定（不向路由抛 2001）。
+
+        入参 steps[i]：{kpId, topic, order, status, signals:{weak,mastered,
+        foundational,jobBoost}}；profile：{foundationLevel, goal, pace, jobName}。
+        返回 {reasons: {kpId: reason}, summary: str}。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return self._mock_plan_path(profile, steps)
+        try:
+            return self._deepseek_plan_path(profile, steps)
+        except LLMGenerationError as exc:
+            logger.warning("路径规划理由真实生成失败，回落确定性模板：%s", exc)
+            return self._mock_plan_path(profile, steps)
+
+    @staticmethod
+    def _mock_plan_path(
+        profile: dict[str, Any], steps: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """确定性规划理由（mock / deepseek 兜底共用）。按排程信号分支产出理由。"""
+        job_name = (profile.get("jobName") or "").strip()
+        reasons: dict[str, str] = {}
+        weak_count = 0
+        mastered_count = 0
+        for step in steps:
+            sig = step.get("signals") or {}
+            topic = step.get("topic") or step.get("kpId")
+            order = step.get("order")
+            if sig.get("mastered"):
+                mastered_count += 1
+                reasons[step["kpId"]] = (
+                    f"你已掌握「{topic}」（测验通过），后置到第 {order} 步用于巩固复习，可快速跳过。"
+                )
+            elif sig.get("jobBoost") and sig.get("weak"):
+                weak_count += 1
+                lead = f"目标岗位「{job_name}」" if job_name else "你的目标岗位"
+                reasons[step["kpId"]] = (
+                    f"{lead}对「{topic}」要求高且你尚薄弱，按先修顺序排在第 {order} 步并列为重点强化项。"
+                )
+            elif sig.get("weak") and sig.get("foundational"):
+                weak_count += 1
+                reasons[step["kpId"]] = (
+                    f"「{topic}」是后续内容的基础且你尚未掌握，优先安排在第 {order} 步打牢根基。"
+                )
+            elif sig.get("weak"):
+                weak_count += 1
+                reasons[step["kpId"]] = (
+                    f"「{topic}」是你的薄弱点，按先修顺序安排在第 {order} 步集中攻克。"
+                )
+            else:
+                reasons[step["kpId"]] = (
+                    f"按知识先修依赖，「{topic}」承接前序内容，安排在第 {order} 步进阶。"
+                )
+        level = profile.get("foundationLevel") or "中等"
+        summary = (
+            f"本路径依据你的画像（基础{level}）与知识掌握度规划：将 {weak_count} 个薄弱/未掌握点"
+            f"按先修顺序前置，{mastered_count} 个已掌握点后置复习，共 {len(steps)} 步，"
+            "每步配套讲义/思维导图/视频/题库资源。"
+        )
+        return {"reasons": reasons, "summary": summary}
+
+    def _deepseek_plan_path(
+        self, profile: dict[str, Any], steps: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """真实规划理由生成 + 契约清洗（reason 按 kpId 回填，缺失回落模板）。"""
+        system = (
+            "你是个性化学习路径规划专家。给定学习者画像与一条**已排好序**的学习路径"
+            "（每步含 kpId/topic/order/status 及排程信号 signals），为每一步用一句话"
+            "解释「为什么排在这个位置」，并给出整体路径摘要。仅输出 JSON："
+            '{"reasons":[{"kpId":"...","reason":"..."}],"summary":"..."}。'
+            "理由必须扣住该步信号：weak=薄弱点优先、mastered=已掌握后置复习、"
+            "foundational=先修基础、jobBoost=目标岗位高需求前置；语言简体中文、"
+            "每条不超过 50 字；不得改变给定顺序，只解释顺序；只输出 JSON。"
+        )
+        payload = {"profile": profile, "steps": steps}
+        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("路径规划输出无法解析为契约 JSON")
+        valid_ids = {s["kpId"] for s in steps}
+        reasons: dict[str, str] = {}
+        for item in data.get("reasons") or []:
+            if not isinstance(item, dict):
+                continue
+            kid = item.get("kpId")
+            reason = str(item.get("reason") or "").strip()
+            if kid in valid_ids and reason:
+                reasons[kid] = reason
+        # 缺失步骤回落确定性模板（保证每步都有理由）
+        fallback = self._mock_plan_path(profile, steps)
+        for step in steps:
+            reasons.setdefault(step["kpId"], fallback["reasons"][step["kpId"]])
+        summary = str(data.get("summary") or "").strip() or fallback["summary"]
+        return {"reasons": reasons, "summary": summary}
 
     # ---- 通用补全（B5-a：供 Agent 节点调用） -------------------------------
     def complete(

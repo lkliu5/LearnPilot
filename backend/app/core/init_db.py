@@ -342,10 +342,26 @@ def _migrate_b9() -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
 
 
+def _migrate_path_plan() -> None:
+    """轻量迁移：既有开发库 journeys 表缺 path_plan 列时补齐（真实路径规划存储）。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。
+    既有行 path_plan 默认 NULL（尚未生成个性化路径 → GET 回落全局种子路径）。
+    """
+    inspector = inspect(engine)
+    if "journeys" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("journeys")}
+    if "path_plan" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE journeys ADD COLUMN path_plan JSON"))
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
     _migrate_b9()
+    _migrate_path_plan()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

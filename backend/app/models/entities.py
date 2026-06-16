@@ -98,6 +98,10 @@ class Journey(Base):
     has_generated_path: Mapped[bool] = mapped_column(Boolean, default=False)
     target_job_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     match_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 真实规划 Agent（接口文档 6.2）产出的该用户个性化路径快照：Lesson[] + 每步
+    # reason/resources（additive 字段，见接口文档 6.3 增量）。NULL = 尚未生成 → GET
+    # 回落全局种子路径（向后兼容）。首次生成后落库，GET 命中缓存（同一画像不重复规划）。
+    path_plan: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
 
 class ResourceCache(Base):
