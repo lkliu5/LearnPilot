@@ -515,6 +515,207 @@ _KEYWORD_TO_DIM: dict[str, int] = {
 }
 
 
+# ---- 学习流程：康奈尔线索 / 费曼讲解评估（接口文档第 18 章，C2） ----------------
+
+# 康奈尔笔记法线索模板（接口文档 18.1）：每核心知识点的「线索区」问题/关键词
+# （5-8 条）+「主笔记区」要点预填骨架 + 总结区引导语。mock 与 deepseek 兜底共用，
+# 内容紧扣各知识点（保证返回真实线索问题而非占位）；未收录知识点参数化生成。
+# 结构：kp_id -> {cues:[(type, text)], outline:[(heading, [points])], summaryHint}
+_CORNELL_TEMPLATES: dict[str, dict[str, Any]] = {
+    "nn": {
+        "cues": [
+            ("question", "为什么神经网络需要激活函数？"),
+            ("question", "一个神经元的前向计算分哪几步？"),
+            ("question", "反向传播是如何更新权重的？"),
+            ("question", "ReLU 相比 Sigmoid 有什么优势？"),
+            ("keyword", "加权求和 → 偏置 → 激活"),
+            ("keyword", "梯度消失"),
+        ],
+        "outline": [
+            ("激活函数的作用", ["引入非线性表达能力", "若无激活，多层等价单层线性变换"]),
+            ("神经元三步运算", ["加权求和 Σ w·x", "加偏置 + b", "激活函数得到输出"]),
+            ("反向传播", ["链式法则逐层求梯度", "按梯度下降更新权重"]),
+        ],
+        "summaryHint": "用一句话概括：神经网络如何通过加权、激活与反向传播来学习？",
+    },
+    "ml": {
+        "cues": [
+            ("question", "监督学习和无监督学习有什么区别？"),
+            ("question", "过拟合是怎么产生的，有什么表现？"),
+            ("question", "正则化为什么能缓解过拟合？"),
+            ("question", "训练集 / 验证集 / 测试集各有什么用？"),
+            ("keyword", "特征工程 / 损失函数"),
+            ("keyword", "偏差-方差权衡"),
+        ],
+        "outline": [
+            ("监督 vs 无监督", ["分类/回归有标注目标", "聚类/降维无标注"]),
+            ("过拟合与泛化", ["训练好、测试差", "模型记住了训练噪声"]),
+            ("正则化", ["L1/L2 惩罚过大参数", "早停 / 交叉验证"]),
+        ],
+        "summaryHint": "用一句话概括：机器学习如何在拟合训练数据与保持泛化之间取得平衡？",
+    },
+    "dl": {
+        "cues": [
+            ("question", "反向传播的核心作用是什么？"),
+            ("question", "梯度下降如何更新参数？"),
+            ("question", "常见优化器（SGD/Adam）有什么区别？"),
+            ("question", "什么是梯度消失/爆炸，如何缓解？"),
+            ("keyword", "链式法则 / 计算图"),
+            ("keyword", "BatchNorm / Dropout"),
+        ],
+        "outline": [
+            ("反向传播", ["链式法则求梯度", "计算图自动求导"]),
+            ("梯度下降与优化器", ["SGD / Adam / RMSprop", "学习率调度"]),
+            ("训练稳定性", ["梯度消失 / 爆炸", "归一化与正则缓解"]),
+        ],
+        "summaryHint": "用一句话概括：深度网络如何通过反向传播与优化器迭代学习？",
+    },
+    "cnn": {
+        "cues": [
+            ("question", "卷积层为什么能提取局部特征？"),
+            ("question", "权重共享带来了什么好处？"),
+            ("question", "池化层的作用是什么？"),
+            ("question", "感受野如何随网络加深变化？"),
+            ("keyword", "卷积核 / 步长 / 填充"),
+            ("keyword", "ResNet 残差连接"),
+        ],
+        "outline": [
+            ("卷积与局部特征", ["卷积核滑动提取局部特征", "权重共享大幅减少参数"]),
+            ("池化", ["下采样降低空间尺寸", "增强平移不变性"]),
+            ("经典网络", ["LeNet / AlexNet / ResNet", "残差连接让网络更深"]),
+        ],
+        "summaryHint": "用一句话概括：CNN 如何通过卷积与池化逐层提取图像特征？",
+    },
+    "transformer": {
+        "cues": [
+            ("question", "自注意力机制解决了什么问题？"),
+            ("question", "Q / K / V 分别代表什么？"),
+            ("question", "为什么要用多头注意力？"),
+            ("question", "位置编码为什么必要？"),
+            ("keyword", "缩放点积注意力"),
+            ("keyword", "残差 + LayerNorm"),
+        ],
+        "outline": [
+            ("自注意力", ["Q/K/V 计算注意力权重", "建模长距离依赖"]),
+            ("多头注意力", ["多个子空间并行", "捕捉不同类型关系"]),
+            ("位置编码", ["注入序列顺序信息", "正弦 / 可学习编码"]),
+        ],
+        "summaryHint": "用一句话概括：Transformer 如何用自注意力建模序列中元素间的依赖？",
+    },
+    "finetune": {
+        "cues": [
+            ("question", "全参微调和参数高效微调有什么区别？"),
+            ("question", "LoRA 的核心思想是什么？"),
+            ("question", "指令微调（SFT）解决了什么问题？"),
+            ("question", "RLHF / DPO 对齐的目标是什么？"),
+            ("keyword", "低秩矩阵 / 冻结权重"),
+            ("keyword", "Adapter / Prompt Tuning"),
+        ],
+        "outline": [
+            ("微调范式", ["全参微调开销大", "PEFT 只更新少量参数"]),
+            ("LoRA", ["冻结原权重", "低秩矩阵学习增量"]),
+            ("对齐", ["SFT 指令微调", "RLHF / DPO 对齐人类偏好"]),
+        ],
+        "summaryHint": "用一句话概括：如何在低成本下让大模型适配下游任务并对齐人类偏好？",
+    },
+}
+
+# 费曼讲解评估的「应覆盖核心概念」（接口文档 18.2）：mock 据此判定学生讲解
+# 「讲漏」哪些关键点 → 生成 gaps。每概念：keys 命中关键词、title 缺口标题、
+# detail 缺口说明、severity 严重度、ask 引导补讲的追问。deepseek 走真实评估。
+_FEYNMAN_CONCEPTS: dict[str, list[dict[str, Any]]] = {
+    "nn": [
+        {"keys": ["激活", "非线性", "relu", "sigmoid", "tanh"], "title": "激活函数与非线性",
+         "detail": "未清楚说明激活函数引入非线性——否则多层网络等价于单层线性变换。",
+         "severity": "high", "ask": "如果去掉激活函数，三层网络和一层线性模型有什么区别？"},
+        {"keys": ["加权", "求和", "权重", "相乘"], "title": "加权求和",
+         "detail": "未说明输入与权重加权求和这一基本运算。", "severity": "medium",
+         "ask": "一个神经元是如何把多个输入汇总成一个数的？"},
+        {"keys": ["反向", "梯度", "误差", "更新", "backprop"], "title": "反向传播与梯度更新",
+         "detail": "未讲清反向传播如何利用梯度更新权重。", "severity": "medium",
+         "ask": "网络是怎样根据误差来调整权重的？"},
+        {"keys": ["偏置", "bias"], "title": "偏置项",
+         "detail": "未提到偏置 b 对决策边界平移的作用。", "severity": "low",
+         "ask": "偏置 b 在加权求和之后起什么作用？"},
+    ],
+    "ml": [
+        {"keys": ["过拟合", "泛化", "overfit"], "title": "过拟合与泛化",
+         "detail": "未提到过拟合——模型训练集好、测试集差的泛化问题。", "severity": "high",
+         "ask": "如果模型训练集表现很好但测试集很差，说明了什么？"},
+        {"keys": ["监督", "标注", "分类", "回归"], "title": "监督学习",
+         "detail": "未区分监督/无监督学习与典型任务（分类、回归）。", "severity": "medium",
+         "ask": "分类、回归和聚类分别属于哪类学习？"},
+        {"keys": ["正则", "l1", "l2", "惩罚", "早停"], "title": "正则化",
+         "detail": "未说明正则化如何抑制过拟合。", "severity": "medium",
+         "ask": "有哪些手段可以缓解过拟合？"},
+        {"keys": ["特征", "损失"], "title": "特征与损失",
+         "detail": "未提到特征与损失函数在训练中的作用。", "severity": "low",
+         "ask": "模型用什么来衡量预测好坏并据此优化？"},
+    ],
+    "dl": [
+        {"keys": ["反向", "链式", "backprop"], "title": "反向传播",
+         "detail": "未讲清反向传播用链式法则求梯度。", "severity": "high",
+         "ask": "梯度是怎样从输出层逐层传回每个参数的？"},
+        {"keys": ["梯度下降", "优化器", "sgd", "adam", "学习率"], "title": "梯度下降与优化器",
+         "detail": "未提到用梯度下降/优化器按学习率更新参数。", "severity": "medium",
+         "ask": "拿到梯度之后，参数是按什么规则更新的？"},
+        {"keys": ["损失", "目标函数"], "title": "损失函数",
+         "detail": "未说明以损失为优化目标。", "severity": "medium",
+         "ask": "训练优化的目标是什么？"},
+        {"keys": ["梯度消失", "梯度爆炸", "归一化", "batchnorm", "dropout"], "title": "训练稳定性",
+         "detail": "未提到梯度消失/爆炸与归一化、正则等稳定手段。", "severity": "low",
+         "ask": "深层网络训练常见哪些梯度问题，如何缓解？"},
+    ],
+    "cnn": [
+        {"keys": ["卷积", "卷积核", "局部", "特征"], "title": "卷积与局部特征",
+         "detail": "未说明卷积核滑动提取局部特征。", "severity": "high",
+         "ask": "卷积核是如何在图像上提取局部特征的？"},
+        {"keys": ["池化", "下采样", "pool"], "title": "池化",
+         "detail": "未提到池化下采样降低尺寸、增强平移不变性。", "severity": "medium",
+         "ask": "池化层的作用是什么？"},
+        {"keys": ["权重共享", "参数共享", "共享"], "title": "权重共享",
+         "detail": "未说明卷积通过权重共享大幅减少参数。", "severity": "medium",
+         "ask": "相比全连接，卷积为什么参数更少？"},
+        {"keys": ["感受野"], "title": "感受野",
+         "detail": "未提到感受野随网络加深而扩大。", "severity": "low",
+         "ask": "为什么深层卷积能看到更大范围的信息？"},
+    ],
+    "transformer": [
+        {"keys": ["自注意力", "注意力", "attention", "query", "q/k/v", "qkv"], "title": "自注意力机制",
+         "detail": "未讲清自注意力用 Q/K/V 建模序列依赖。", "severity": "high",
+         "ask": "自注意力是怎样让每个位置关注到其他位置的？"},
+        {"keys": ["多头", "multi-head", "multihead"], "title": "多头注意力",
+         "detail": "未提到多头在不同子空间并行建模。", "severity": "medium",
+         "ask": "为什么要用多个注意力头而不是一个？"},
+        {"keys": ["位置编码", "position", "顺序"], "title": "位置编码",
+         "detail": "未提到位置编码为模型注入顺序信息。", "severity": "medium",
+         "ask": "自注意力本身不区分顺序，靠什么补充位置信息？"},
+        {"keys": ["前馈", "残差", "layernorm", "归一化"], "title": "前馈与残差归一化",
+         "detail": "未提到前馈网络与残差 + LayerNorm。", "severity": "low",
+         "ask": "编码器每层除了注意力还有哪些子层？"},
+    ],
+    "finetune": [
+        {"keys": ["lora", "低秩"], "title": "LoRA 低秩适配",
+         "detail": "未讲清 LoRA 冻结原权重、用低秩矩阵学增量。", "severity": "high",
+         "ask": "LoRA 是如何在不改动原权重的情况下微调的？"},
+        {"keys": ["全参", "全量", "参数高效", "peft", "adapter"], "title": "全参 vs 参数高效微调",
+         "detail": "未对比全参微调与 PEFT 的开销差异。", "severity": "medium",
+         "ask": "全参微调和参数高效微调的主要区别是什么？"},
+        {"keys": ["指令", "sft", "监督微调"], "title": "指令微调",
+         "detail": "未提到指令微调提升模型遵循指令的能力。", "severity": "medium",
+         "ask": "如何让模型更好地理解并遵循指令？"},
+        {"keys": ["对齐", "rlhf", "dpo", "偏好"], "title": "对齐",
+         "detail": "未提到 RLHF/DPO 等对齐方法。", "severity": "low",
+         "ask": "训练后如何让模型输出更符合人类偏好？"},
+    ],
+}
+
+# 缺口严重度排序（接口文档 18.2）：high 最先，决定 feedback 焦点与 complete 判定
+_SEVERITY_RANK: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
+# 含此类缺口即「讲解未充分」（done=False）；仅 low 或无缺口 → complete=True
+_FEYNMAN_BLOCKING: tuple[str, ...] = ("high", "medium")
+
+
 class LLMClient:
     """LLM 适配层。provider=mock 时确定性产出；其余 provider 为 B5 占位。"""
 
@@ -1142,6 +1343,281 @@ class LLMClient:
         if self.is_mock:
             return _mock_tutor_reply(message)[1]
         return []
+
+    # ---- 康奈尔线索生成（接口文档 18.1，C2） -------------------------------
+    def generate_cornell_cues(
+        self, kp_id: str, kp_name: str, difficulty: str, description: str = ""
+    ) -> dict[str, Any]:
+        """生成康奈尔笔记线索（接口文档 18.1）。
+
+        返回 {cues:[{id,type,text}], noteOutline:[{id,cueId,heading,points}],
+        summaryHint, sources}（sources 复用 8.2 讲义 RAG 引用占位 _LECTURE_SOURCES）。
+        - mock：确定性主题模板（已收录知识点精写线索，未收录参数化生成），cues 5-8 条；
+        - deepseek：真实生成 + 契约清洗（cues 5-8 条、type 枚举、要点截断）；解析失败
+          或上游异常 → 回落确定性主题模板（线索始终可用，不向路由抛 2001）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return self._mock_cornell(kp_id, kp_name, difficulty, description)
+        try:
+            return self._deepseek_cornell(kp_id, kp_name, difficulty, description)
+        except LLMGenerationError as exc:
+            logger.warning("康奈尔线索真实生成失败，回落主题模板：%s", exc)
+            return self._mock_cornell(kp_id, kp_name, difficulty, description)
+
+    @staticmethod
+    def _assemble_cornell(
+        cue_specs: list[tuple[str, str]],
+        outline_specs: list[tuple[str, list[str]]],
+        summary_hint: str,
+    ) -> dict[str, Any]:
+        """把 (cues, outline, summaryHint) 装配为契约结构（id 编号 + cueId 关联）。"""
+        cues = [
+            {"id": f"c{i + 1}", "type": t, "text": text}
+            for i, (t, text) in enumerate(cue_specs)
+        ]
+        note_outline: list[dict[str, Any]] = []
+        for i, (heading, points) in enumerate(outline_specs):
+            # 第 i 条要点关联第 i 条线索（若该线索为问题）；否则通用要点 cueId=null
+            cue_id = cues[i]["id"] if i < len(cues) and cues[i]["type"] == "question" else None
+            note_outline.append(
+                {"id": f"n{i + 1}", "cueId": cue_id, "heading": heading, "points": list(points)}
+            )
+        return {
+            "cues": cues,
+            "noteOutline": note_outline,
+            "summaryHint": summary_hint,
+            "sources": [dict(s) for s in _LECTURE_SOURCES],
+        }
+
+    def _mock_cornell(
+        self, kp_id: str, kp_name: str, difficulty: str, description: str
+    ) -> dict[str, Any]:
+        """确定性康奈尔线索（mock / deepseek 兜底共用）。"""
+        tpl = _CORNELL_TEMPLATES.get(kp_id)
+        if tpl:
+            return self._assemble_cornell(tpl["cues"], tpl["outline"], tpl["summaryHint"])
+        desc = (description or "").strip()
+        cue_specs = [
+            ("question", f"{kp_name}要解决的核心问题是什么？"),
+            ("question", f"{kp_name}的关键步骤 / 组成有哪些？"),
+            ("question", f"{kp_name}在实践中如何应用？"),
+            ("question", f"学习{kp_name}时最容易混淆的点是什么？"),
+            ("keyword", f"{kp_name}核心概念"),
+        ]
+        outline_specs = [
+            (f"{kp_name}核心概念", [desc[:24] if desc else f"{kp_name}的定义与作用", "关键组成与原理"]),
+            ("实践应用", [f"{kp_name}的典型场景", "动手示例巩固理解"]),
+        ]
+        summary_hint = f"用一句话概括：{kp_name}是什么、解决了什么问题？"
+        return self._assemble_cornell(cue_specs, outline_specs, summary_hint)
+
+    def _deepseek_cornell(
+        self, kp_id: str, kp_name: str, difficulty: str, description: str
+    ) -> dict[str, Any]:
+        """真实康奈尔线索生成 + 契约清洗（接口文档 18.1）。"""
+        system = (
+            "你是康奈尔笔记法的教学设计助手。针对给定知识点，产出供学生做笔记的"
+            "「线索区」关键问题/关键词，以及「主笔记区」要点预填骨架。仅输出 JSON："
+            '{"cues":[{"type":"question|keyword","text":"..."}],'
+            '"noteOutline":[{"heading":"要点标题","points":["要点1","要点2"]}],'
+            '"summaryHint":"总结区引导语"}。'
+            "要求：cues 为 5-8 条（多为启发性问题、少量关键词）；noteOutline 2-4 条，"
+            "每条 points 2-4 个；所有内容必须紧扣该知识点主题、简体中文、不要跑题；只输出 JSON。"
+        )
+        prompt = f"知识点：{kp_name}\n难度档：{difficulty}\n知识点说明：{description or kp_name}"
+        raw = llm_deepseek.chat(prompt, system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("康奈尔线索输出无法解析为契约 JSON")
+        return self._clean_cornell(data)
+
+    @staticmethod
+    def _clean_cornell(data: dict[str, Any]) -> dict[str, Any]:
+        """康奈尔线索契约清洗：cues 5-8 条、type 枚举、noteOutline 要点截断。"""
+        raw_cues = data.get("cues")
+        if not isinstance(raw_cues, list):
+            raise LLMGenerationError("康奈尔线索缺 cues 数组")
+        cues: list[dict[str, Any]] = []
+        for c in raw_cues:
+            if not isinstance(c, dict):
+                continue
+            text = str(c.get("text") or "").strip()
+            if not text:
+                continue
+            ctype = c.get("type") if c.get("type") in ("question", "keyword") else "question"
+            cues.append({"id": f"c{len(cues) + 1}", "type": ctype, "text": text})
+            if len(cues) >= 8:  # 上限 8 条（契约 5-8）
+                break
+        if len(cues) < 5:
+            raise LLMGenerationError(f"康奈尔线索有效条目不足 5 条（得到 {len(cues)}）")
+        note_outline: list[dict[str, Any]] = []
+        for o in data.get("noteOutline") or []:
+            if not isinstance(o, dict):
+                continue
+            heading = str(o.get("heading") or "").strip()
+            if not heading:
+                continue
+            points = [
+                str(p).strip() for p in (o.get("points") or []) if str(p).strip()
+            ][:4]
+            i = len(note_outline)
+            cue_id = cues[i]["id"] if i < len(cues) and cues[i]["type"] == "question" else None
+            note_outline.append(
+                {"id": f"n{len(note_outline) + 1}", "cueId": cue_id, "heading": heading, "points": points}
+            )
+        summary_hint = str(data.get("summaryHint") or "").strip()
+        return {
+            "cues": cues,
+            "noteOutline": note_outline,
+            "summaryHint": summary_hint,
+            "sources": [dict(s) for s in _LECTURE_SOURCES],
+        }
+
+    # ---- 费曼讲解评估（接口文档 18.2，C2；复用苏格拉底 Agent 的引导式取向） ------
+    def feynman_eval(
+        self,
+        *,
+        kp_id: str,
+        kp_name: str,
+        description: str,
+        history: list[dict[str, str]],
+        explanation: str,
+    ) -> dict[str, Any]:
+        """评估学生对某知识点的「费曼讲解」（接口文档 18.2）。
+
+        返回 {feedback, gaps, score, followups, complete}——gaps 元素为
+        {kpId, title, detail, severity}（应回看资源 review[] 由服务层按 kp 注入）。
+        - mock：确定性评估——按 _FEYNMAN_CONCEPTS 比对学生讲解，定位「讲漏」的关键
+          概念为 gaps，覆盖率折算 score，无随机、无网络；
+        - deepseek：真实评估 + 契约清洗（severity 枚举、score 截断、gaps 标题非空），
+          解析失败/上游异常 → 回落确定性评估（评估始终可用，不向路由抛 2001）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return self._mock_feynman(kp_id, kp_name, explanation)
+        try:
+            return self._deepseek_feynman(kp_id, kp_name, description, history, explanation)
+        except LLMGenerationError as exc:
+            logger.warning("费曼讲解评估真实生成失败，回落确定性评估：%s", exc)
+            return self._mock_feynman(kp_id, kp_name, explanation)
+
+    @staticmethod
+    def _mock_feynman(kp_id: str, kp_name: str, explanation: str) -> dict[str, Any]:
+        """确定性费曼评估：比对应覆盖概念，定位讲漏点为 gaps。"""
+        text = explanation or ""
+        low = text.lower()
+        concepts = _FEYNMAN_CONCEPTS.get(kp_id)
+        if not concepts:
+            # 未收录知识点：按讲解充实度给确定性评估（仍指向真实 kp）
+            if len(text.strip()) >= 40:
+                return {
+                    "feedback": f"你对「{kp_name}」做了讲解，已覆盖主要思路，可继续补充细节使其更完整。",
+                    "gaps": [], "score": 70, "followups": [], "complete": True,
+                }
+            return {
+                "feedback": f"你的讲解略显简略，试着把「{kp_name}」的核心机制讲得更具体一些。",
+                "gaps": [{
+                    "kpId": kp_id, "title": f"{kp_name}讲解过于简略",
+                    "detail": "讲解信息量不足，难以判断理解程度，建议展开核心机制。",
+                    "severity": "medium",
+                }],
+                "followups": [f"用你自己的话说说，{kp_name}最关键的一步是什么？"],
+                "complete": False,
+            }
+        covered: list[str] = []
+        gaps: list[dict[str, Any]] = []
+        for c in concepts:
+            if any(k.lower() in low for k in c["keys"]):
+                covered.append(c["title"])
+            else:
+                gaps.append({
+                    "kpId": kp_id, "title": c["title"], "detail": c["detail"],
+                    "severity": c["severity"], "_ask": c["ask"],
+                })
+        total = len(concepts)
+        score = round(len(covered) / total * 100) if total else 0
+        gaps.sort(key=lambda g: _SEVERITY_RANK.get(g["severity"], 9))
+        ack = f"你讲清了「{'、'.join(covered)}」。" if covered else "你的讲解还比较笼统。"
+        if gaps:
+            top = gaps[0]
+            body = f"但还有需要补充的地方：最关键的是{top['title']}——{top['detail']}"
+        else:
+            body = "关键点都覆盖到了，讲解相当完整！"
+        followups = [g["_ask"] for g in gaps[:2]]
+        complete = not any(g["severity"] in _FEYNMAN_BLOCKING for g in gaps)
+        clean_gaps = [
+            {"kpId": g["kpId"], "title": g["title"], "detail": g["detail"], "severity": g["severity"]}
+            for g in gaps
+        ]
+        return {
+            "feedback": ack + body, "gaps": clean_gaps, "score": score,
+            "followups": followups, "complete": complete,
+        }
+
+    def _deepseek_feynman(
+        self,
+        kp_id: str,
+        kp_name: str,
+        description: str,
+        history: list[dict[str, str]],
+        explanation: str,
+    ) -> dict[str, Any]:
+        """真实费曼评估 + 契约清洗（接口文档 18.2）。"""
+        system = (
+            "你是费曼学习法导师。学生会用自己的话讲解一个知识点，你要：① 点评其讲解的"
+            "亮点与问题；② 找出讲错或讲漏的关键知识点（gaps）；③ 给出引导学生补讲的追问，"
+            "但不要直接替学生把答案讲完。仅输出 JSON："
+            '{"feedback":"点评(简体中文,不超过150字)","score":0到100整数(讲解完整度),'
+            '"gaps":[{"title":"缺口标题","detail":"为什么这是缺口","severity":"high|medium|low"}],'
+            '"followups":["引导补讲的追问"],"complete":true或false(是否已无 high/medium 缺口)}。只输出 JSON。'
+        )
+        prompt = (
+            f"知识点：{kp_name}\n知识点说明：{description or kp_name}\n"
+            f"学生讲解：{explanation}"
+        )
+        raw = llm_deepseek.chat(prompt, system=system, history=history)
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("费曼评估输出无法解析为契约 JSON")
+        return self._clean_feynman(data, kp_id)
+
+    @staticmethod
+    def _clean_feynman(data: dict[str, Any], kp_id: str) -> dict[str, Any]:
+        """费曼评估契约清洗：gaps 标题/说明非空、severity 枚举、score 截断、complete 布尔。
+
+        gap.kpId 一律回正为当前知识点 id（不信任模型给的 kp，防幻觉引用）。
+        """
+        gaps: list[dict[str, Any]] = []
+        for g in data.get("gaps") or []:
+            if not isinstance(g, dict):
+                continue
+            title = str(g.get("title") or "").strip()
+            detail = str(g.get("detail") or "").strip()
+            if not title or not detail:
+                continue
+            sev = g.get("severity") if g.get("severity") in _SEVERITY_RANK else "medium"
+            gaps.append({"kpId": kp_id, "title": title, "detail": detail, "severity": sev})
+        gaps.sort(key=lambda x: _SEVERITY_RANK[x["severity"]])
+        feedback = str(data.get("feedback") or "").strip()
+        if not feedback:
+            raise LLMGenerationError("费曼评估缺 feedback")
+        try:
+            score = int(data.get("score"))
+        except (TypeError, ValueError):
+            blocking = len([g for g in gaps if g["severity"] in _FEYNMAN_BLOCKING])
+            score = max(0, 100 - 25 * blocking)
+        score = max(0, min(100, score))
+        followups = [
+            str(f).strip() for f in (data.get("followups") or []) if str(f).strip()
+        ][:3]
+        complete = data.get("complete")
+        if not isinstance(complete, bool):
+            complete = not any(g["severity"] in _FEYNMAN_BLOCKING for g in gaps)
+        return {
+            "feedback": feedback, "gaps": gaps, "score": score,
+            "followups": followups, "complete": complete,
+        }
 
     # ---- 对话式画像抽取（接口文档 17.1，C1-b） ------------------------------
     def extract_portrait(

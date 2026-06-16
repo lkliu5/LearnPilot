@@ -23,6 +23,7 @@ from app.api.v1 import (
     health,
     job_market,
     knowledge_graph,
+    learning,
     learning_path,
     mastery,
     profile,
@@ -95,3 +96,5 @@ app.include_router(knowledge_graph.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
 # B7-a：多智能体工作流实时通道（execute / 轮询 / WS 推送；Tutor SSE 与 Video 在 resource）
 app.include_router(workflow.router, prefix=settings.api_prefix)
+# C2：学习流程模块（费曼 + 康奈尔，接口文档第 18 章；新增 /learning/* 接口 39-44）
+app.include_router(learning.router, prefix=settings.api_prefix)

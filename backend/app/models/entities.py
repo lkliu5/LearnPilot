@@ -247,3 +247,45 @@ class ExternalResource(Base):
     relevance: Mapped[int] = mapped_column(Integer, default=0)  # 相关度 0-100
     credibility: Mapped[int] = mapped_column(Integer, default=0)  # 可信度 0-100
     reason: Mapped[str] = mapped_column(Text, default="")
+
+
+class LearningStepProgress(Base):
+    """学习步骤进度（接口文档 18.3，C2）。单用户单知识点下各过程步骤完成标记。
+
+    步骤集固定 6 项：video|lecture|diagram|note|feynman|practice（视频/讲义/图解/
+    笔记/费曼/实操）。与 Mastery（2.2 三态）**解耦**——Mastery 粒度不足以表达 6 步
+    过程；「已掌握」仍由阶段测试（9.1）驱动 Mastery（7.3），本表只记过程完成标记。
+    **无外键耦合**（user_id 仅作隔离键，不建外键），不改 Journey/Mastery 表（契约 18.6）。
+    """
+
+    __tablename__ = "learning_step_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kp_id", "step", name="uq_step_user_kp_step"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    step: Mapped[str] = mapped_column(String(16))  # video|lecture|diagram|note|feynman|practice
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class LearningNote(Base):
+    """康奈尔笔记（接口文档 18.4/18.5，C2）。单用户单知识点一份三栏笔记。
+
+    cue_notes（线索区作答 [{cueId,text}]）、main_notes（主笔记区 Markdown）、
+    summary（总结区）。轻量持久化（随学随新、跨设备不丢，契约 18.6 建议），
+    **无外键耦合**，不改 Journey/Mastery 表。
+    """
+
+    __tablename__ = "learning_notes"
+    __table_args__ = (UniqueConstraint("user_id", "kp_id", name="uq_note_user_kp"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    cue_notes: Mapped[list] = mapped_column(JSON, default=list)  # [{cueId,text}]
+    main_notes: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
