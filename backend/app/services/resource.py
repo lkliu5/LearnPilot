@@ -288,61 +288,90 @@ def diagram(db: Session, kp_id: str) -> dict[str, Any]:
     return {"mermaid": mermaid}
 
 
-# ---- 视频讲解（接口文档 8.3，B7-a） --------------------------------------------
+# ---- 视频讲解（接口文档 8.3，B7-a；分镜脚本随知识点动态生成） ------------------
 # 视频参数与前端 Remotion 组件逐一对齐（frontend/src/remotion/LectureVideo.tsx：
-# VIDEO_FPS/W/H/DURATION 与 5 个 Sequence 场景起始帧）。videoUrl 返回 null →
-# 前端走 Remotion Player + TTS（契约 8.3）；服务端渲染 mp4 为可选加分项，
-# 生产路径：Remotion server-side rendering 产出 mp4 回填 videoUrl，写 README。
+# VIDEO_FPS/W/H 与 SCENE_FRAMES）。videoUrl 返回 null → 前端走 Remotion Player +
+# TTS（契约 8.3）；服务端渲染 mp4 为可选加分项，生产路径：Remotion server-side
+# rendering 产出 mp4 回填 videoUrl，写 README。
 _VIDEO_FPS = 30
 _VIDEO_WIDTH = 1280
 _VIDEO_HEIGHT = 720
-_VIDEO_DURATION_FRAMES = 900
-# 5 段帧-旁白映射的起始帧：封面/神经元三步/前向传播/激活函数/小结闭环
-_NARRATION_FRAMES = [0, 90, 300, 540, 720]
-# nn 知识点旁白与前端 LectureVideo.NARRATION 逐字一致（场景画面为 nn 定制）
-_NARRATION_NN = [
-    "欢迎学习神经网络基础。本视频由领域知识生成智能体为你定制。",
-    "一个神经元完成三步运算：加权求和、加上偏置、再经过激活函数输出。",
-    "前向传播时，输入与权重相乘求和，加偏置得到 z，再用 ReLU 激活得到输出。",
-    "常见激活函数有 ReLU、Sigmoid 和 Tanh，其中 ReLU 计算快、最常用。",
-    "神经元、前向传播、激活、反向传播更新，构成了神经网络学习的完整闭环。",
-]
+# 每个分镜场景的时长（帧，30fps→6s/场景），与前端 LectureVideo.SCENE_FRAMES 对齐。
+# 场景 i 起始帧 = i * _SCENE_FRAMES；总时长 = 场景数 × _SCENE_FRAMES（随场景数自适应）。
+_SCENE_FRAMES = 180
 
 
 def generate_video(
     db: Session, user_id: str, kp_id: str, difficulty: str
 ) -> dict[str, Any]:
-    """生成视频讲解（接口文档 8.3）。videoUrl:null + narration[] 帧-旁白映射。
+    """生成视频讲解（接口文档 8.3）。videoUrl:null + 分镜脚本 scenes + narration 映射。
 
-    确定性产出（无 LLM 成本，不走缓存）：nn 用与前端场景逐字对齐的旁白，
-    其余知识点按相同 5 段结构模板化生成。
+    经 LLMClient.generate_video_script 按当前知识点生成结构化分镜脚本（标题 +
+    3-5 个场景，每场景含 title/points/narration）：
+    - mock：确定性主题占位脚本（nn 与前端原场景逐字对齐，其余知识点参数化生成）；
+    - deepseek：真实生成（解析失败回落主题占位脚本，视频始终可渲染）。
+
+    服务层负责把场景按 _SCENE_FRAMES 均匀铺帧（scenes[].frame、narration[].frame），
+    并把整片 durationInFrames 设为场景数 × _SCENE_FRAMES。结果写 ResourceCache
+    （kind=video / video@<provider>，按 kp+难度+provider 隔离），命中直接返回，
+    避免真实模式重复触发 LLM 调用。
     """
     kp = _require_kp(db, kp_id)
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
     mastery_service.ensure_learning(db, user_id, kp_id)
 
-    if kp_id == "nn":
-        texts = list(_NARRATION_NN)
-    else:
-        texts = [
-            f"欢迎学习{kp.name}。本视频由领域知识生成智能体按「{difficulty}」难度为你定制。",
-            f"我们先拆解{kp.name}的核心构成，建立整体认知框架。",
-            f"接着通过一个{difficulty}难度的典型示例，看看{kp.name}在实践中如何运作。",
-            f"再对比{kp.name}相关的常见方法与适用场景，避免典型误区。",
-            f"最后回顾要点，把{kp.name}纳入完整的学习闭环。建议完成测验巩固理解。",
-        ]
-    return {
+    llm = get_llm()
+    # mock 缓存 kind=video；真实模式按 provider 隔离，互不污染
+    kind = "video" if llm.is_mock else f"video@{llm.provider}"
+    cached = (
+        db.query(ResourceCache)
+        .filter(
+            ResourceCache.kp_id == kp_id,
+            ResourceCache.difficulty == difficulty,
+            ResourceCache.kind == kind,
+        )
+        .one_or_none()
+    )
+    if cached is not None:
+        return dict(cached.payload)
+
+    script = llm.generate_video_script(kp.id, kp.name, difficulty, kp.description or "")
+    scenes: list[dict[str, Any]] = []
+    narration: list[dict[str, Any]] = []
+    for i, s in enumerate(script["scenes"]):
+        frame = i * _SCENE_FRAMES
+        scenes.append(
+            {
+                "frame": frame,
+                "title": s["title"],
+                "points": list(s["points"]),
+                "narration": s["narration"],
+            }
+        )
+        narration.append({"frame": frame, "text": s["narration"]})
+
+    payload = {
         "videoUrl": None,  # 无服务端渲染产物 → 前端 Remotion Player + TTS
-        "narration": [
-            {"frame": frame, "text": text}
-            for frame, text in zip(_NARRATION_FRAMES, texts)
-        ],
+        "title": script["title"],
+        "scenes": scenes,
+        "narration": narration,  # 帧-旁白映射（向后兼容，= scenes[].{frame,narration}）
         "fps": _VIDEO_FPS,
         "width": _VIDEO_WIDTH,
         "height": _VIDEO_HEIGHT,
-        "durationInFrames": _VIDEO_DURATION_FRAMES,
+        "durationInFrames": len(scenes) * _SCENE_FRAMES,
     }
+    db.add(
+        ResourceCache(
+            kp_id=kp_id,
+            difficulty=difficulty,
+            kind=kind,
+            payload=payload,
+            hallucination_rate=0.0,
+        )
+    )
+    db.commit()
+    return payload
 
 
 def _retrieve_for_lecture(

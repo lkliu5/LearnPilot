@@ -384,7 +384,7 @@ def test_tutor_sse_deepseek_error_event(client, learner_headers, monkeypatch):
         llm_mod._client = None
 
 
-# ---- 8.3 Video：videoUrl:null + 5 段帧-旁白映射 --------------------------------
+# ---- 8.3 Video：videoUrl:null + 分镜脚本 scenes + 帧-旁白映射 -------------------
 
 def test_video_contract_aligned_with_lecture_video(client, learner_headers):
     res = client.post(
@@ -395,15 +395,27 @@ def test_video_contract_aligned_with_lecture_video(client, learner_headers):
     assert res.status_code == 200, res.text
     data = res.json()["data"]
     assert set(data.keys()) == {
-        "videoUrl", "narration", "fps", "width", "height", "durationInFrames"
+        "videoUrl", "title", "scenes", "narration",
+        "fps", "width", "height", "durationInFrames",
     }
     assert data["videoUrl"] is None  # 走前端 Remotion Player + TTS
+    assert data["title"] == "神经网络基础"
+    # 分镜脚本：3-5 个场景，每场景 title/points/narration；nn 为 5 场景
+    scenes = data["scenes"]
+    assert 3 <= len(scenes) <= 5
+    assert len(scenes) == 5
+    for i, s in enumerate(scenes):
+        assert set(s.keys()) == {"frame", "title", "points", "narration"}
+        assert s["frame"] == i * 180  # 场景 i 起始帧 = i × SCENE_FRAMES(180)
+        assert s["title"] and s["narration"]
+        assert s["points"] and all(p for p in s["points"])
+    # narration[] 帧-旁白映射与 scenes 对齐（向后兼容字段）
     narration = data["narration"]
-    assert len(narration) == 5
-    # 帧位与前端 LectureVideo 5 个 Sequence 场景对齐
-    assert [n["frame"] for n in narration] == [0, 90, 300, 540, 720]
+    assert [n["frame"] for n in narration] == [0, 180, 360, 540, 720]
     assert all(set(n.keys()) == {"frame", "text"} and n["text"] for n in narration)
-    # 视频参数与前端 Remotion 组件一致
+    # nn 旁白与前端 LectureVideo 原 NARRATION 逐字一致（不回归）
+    assert narration[0]["text"].startswith("欢迎学习神经网络基础")
+    # 视频参数与前端 Remotion 组件一致；总时长 = 场景数 × 180
     assert (data["fps"], data["width"], data["height"], data["durationInFrames"]) == (
         30, 1280, 720, 900,
     )
@@ -416,7 +428,11 @@ def test_video_other_kp_and_errors(client, learner_headers):
         json={"kpId": "transformer", "difficulty": "高级"},
     )
     data = res.json()["data"]
-    assert len(data["narration"]) == 5 and data["videoUrl"] is None
+    assert len(data["scenes"]) == 5 and data["videoUrl"] is None
+    # 画面随知识点动态生成：标题/旁白对应 Transformer，绝不是神经网络
+    assert "Transformer" in data["title"]
+    assert "神经网络" not in data["scenes"][0]["title"]
+    assert "Transformer" in data["narration"][0]["text"]
 
     res = client.post(
         "/api/v1/resource/video",

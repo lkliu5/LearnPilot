@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import {
   LectureVideo,
-  NARRATION,
+  DEFAULT_SCENES,
+  DEFAULT_TITLE,
+  SCENE_FRAMES,
   VIDEO_FPS,
   VIDEO_W,
   VIDEO_H,
-  VIDEO_DURATION,
+  type LectureScene,
 } from '../remotion/LectureVideo'
 import { USE_REAL_API } from '../services/api'
 import { getVideo, type VideoNarrationLine } from '../services/resource'
@@ -25,20 +27,32 @@ export default function VideoLecture() {
   const [narration, setNarration] = useState(true)
   const spokenRef = useRef<number>(-1)
 
-  /* B7-b 联调：旁白脚本改吃 8.3 POST /resource/video 的 narration（services 层已映射
-     frame→from）；mock 模式 / 请求失败保持本地 NARRATION，朗读与点击 seek 行为不变 */
-  const [script, setScript] = useState<VideoNarrationLine[]>(NARRATION)
-  const scriptRef = useRef(script)
-  scriptRef.current = script
+  /* B7-b 联调 + 动态分镜：分镜脚本（标题/要点/旁白）改吃 8.3 POST /resource/video，
+     画面与旁白随当前知识点动态生成；mock 模式 / 请求失败保持本地默认脚本（兜底占位），
+     朗读与点击 seek 行为不变 */
+  const [scenes, setScenes] = useState<LectureScene[]>(DEFAULT_SCENES)
+  const [title, setTitle] = useState<string>(DEFAULT_TITLE)
   useEffect(() => {
     if (!USE_REAL_API) return
-    // 难度固定「初级」：与视频画面内容（封面标注 难度：初级）一致
+    // 难度固定「初级」：与讲义默认档一致
     getVideo(getResourceKpId(), '初级')
       .then((d) => {
-        if (d.narration.length) setScript(d.narration)
+        if (d.scenes?.length) {
+          setScenes(d.scenes.map((s) => ({ title: s.title, points: s.points, narration: s.narration })))
+          setTitle(d.title || DEFAULT_TITLE)
+        }
       })
-      .catch((e) => console.error('[video] 加载旁白脚本失败，使用本地脚本', e))
+      .catch((e) => console.error('[video] 加载分镜脚本失败，使用本地默认脚本', e))
   }, [])
+
+  /* 旁白脚本（侧栏字幕 + TTS）由分镜场景派生：场景 i 起始帧 = i × SCENE_FRAMES */
+  const script = useMemo<VideoNarrationLine[]>(
+    () => scenes.map((s, i) => ({ from: i * SCENE_FRAMES, text: s.narration })),
+    [scenes]
+  )
+  const scriptRef = useRef(script)
+  scriptRef.current = script
+  const durationInFrames = scenes.length * SCENE_FRAMES
 
   const speak = useCallback((text: string) => {
     if (!('speechSynthesis' in window)) return
@@ -87,7 +101,8 @@ export default function VideoLecture() {
         <Player
           ref={playerRef}
           component={LectureVideo}
-          durationInFrames={VIDEO_DURATION}
+          inputProps={{ title, scenes }}
+          durationInFrames={durationInFrames}
           fps={VIDEO_FPS}
           compositionWidth={VIDEO_W}
           compositionHeight={VIDEO_H}

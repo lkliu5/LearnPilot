@@ -68,9 +68,21 @@ export interface VideoNarrationLine {
   text: string
 }
 
+/** 8.3 分镜场景：标题 + 要点文本 + 旁白（由后端按知识点动态生成，供通用模板渲染）。 */
+export interface VideoScene {
+  frame: number
+  title: string
+  points: string[]
+  narration: string
+}
+
 /** 8.3 视频讲解响应（videoUrl 为 null 时走前端 Remotion Player + TTS）。 */
 export interface VideoData {
   videoUrl: string | null
+  /** 视频标题（= 知识点名） */
+  title: string
+  /** 分镜脚本：3-5 个场景，画面标题/要点/旁白随知识点变化 */
+  scenes: VideoScene[]
   narration: VideoNarrationLine[]
   fps: number
   width: number
@@ -78,7 +90,7 @@ export interface VideoData {
   durationInFrames: number
 }
 
-/** 8.3 生成视频讲解：取帧-旁白同步映射（narration[].frame → from 在本层完成映射）。 */
+/** 8.3 生成视频讲解：取分镜脚本 + 帧-旁白同步映射（narration[].frame → from 在本层完成映射）。 */
 export async function getVideo(kpId: string, difficulty: string): Promise<VideoData> {
   const raw = await apiPost<Omit<VideoData, 'narration'> & { narration: { frame: number; text: string }[] }>(
     '/resource/video',

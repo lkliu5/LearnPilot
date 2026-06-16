@@ -410,10 +410,22 @@ def test_17_lecture(client, learner):
 def test_18_video(client, learner):
     data = _data(client.post(f"{API}/resource/video", headers=learner,
                              json={"kpId": "nn", "difficulty": "初级"}))
-    _exact(data, {"videoUrl", "narration", "fps", "width", "height",
-                  "durationInFrames"})
+    _exact(data, {"videoUrl", "title", "scenes", "narration", "fps", "width",
+                  "height", "durationInFrames"})
     assert data["videoUrl"] is None or isinstance(data["videoUrl"], str)
+    assert isinstance(data["title"], str) and data["title"]
+    # 分镜脚本：3-5 个场景，每场景 title/points/narration 随知识点动态生成
+    assert isinstance(data["scenes"], list) and 3 <= len(data["scenes"]) <= 5
+    for scene in data["scenes"]:
+        _exact(scene, {"frame", "title", "points", "narration"})
+        assert isinstance(scene["frame"], int)
+        assert isinstance(scene["title"], str) and scene["title"]
+        assert isinstance(scene["points"], list) and scene["points"]
+        assert all(isinstance(p, str) and p for p in scene["points"])
+        assert isinstance(scene["narration"], str) and scene["narration"]
+    # narration[] 帧-旁白映射与 scenes 对齐（向后兼容字段）
     assert isinstance(data["narration"], list) and data["narration"]
+    assert len(data["narration"]) == len(data["scenes"])
     for item in data["narration"]:
         _exact(item, {"frame", "text"})
         assert isinstance(item["frame"], int)
