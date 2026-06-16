@@ -24,7 +24,8 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
-from app.models.entities import Mastery, User
+from app.models.entities import Mastery, StudentPortrait, User
+from app.services import student_portrait as portrait_service
 from app.services.knowledge_graph import derive_node
 
 
@@ -358,52 +359,119 @@ def test_external_unknown_kp_404(client, learner_headers):
     assert res.status_code == 404 and res.json()["code"] == 1004
 
 
-# ---- Dashboard（接口文档 12.1）：明细接口一致性 ---------------------------------
+# ---- Dashboard（接口文档 12.1）：真实画像 / Mastery 派生（C1-c 真实化） ---------
 
-def test_dashboard_consistent_with_details_and_mastery(
-    client, learner_headers, clean_mastery
-):
-    """验收标准 1：mastery 置 passed → graph 节点 category=0 且 dashboard
-    overall_score / strong_topics 联动，radar/targetSummary 与明细接口逐字一致。"""
-    before = client.get(
-        "/api/v1/dashboard/overview", headers=learner_headers
+# 一份确定性 6 维异质画像（与前端 synthesizeOverview 口径对拍用的固定输入）
+_PORTRAIT_DIMS = [
+    {"key": "knowledge_base", "label": "知识基础", "value": "扎实", "score": 80,
+     "confidence": 0.7, "source": "dialogue"},
+    {"key": "prior_experience", "label": "先验经验", "value": "有项目经验",
+     "confidence": 0.6, "source": "dialogue"},
+    {"key": "learning_goal", "label": "学习目标", "value": "转岗",
+     "confidence": 0.9, "source": "dialogue"},
+    {"key": "cognitive_style", "label": "认知风格", "value": "实践型",
+     "confidence": 0.5, "source": "dialogue"},
+    {"key": "learning_pace", "label": "学习节奏", "value": "适中",
+     "confidence": 0.6, "source": "dialogue"},
+    {"key": "error_preference", "label": "易错点偏好", "value": "概念混淆",
+     "confidence": 0.5, "source": "inferred"},
+]
+
+
+@pytest.fixture()
+def clean_portrait(db):
+    """测试前后清空 learner_001 的 StudentPortrait（保存原状并复原，不污染 dev 库）。"""
+    user = db.query(User).filter(User.username == "learner_001").one()
+    original = db.get(StudentPortrait, user.id)
+    saved = (list(original.dimensions or []), original.version) if original else None
+
+    def _del() -> None:
+        row = db.get(StudentPortrait, user.id)
+        if row is not None:
+            db.delete(row)
+            db.commit()
+
+    _del()
+    yield user
+    _del()
+    if saved is not None:
+        db.add(StudentPortrait(user_id=user.id, dimensions=saved[0], version=saved[1]))
+        db.commit()
+
+
+def test_dashboard_empty_for_new_undiagnosed_user(client, clean_mastery, clean_portrait):
+    """验收 1：无画像、无 Mastery 的新用户 → 雷达/优势/盲区为空、综合分 0、
+    覆盖率/已学资源为 0（结构不变，绝不臆造）。"""
+    headers = _login(client, "learner_001", "123456")
+    data = client.get(
+        "/api/v1/dashboard/overview", headers=headers
     ).json()["data"]
     for key in (
         "overall_level", "overall_score", "knowledge_graph_coverage",
         "learned_resources", "strong_topics", "weak_topics", "radar",
         "comparison", "targetSummary",
     ):
-        assert key in before, f"缺字段 {key}"
-    # 与 4.4 雷达明细严格一致
-    portrait = client.get(
-        "/api/v1/profile/ability-portrait", headers=learner_headers
+        assert key in data, f"缺字段 {key}"
+    assert data["radar"] == {"dimensions": [], "values": []}
+    assert data["strong_topics"] == [] and data["weak_topics"] == []
+    assert data["overall_score"] == 0.0 and data["overall_level"] == "初学"
+    assert data["knowledge_graph_coverage"] == 0.0
+    assert data["learned_resources"] == 0
+    assert data["comparison"]["betterThanPct"] == 0
+
+
+def test_dashboard_derived_from_portrait_and_mastery(
+    client, db, clean_mastery, clean_portrait
+):
+    """验收 2/3：overview 雷达/优势/盲区/综合分来自真实 StudentPortrait（与前端
+    synthesizeOverview 逐位一致），覆盖率/已学资源来自真实 Mastery；通过知识点
+    联动覆盖率/已学资源，但**不改变**画像派生的雷达/强弱项/综合分（两者解耦）。"""
+    user = clean_portrait
+    portrait_service.apply_updates(db, user.id, _PORTRAIT_DIMS)
+    headers = _login(client, "learner_001", "123456")
+
+    before = client.get(
+        "/api/v1/dashboard/overview", headers=headers
     ).json()["data"]
-    assert before["radar"] == portrait
+
+    # 雷达：按前端 CANONICAL 次序，可量化取 score、其余取 confidence×100
+    assert before["radar"] == {
+        "dimensions": ["知识基础", "认知风格", "易错点偏好", "学习目标", "先验经验", "学习节奏"],
+        "values": [80, 50, 50, 90, 60, 60],
+    }
+    # 优势：非 inferred 降序前 3
+    assert before["strong_topics"] == [
+        {"name": "学习目标", "mastery": 90},
+        {"name": "知识基础", "mastery": 80},
+        {"name": "先验经验", "mastery": 60},
+    ]
+    # 盲区：inferred 或 <60，升序前 3（认知风格 50 / 易错点偏好 50-inferred）
+    assert before["weak_topics"] == [
+        {"name": "认知风格", "mastery": 50},
+        {"name": "易错点偏好", "mastery": 50},
+    ]
+    # 综合分 = (80+50+50+90+60+60)/6 = 65.0 → 中级
+    assert before["overall_score"] == 65.0 and before["overall_level"] == "中级"
+    # 覆盖率 / 已学资源：尚无通过的核心知识点 → 0
+    assert before["knowledge_graph_coverage"] == 0.0
+    assert before["learned_resources"] == 0
     # targetSummary 与 7.4 Journey 严格一致
-    journey = client.get("/api/v1/journey", headers=learner_headers).json()["data"]
+    journey = client.get("/api/v1/journey", headers=headers).json()["data"]
     assert before["targetSummary"] == {
         "hasDiagnosed": journey["hasDiagnosed"],
         "targetJobName": journey["targetJobName"],
         "matchPct": journey["matchPct"],
     }
-    # 基线：nn 未通过 → 不在满分强项里
-    assert all(t["mastery"] < 100 for t in before["strong_topics"])
 
-    # nn 置 passed → 三方联动
-    client.post("/api/v1/mastery/nn/pass", headers=learner_headers)
+    # 通过一个核心知识点 → 覆盖率 / 已学资源联动增长，画像派生项不变（解耦）
+    client.post("/api/v1/mastery/nn/pass", headers=headers)
     after = client.get(
-        "/api/v1/dashboard/overview", headers=learner_headers
+        "/api/v1/dashboard/overview", headers=headers
     ).json()["data"]
-    graph_nodes = {
-        n["id"]: n
-        for n in client.get("/api/v1/knowledge-graph", headers=learner_headers)
-        .json()["data"]["nodes"]
-    }
-    assert graph_nodes["nn"]["category"] == 0  # 图谱联动
-    assert after["overall_score"] > before["overall_score"]  # 评分联动
-    assert {"name": "神经网络基础", "mastery": 100} in after["strong_topics"]  # 强项联动
-    # 强弱项口径与图谱节点推导值一致
-    assert after["strong_topics"][0]["mastery"] == max(
-        n["value"] for n in graph_nodes.values()
-    )
-    assert after["knowledge_graph_coverage"] > before["knowledge_graph_coverage"]
+    assert after["learned_resources"] == 1
+    assert after["knowledge_graph_coverage"] == round(1 / 6, 2)  # 0.17
+    # 雷达 / 强弱项 / 综合分来自画像，不随 Mastery 变化
+    assert after["radar"] == before["radar"]
+    assert after["strong_topics"] == before["strong_topics"]
+    assert after["weak_topics"] == before["weak_topics"]
+    assert after["overall_score"] == before["overall_score"]

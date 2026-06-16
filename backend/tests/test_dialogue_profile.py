@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from app.core import llm as llm_mod
 from app.core import llm_deepseek
 from app.core.config import settings
+from app.agents import dialogue_agent
 from app.main import app
 from app.services import profile_dialogue as dialogue_service
 
@@ -135,16 +136,19 @@ def test_dialogue_json_contract_and_session_id(client):
 
 def test_multi_turn_accumulation_and_completion(client):
     headers = _fresh_headers(client)
+    # 6 维逐轮采集；diagnosisComplete 须到第 6 维（含 inferred 的 error_preference）
+    # 到位才翻 True，与赛题「≥6 维」及前端「满 6 维」门控一致。
     turns = [
         ("我是计算机专业本科毕业", "knowledge_base"),
         ("平时做过一些Python项目", "prior_experience"),
         ("想转行进入大模型应用方向", "learning_goal"),
         ("我比较喜欢动手实践、做中学", "cognitive_style"),
         ("时间比较紧，想尽快突破", "learning_pace"),
+        ("学的时候概念总是容易混淆", "error_preference"),
     ]
     session_id = None
     seen_keys: set[str] = set()
-    last_complete = False
+    completions: list[bool] = []
     for message, expect_key in turns:
         data = _dialogue(client, headers, message, session_id=session_id)
         session_id = data["sessionId"]  # 复用同一会话
@@ -157,19 +161,59 @@ def test_multi_turn_accumulation_and_completion(client):
         assert seen_keys <= keys_now, "画像维度不应回退（随学随新只增/更新）"
         assert expect_key in keys_now
         seen_keys = keys_now
-        last_complete = data["diagnosisComplete"]
-    # 采集到 ≥5 维 → 诊断收敛完成
+        completions.append(data["diagnosisComplete"])
+    # 采集到 ≥6 维 → 诊断收敛完成
     assert seen_keys >= {
         "knowledge_base",
         "prior_experience",
         "learning_goal",
         "cognitive_style",
         "learning_pace",
+        "error_preference",
     }
-    assert last_complete is True
+    # 第 6 维到位前（前 5 轮）均未完成；第 6 维到位才翻 True（阈值 ≥6）
+    assert completions[:5] == [False] * 5
+    assert completions[5] is True
     # 末轮画像每维契约自洽
     for dim in _get_portrait(client, headers)["dimensions"]:
         _assert_dim_contract(dim)
+
+
+def test_completes_only_at_six_dims_even_when_focus_exhausted():
+    """阈值回归：仅采集 5 维时不收尾——即便缺口维度已问过（focus 耗尽），也须继续
+    追问该缺口维度，绝不「满 5 维即完成」（与赛题 ≥6 维、前端「满 6 维」门控一致）。"""
+    known = [
+        "knowledge_base", "prior_experience", "learning_goal",
+        "cognitive_style", "learning_pace",
+    ]  # 已采集 5 维，缺 error_preference
+    asked = [
+        "prior_experience", "learning_goal", "cognitive_style",
+        "learning_pace", "error_preference",  # error_preference 已问过但未采集
+    ]
+    res = dialogue_agent.respond(
+        context=None,
+        history=[{"role": "user", "content": "x"}],
+        message="嗯嗯，了解",  # 无新维度信号（mock 抽取为空）
+        known_keys=known,
+        asked_keys=asked,
+        first_turn=False,
+    )
+    assert res["diagnosisComplete"] is False  # 仅 5 维 → 未达 ≥6，不收尾
+    assert res["focus"] == "error_preference"  # 回头重问未采集维度，驱动收敛到 6
+    assert res["suggestions"]  # 仍为追问态（非收尾，给出快捷建议）
+
+    # 补齐第 6 维（error_preference）→ 立即收尾
+    done = dialogue_agent.respond(
+        context=None,
+        history=[{"role": "user", "content": "x"}],
+        message="概念总是容易混淆",  # mock 抽取 error_preference
+        known_keys=known,
+        asked_keys=asked,
+        first_turn=False,
+    )
+    assert "error_preference" in {u["key"] for u in done["updates"]}
+    assert done["diagnosisComplete"] is True  # 第 6 维到位 → 完成
+    assert done["focus"] is None
 
 
 def test_new_session_runs_dialogue_even_with_completed_portrait(client):
@@ -179,13 +223,14 @@ def test_new_session_runs_dialogue_even_with_completed_portrait(client):
     ≥ 阈值的用户一开口即被判完成，助手永远只回固定收尾语。
     """
     headers = _fresh_headers(client)
-    # 会话 A：先把画像采集到收敛完成（≥5 维）
+    # 会话 A：先把画像采集到收敛完成（≥6 维）
     turns = [
         "我是计算机专业本科毕业",
         "平时做过一些Python项目",
         "想转行进入大模型应用方向",
         "我比较喜欢动手实践、做中学",
         "时间比较紧，想尽快突破",
+        "学的时候概念总是容易混淆",
     ]
     sid = None
     last = None
@@ -194,7 +239,7 @@ def test_new_session_runs_dialogue_even_with_completed_portrait(client):
         sid = last["sessionId"]
     assert last["diagnosisComplete"] is True  # 会话 A 已收敛
     portrait_keys = {d["key"] for d in _get_portrait(client, headers)["dimensions"]}
-    assert len(portrait_keys) >= 5  # 库内画像已完整
+    assert len(portrait_keys) >= 6  # 库内画像已完整
 
     # 会话 B（全新 sessionId）：一句简单问候不应被直接判完成，应继续追问
     fresh = _dialogue(client, headers, "你好")  # 无 sessionId → 新会话

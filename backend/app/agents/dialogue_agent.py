@@ -37,9 +37,10 @@ _SUGGESTIONS: dict[str, list[str]] = {
 }
 
 _PROBE_ORDER: list[str] = [k for k, _ in PORTRAIT_DIMENSIONS]
-# 收敛阈值：采集到至少 (维度数-1) 维即可结束诊断——error_preference 多为 inferred，
-# 对话中常无明确信号，允许其缺省，避免诊断陷入死循环（17.1「足够维度可结束」）。
-_COMPLETE_THRESHOLD: int = len(_PROBE_ORDER) - 1
+# 收敛阈值：采集到 ≥6 维（赛题「≥6 维异质画像」口径，与前端「满 6 维」门控一致）。
+# 维度计数含 inferred 推断维度（error_preference 多为 inferred）——既满足 ≥6 维，
+# 又借「探查顺序耗尽（focus 为 None）」兜底，避免某维难采集时诊断永不收敛（17.1）。
+_COMPLETE_THRESHOLD: int = len(_PROBE_ORDER)
 
 _CLOSING_REPLY = (
     "画像维度已基本采集完整，我已据此生成你的动态学习画像，"
@@ -48,14 +49,18 @@ _CLOSING_REPLY = (
 
 
 def _next_focus(filled: set[str], asked: set[str]) -> str | None:
-    """按探查顺序取下一个「既未采集、又未问过」的维度；全部覆盖 → None。
+    """选下一个要追问的维度。
 
-    以 asked 推进保证对话不卡壳：真实模式下 LLM 偶把某维度归到别处导致该维度
-    始终未采集，若只看 filled 会反复追问同一维度；叠加 asked 后每维至多问一次，
-    逐步走完 6 维。
+    优先按探查顺序取「既未采集、又未问过」的维度（推进对话、不重复追问）；若所有
+    维度都已问过但仍有缺口，回头重问首个「未采集」维度——保证向 ≥6 维收敛，不因某
+    维已问过即放弃采集（真实模式下 LLM 偶把某维归到别处，需再问一次才补齐）；全部
+    维度均已采集 → None（此时调用方已按 ≥阈值判定收尾）。
     """
     for key in _PROBE_ORDER:
         if key not in filled and key not in asked:
+            return key
+    for key in _PROBE_ORDER:  # 均已问过仍有缺口 → 重问首个未采集维度，驱动 ≥6 维收敛
+        if key not in filled:
             return key
     return None
 
@@ -100,9 +105,11 @@ def respond(
     )
     # 采集进度 = 本轮前已有维度 ∪ 本轮新抽取维度
     filled = set(known_keys) | {u["key"] for u in updates}
-    focus = _next_focus(filled, set(asked_keys))
-    # 收尾：每维都已采集或已问过（focus 耗尽），或已采集到足够维度
-    done = focus is None or len(filled) >= _COMPLETE_THRESHOLD
+    # 收尾判定：画像维度数 ≥ 阈值（≥6，含 inferred 计数）才完成——与赛题「≥6 维异质
+    # 画像」及前端「满 6 维」门控严格一致；未达 6 维则继续追问缺口维度，**不因 focus
+    # 耗尽（某维已问过但未采集）提前收尾**，避免「满 5 维即收敛」的口径漂移。
+    done = len(filled) >= _COMPLETE_THRESHOLD
+    focus = None if done else _next_focus(filled, set(asked_keys))
     if done:
         reply, suggestions = _CLOSING_REPLY, []
     else:
@@ -113,5 +120,5 @@ def respond(
         "updates": updates,
         "suggestions": suggestions,
         "diagnosisComplete": done,
-        "focus": None if done else focus,
+        "focus": focus,
     }

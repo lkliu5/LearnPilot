@@ -571,7 +571,13 @@ def test_29_dashboard_overview(client, learner):
     for topic in data["strong_topics"] + data["weak_topics"]:
         _exact(topic, {"name", "mastery"})
     _exact(data["radar"], {"dimensions", "values"})
-    assert data["radar"]["dimensions"] == DIMENSIONS
+    # 雷达由该用户真实 StudentPortrait 异质维度派生（C1-c 真实化）——轴数与取值随画像而定，
+    # 不再恒等于固定 6 知识点维；此处只校验结构：维度名 / 轴值成对且类型自洽。
+    assert isinstance(data["radar"]["dimensions"], list)
+    assert isinstance(data["radar"]["values"], list)
+    assert len(data["radar"]["dimensions"]) == len(data["radar"]["values"])
+    assert all(isinstance(name, str) for name in data["radar"]["dimensions"])
+    assert all(isinstance(v, (int, float)) for v in data["radar"]["values"])
     _exact(data["comparison"], {"betterThanPct"})
     _exact(data["targetSummary"], {"hasDiagnosed", "targetJobName", "matchPct"})
 
