@@ -34,11 +34,12 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
   })
 
   /* 弹窗按钮 → 资源页：经 resourceNav 通道携带该课程对应 kpId（Lesson.sequence ↔ lessonSeq 映射）。
-     开始学习落默认「定制讲义」Tab；查看资源落「资源推荐」Tab，各司其职 */
-  const openResource = (topic: string, entryTab?: string) => {
+     「开始学习」进有序学习流（费曼+康奈尔，从当前未完成步接着学）；
+     「查看资源」进 8-tab 资源中枢自由浏览，落「资源推荐」Tab，各司其职 */
+  const openResource = (topic: string, mode: 'flow' | 'browse', entryTab?: string) => {
     const lesson = pathData.find((p) => p.topic === topic)
     const kp = lesson ? kpByLessonSeq(lesson.sequence) : undefined
-    setResourceNav(kp?.id ?? '', entryTab)
+    setResourceNav(kp?.id ?? '', mode, entryTab)
     onNavigate?.('learning-resource')
   }
 
@@ -278,13 +279,13 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
               <div className="topic-modal__actions">
                 <button
                   className="topic-modal__btn topic-modal__btn--primary"
-                  onClick={() => openResource(selectedTopic)}
+                  onClick={() => openResource(selectedTopic, 'flow')}
                 >
                   开始学习
                 </button>
                 <button
                   className="topic-modal__btn topic-modal__btn--secondary"
-                  onClick={() => openResource(selectedTopic, 'external')}
+                  onClick={() => openResource(selectedTopic, 'browse', 'external')}
                 >
                   查看资源
                 </button>

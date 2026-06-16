@@ -358,14 +358,14 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
   /** B10：完成后跳转学习资源页查看回写产物（设目标 kp 后导航）。 */
   const goToResource = () => {
     if (!completed) return
-    setResourceNav(completed.kpId)
+    setResourceNav(completed.kpId, 'browse')
     onNavigate?.('learning-resource')
   }
 
   /** 完成弹窗：跳转资源页对应 Tab（缺省落讲义）。 */
   const goToResourceTab = (tab?: string) => {
     const kpId = resultModal?.kpId ?? targetKp
-    setResourceNav(kpId, tab)
+    setResourceNav(kpId, 'browse', tab)
     setResultModal(null)
     onNavigate?.('learning-resource')
   }

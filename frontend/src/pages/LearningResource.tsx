@@ -5,13 +5,15 @@ import QuizRenderer, { type QuizQuestion } from '../components/QuizRenderer'
 import SourceTrace, { type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
+import LearningFlow from '../components/LearningFlow'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, submitQuiz, type LectureData } from '../services/resource'
+import type { ReviewRef } from '../services/learningFlow'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
-import { consumeResourceEntryTab, getResourceKpId } from '../services/resourceNav'
+import { consumeResourceEntryTab, getResourceKpId, getResourceMode, type ResourceMode } from '../services/resourceNav'
 import { setWorkflowReplay } from '../services/workflowNav'
 import type { PageType } from '../App'
 import './LearningResource.css'
@@ -284,11 +286,28 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   /* 当前知识点：联调从 resourceNav 路由传参通道取（页面随导航重挂载，挂载时读取即可）；
      mock 模式恒为 CURRENT_KP_ID——本地演示内容只有 nn 一套，避免「标题 CNN、内容 nn」错配 */
   const kpId = USE_REAL_API ? getResourceKpId() : CURRENT_KP_ID
+  /* 进入模式：「开始学习」→ flow（费曼+康奈尔有序流）；「查看资源」→ browse（8-tab 中枢）*/
+  const [mode, setMode] = useState<ResourceMode>(() => getResourceMode())
   /* 落点 Tab：路径页「查看资源」落资源推荐，「开始学习」落默认讲义（一次性参数，读后即清）*/
   const [tab, setTab] = useState<Tab>(() => {
     const t = consumeResourceEntryTab()
     return isTab(t) ? t : 'lecture'
   })
+
+  /* 费曼缺口「回看」：切到资源中枢自由浏览，落对应资源 Tab */
+  const REVIEW_KIND_TO_TAB: Record<string, Tab> = {
+    lecture: 'lecture',
+    video: 'video',
+    diagram: 'diagram',
+    mindmap: 'mindmap',
+    quiz: 'quiz',
+    code: 'code',
+    external: 'external',
+  }
+  const handleReview = (ref: ReviewRef) => {
+    setMode('browse')
+    setTab(REVIEW_KIND_TO_TAB[ref.kind] ?? 'lecture')
+  }
   const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
   const [regenerating, setRegenerating] = useState(false)
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
@@ -490,6 +509,45 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         </div>
       )}
 
+      {/* 模式切换：有序学习流（费曼+康奈尔） ↔ 资源中枢（8-tab 自由浏览） */}
+      <div className="flow-mode">
+        <button
+          type="button"
+          className={`flow-mode__btn ${mode === 'flow' ? 'flow-mode__btn--active' : ''}`}
+          onClick={() => setMode('flow')}
+        >
+          🧭 有序学习
+        </button>
+        <button
+          type="button"
+          className={`flow-mode__btn ${mode === 'browse' ? 'flow-mode__btn--active' : ''}`}
+          onClick={() => setMode('browse')}
+        >
+          🗂 资源中枢
+        </button>
+      </div>
+
+      {mode === 'flow' && (
+        <RevealGroup>
+          <RevealItem className="resource-card">
+            <LearningFlow
+              kpId={kpId}
+              kpName={kpName}
+              level={level}
+              lectureMarkdown={activeLecture}
+              diagramChart={USE_REAL_API ? diagramChart : mermaidChart}
+              questions={questions}
+              kpStatus={kpStatus}
+              onQuizResult={handleQuizResult}
+              onGoCheck={() => goCheck(kpId)}
+              onReview={handleReview}
+              onNavigate={onNavigate}
+            />
+          </RevealItem>
+        </RevealGroup>
+      )}
+
+      {mode === 'browse' && (
       <RevealGroup>
       {/* Tab 切换 */}
       <RevealItem className="resource-tabs">
@@ -680,6 +738,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
       </RevealItem>
       </RevealGroup>
+      )}
 
       {/* B10：重新生成确认弹层（约需 20 秒提示） */}
       <AnimatePresence>

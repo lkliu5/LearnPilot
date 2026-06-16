@@ -11,18 +11,32 @@
  */
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 
+/** 资源页进入模式：flow=费曼+康奈尔有序学习流；browse=8-tab 资源中枢自由浏览。 */
+export type ResourceMode = 'flow' | 'browse'
+
 let kpId: string = CURRENT_KP_ID
 let entryTab: string | null = null
+let entryMode: ResourceMode = 'flow'
 
-/** 导航去资源页前调用：指定目标知识点与（可选）落点 Tab。未知 kpId 回退默认。 */
-export function setResourceNav(nextKpId: string, nextEntryTab?: string): void {
+/**
+ * 导航去资源页前调用：指定目标知识点 + 进入模式 +（可选）落点 Tab。未知 kpId 回退默认。
+ * - 「开始学习」→ mode='flow'（有序流，从当前未完成步接着学）
+ * - 「查看资源」→ mode='browse'（自由浏览 8-tab 中枢，可带落点 Tab）
+ */
+export function setResourceNav(nextKpId: string, mode: ResourceMode = 'flow', nextEntryTab?: string): void {
   kpId = kpById(nextKpId) ? nextKpId : CURRENT_KP_ID
+  entryMode = mode
   entryTab = nextEntryTab ?? null
 }
 
 /** 资源页当前知识点 id（粘性）。 */
 export function getResourceKpId(): string {
   return kpId
+}
+
+/** 资源页进入模式（粘性；侧边栏直达时沿用上次值，默认 flow）。 */
+export function getResourceMode(): ResourceMode {
+  return entryMode
 }
 
 /** 资源页落点 Tab（一次性：读取后清空）。
