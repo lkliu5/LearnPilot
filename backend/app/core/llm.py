@@ -332,6 +332,82 @@ def _strip_md_fence(text: str) -> str:
     return t
 
 
+def _clean_mermaid(raw: str) -> str:
+    """Mermaid 知识图解契约清洗（接口文档 8.5）：剥围栏、校验首行为 flowchart/graph。
+
+    非法输出（无法解析为合法 Mermaid 流程图）→ 抛 LLMGenerationError，由调用方回落
+    确定性主题模板，保证图解始终可渲染（演示兜底，不向路由抛错）。
+    """
+    text = _strip_md_fence(raw or "").strip()
+    if not text:
+        raise LLMGenerationError("知识图解输出为空")
+    head = text.splitlines()[0].strip().lower()
+    if not (head.startswith("flowchart") or head.startswith("graph")):
+        raise LLMGenerationError("知识图解输出非合法 Mermaid flowchart/graph")
+    return text
+
+
+# Mermaid 知识图解模板（接口文档 8.5；mock 与 deepseek 兜底共用）。
+# nn 与前端 LearningResource.mermaidChart 逐字一致（不回归），其余知识点收录精写模板。
+_DIAGRAM_TEMPLATES: dict[str, str] = {
+    "nn": (
+        "flowchart LR\n"
+        '  X["输入 x"] --> S(["加权求和<br/>Σ w·x"])\n'
+        '  W["权重 w"] --> S\n'
+        '  S --> B(["加偏置<br/>+ b"])\n'
+        '  B --> A{{"激活函数<br/>ReLU"}}\n'
+        '  A --> O["输出 a"]\n'
+        "  O -. 反向传播更新 .-> W\n"
+    ),
+    "ml": (
+        "flowchart LR\n"
+        '  D["数据集"] --> F(["特征工程"])\n'
+        '  F --> M["模型"]\n'
+        '  M --> L(["损失函数"])\n'
+        '  L --> O{{"优化器"}}\n'
+        "  O -. 参数更新 .-> M\n"
+        '  M --> E["评估<br/>泛化能力"]\n'
+    ),
+    "dl": (
+        "flowchart LR\n"
+        '  X["输入"] --> FW(["前向传播"])\n'
+        '  FW --> L["损失 L"]\n'
+        '  L --> BP(["反向传播<br/>链式法则"])\n'
+        '  BP --> G["梯度 ∂L/∂θ"]\n'
+        '  G --> U{{"梯度下降<br/>θ ← θ − η·g"}}\n'
+        "  U -. 迭代更新 .-> FW\n"
+    ),
+    "cnn": (
+        "flowchart LR\n"
+        '  I["输入图像"] --> C1(["卷积层"])\n'
+        '  C1 --> A1{{"ReLU"}}\n'
+        '  A1 --> P1(["池化层"])\n'
+        '  P1 --> C2(["卷积层 ×N"])\n'
+        '  C2 --> FC["全连接层"]\n'
+        '  FC --> O["分类输出"]\n'
+    ),
+    "transformer": (
+        "flowchart LR\n"
+        '  E["输入嵌入"] --> PE(["+ 位置编码"])\n'
+        '  PE --> MHA(["多头自注意力"])\n'
+        '  MHA --> AN1{{"Add & Norm"}}\n'
+        '  AN1 --> FFN(["前馈网络"])\n'
+        '  FFN --> AN2{{"Add & Norm"}}\n'
+        '  AN2 --> O["输出表示"]\n'
+    ),
+    "finetune": (
+        "flowchart LR\n"
+        '  PT["预训练大模型"] --> FT{{"微调策略"}}\n'
+        '  FT --> FP(["全参微调"])\n'
+        '  FT --> LR(["LoRA<br/>低秩增量"])\n'
+        '  FP --> SFT["指令微调 SFT"]\n'
+        "  LR --> SFT\n"
+        '  SFT --> AL(["对齐<br/>RLHF / DPO"])\n'
+        '  AL --> D["部署应用"]\n'
+    ),
+}
+
+
 _QUESTION_TYPES = ("single", "multiple", "boolean")
 
 
@@ -841,6 +917,55 @@ class LLMClient:
         scenes = scenes[:5]  # 截断到 5 个场景（契约 3-5）
         title = str(data.get("title") or "").strip() or kp_name
         return {"title": title, "scenes": scenes}
+
+    # ---- Mermaid 知识图解（接口文档 8.5，与讲义/视频同口径经 LLMClient 生成） ----
+    def generate_diagram(
+        self, kp_id: str, kp_name: str, description: str = ""
+    ) -> dict[str, Any]:
+        """生成 Mermaid 知识图解（接口文档 8.5）。返回 {mermaid}。
+
+        - mock：确定性主题流程图——已收录知识点用精写模板（nn 与前端逐字一致），
+          未收录知识点按主题参数化生成，恒以 `flowchart` 开头、紧扣 kpName；
+        - deepseek：真实生成 mermaid + 契约清洗（首行须 flowchart/graph）；解析失败
+          或上游异常时**回落确定性主题模板**，保证图解始终可渲染（不向路由抛 2001）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return {"mermaid": self._mock_diagram(kp_id, kp_name, description)}
+        try:
+            return {"mermaid": self._deepseek_diagram(kp_name, description)}
+        except LLMGenerationError as exc:
+            logger.warning("知识图解真实生成失败，回落主题占位图：%s", exc)
+            return {"mermaid": self._mock_diagram(kp_id, kp_name, description)}
+
+    @staticmethod
+    def _mock_diagram(kp_id: str, kp_name: str, description: str) -> str:
+        """确定性主题知识图解（mock / deepseek 兜底共用）。"""
+        tpl = _DIAGRAM_TEMPLATES.get(kp_id)
+        if tpl:
+            return tpl
+        desc = (description or "").strip()
+        core = desc[:14] if desc else f"{kp_name}核心"
+        return (
+            "flowchart LR\n"
+            f'  A["输入 / 前置"] --> B(["{kp_name}<br/>{core}"])\n'
+            '  B --> C{{"关键步骤"}}\n'
+            '  C --> O["输出 / 应用"]\n'
+            "  O -. 迭代优化 .-> B\n"
+        )
+
+    def _deepseek_diagram(self, kp_name: str, description: str) -> str:
+        """真实知识图解生成 + 契约清洗（接口文档 8.5）。"""
+        system = (
+            "你是知识图解专家。根据给定知识点生成一张用于教学的 Mermaid 流程图，"
+            "只输出 Mermaid 源码本身，不要任何解释文字、不要 ``` 围栏。要求："
+            "第一行必须是 `flowchart LR`（或 `flowchart TD`）；6-10 个节点，"
+            "体现该知识点「输入 → 核心步骤 → 输出」的工作机制；节点文字简短"
+            "（不超过 12 字）且紧扣该主题，禁止跑题到其它领域；只输出 Mermaid 源码。"
+        )
+        prompt = f"知识点：{kp_name}\n知识点说明：{description or kp_name}"
+        raw = llm_deepseek.chat(prompt, system=system)
+        return _clean_mermaid(raw)
 
     # ---- 错题强化（接口文档 9.2，B6） --------------------------------------
     def generate_reinforcement(

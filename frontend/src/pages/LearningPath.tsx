@@ -42,6 +42,18 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
     onNavigate?.('learning-resource')
   }
 
+  /* 当前应学节点：按 sequence 顺序取第一个「未通过测试」的知识点（全部通过则取最后一节）。
+     「去学习资源」据此跳转，不再写死第一节——学完一节标已掌握后自动跟进度推进（issue#4）。*/
+  const currentKp = (() => {
+    const ordered = [...lessons].sort((a, b) => a.sequence - b.sequence)
+    for (const l of ordered) {
+      const kp = kpByLessonSeq(l.sequence)
+      if (kp && masteryStatus[kp.id] !== 'passed') return kp
+    }
+    const last = ordered[ordered.length - 1]
+    return last ? kpByLessonSeq(last.sequence) : undefined
+  })()
+
   const completedCount = pathData.filter(p => p.status === 'completed').length
   const inProgressCount = pathData.filter(p => p.status === 'in_progress').length
   const overallProgress = Math.round(
@@ -221,13 +233,16 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
       <div className="flow-next">
         <div className="flow-next__text">
           <span className="flow-next__step">下一步 · ③ 学习资源</span>
-          <span className="flow-next__desc">路径已规划好，进入第一节去获取 AI 讲义与练习</span>
+          <span className="flow-next__desc">
+            {currentKp ? `进入「${currentKp.name}」获取 AI 讲义与练习` : '进入当前进度节点获取 AI 讲义与练习'}
+          </span>
         </div>
         <button
           className="flow-next__btn"
           type="button"
           onClick={() => {
             generatePath()
+            setResourceNav(currentKp?.id ?? '')
             onNavigate?.('learning-resource')
           }}
         >

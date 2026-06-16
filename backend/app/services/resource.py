@@ -210,65 +210,6 @@ _MINDMAPS: dict[str, str] = {
     ),
 }
 
-_DIAGRAMS: dict[str, str] = {
-    # nn 与前端 mermaidChart 逐字一致（神经元前向 / 反向流程）
-    "nn": (
-        "flowchart LR\n"
-        '  X["输入 x"] --> S(["加权求和<br/>Σ w·x"])\n'
-        '  W["权重 w"] --> S\n'
-        '  S --> B(["加偏置<br/>+ b"])\n'
-        '  B --> A{{"激活函数<br/>ReLU"}}\n'
-        '  A --> O["输出 a"]\n'
-        "  O -. 反向传播更新 .-> W\n"
-    ),
-    "ml": (
-        "flowchart LR\n"
-        '  D["数据集"] --> F(["特征工程"])\n'
-        '  F --> M["模型"]\n'
-        '  M --> L(["损失函数"])\n'
-        '  L --> O{{"优化器"}}\n'
-        "  O -. 参数更新 .-> M\n"
-        '  M --> E["评估<br/>泛化能力"]\n'
-    ),
-    "dl": (
-        "flowchart LR\n"
-        '  X["输入"] --> FW(["前向传播"])\n'
-        '  FW --> L["损失 L"]\n'
-        '  L --> BP(["反向传播<br/>链式法则"])\n'
-        '  BP --> G["梯度 ∂L/∂θ"]\n'
-        '  G --> U{{"梯度下降<br/>θ ← θ − η·g"}}\n'
-        "  U -. 迭代更新 .-> FW\n"
-    ),
-    "cnn": (
-        "flowchart LR\n"
-        '  I["输入图像"] --> C1(["卷积层"])\n'
-        '  C1 --> A1{{"ReLU"}}\n'
-        '  A1 --> P1(["池化层"])\n'
-        '  P1 --> C2(["卷积层 ×N"])\n'
-        '  C2 --> FC["全连接层"]\n'
-        '  FC --> O["分类输出"]\n'
-    ),
-    "transformer": (
-        "flowchart LR\n"
-        '  E["输入嵌入"] --> PE(["+ 位置编码"])\n'
-        '  PE --> MHA(["多头自注意力"])\n'
-        '  MHA --> AN1{{"Add & Norm"}}\n'
-        '  AN1 --> FFN(["前馈网络"])\n'
-        '  FFN --> AN2{{"Add & Norm"}}\n'
-        '  AN2 --> O["输出表示"]\n'
-    ),
-    "finetune": (
-        "flowchart LR\n"
-        '  PT["预训练大模型"] --> FT{{"微调策略"}}\n'
-        '  FT --> FP(["全参微调"])\n'
-        '  FT --> LR(["LoRA<br/>低秩增量"])\n'
-        '  FP --> SFT["指令微调 SFT"]\n'
-        "  LR --> SFT\n"
-        '  SFT --> AL(["对齐<br/>RLHF / DPO"])\n'
-        '  AL --> D["部署应用"]\n'
-    ),
-}
-
 
 def mindmap(db: Session, kp_id: str) -> dict[str, Any]:
     """思维导图（接口文档 8.4）。返回 Markmap 语法 Markdown 大纲。"""
@@ -280,12 +221,42 @@ def mindmap(db: Session, kp_id: str) -> dict[str, Any]:
 
 
 def diagram(db: Session, kp_id: str) -> dict[str, Any]:
-    """Mermaid 知识图解（接口文档 8.5）。"""
+    """Mermaid 知识图解（接口文档 8.5）。经 LLMClient 按当前知识点真实生成。
+
+    与讲义/视频同口径走 get_llm()：
+    - mock：确定性主题流程图（已收录知识点逐字模板，nn 与前端一致）；
+    - deepseek：真实生成 + 契约清洗（失败回落主题模板，图解始终可渲染）。
+
+    结果写 ResourceCache（kind=diagram / diagram@<provider>，知识图解与难度无关故
+    difficulty 固定空串），命中直接返回，避免真实模式重复触发 LLM 调用。
+    """
     kp = _require_kp(db, kp_id)
-    mermaid = _DIAGRAMS.get(kp_id) or (
-        f'flowchart LR\n  A["输入"] --> B(["{kp.name}"])\n  B --> C["输出"]\n'
+    llm = get_llm()
+    kind = "diagram" if llm.is_mock else f"diagram@{llm.provider}"
+    cached = (
+        db.query(ResourceCache)
+        .filter(
+            ResourceCache.kp_id == kp_id,
+            ResourceCache.difficulty == "",
+            ResourceCache.kind == kind,
+        )
+        .one_or_none()
     )
-    return {"mermaid": mermaid}
+    if cached is not None:
+        return dict(cached.payload)
+
+    payload = llm.generate_diagram(kp.id, kp.name, kp.description or "")
+    db.add(
+        ResourceCache(
+            kp_id=kp_id,
+            difficulty="",
+            kind=kind,
+            payload=payload,
+            hallucination_rate=0.0,
+        )
+    )
+    db.commit()
+    return payload
 
 
 # ---- 视频讲解（接口文档 8.3，B7-a；分镜脚本随知识点动态生成） ------------------

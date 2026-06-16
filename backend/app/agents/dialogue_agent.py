@@ -28,13 +28,55 @@ _QUESTIONS: dict[str, str] = {
     "error_preference": "回想以往学习，你最容易卡在哪类问题上——概念、计算推导、还是代码实现？",
 }
 _SUGGESTIONS: dict[str, list[str]] = {
-    "knowledge_base": ["系统学过，基础扎实", "学过一些，理解一般", "基本零基础"],
+    # 首项原为「系统学过…」，前缀「系统」易被误读成系统角色 → 改为「完整学过…」避免气泡归属歧义
+    "knowledge_base": ["完整学过，基础扎实", "学过一些，理解一般", "基本零基础"],
     "prior_experience": ["做过相关项目", "只在课程里练过", "还没有实践"],
     "learning_goal": ["转岗/求职", "考试/认证", "兴趣自学"],
     "cognitive_style": ["喜欢先动手实践", "喜欢先弄懂原理", "两者都要"],
     "learning_pace": ["时间充裕，稳扎稳打", "节奏适中", "时间紧，想快速突破"],
     "error_preference": ["概念容易混淆", "计算/推导易错", "代码实现卡壳"],
 }
+
+# 同一维度需「再次追问」时的替代问法（按已问次数轮换）。模糊回答致某维多轮抽取失败、
+# 探查顺序耗尽后须回头重问该维度（驱动 ≥6 维收敛）——此时换措辞，**严禁原样重发同一句
+# 问题**（issue#2 / 17.1：模糊回答 → 低置信推断 或 转向/换措辞追问，不机械复读）。
+_REPHRASE: dict[str, list[str]] = {
+    "knowledge_base": [
+        "换个方式问——如果现在给你一道相关的入门题，你大概能独立做出来吗？",
+        "那你对这块的整体感觉是「基本能跟上」「会一点」还是「比较吃力」？",
+    ],
+    "prior_experience": [
+        "哪怕是课程作业、教程里的小练习也算——有动手做过相关的东西吗？",
+        "那有没有看过相关项目的代码，或者跟着教程把例子跑通过？",
+    ],
+    "learning_goal": [
+        "简单说，学完之后你最希望自己能做到什么？",
+        "你更看重「能上手做项目」「应付考试」还是「打牢基础」？",
+    ],
+    "cognitive_style": [
+        "举个例子：拿到新知识，你会先翻原理，还是先找个例子跑起来？",
+        "看教程时你更愿意逐行推导，还是先整体跑通、再回头抠细节？",
+    ],
+    "learning_pace": [
+        "大概每周能挤出多少时间来学？时间够用吗？",
+        "你是想稳扎稳打慢慢来，还是赶时间、想快点突破？",
+    ],
+    "error_preference": [
+        "回想做错的题，更多是「看错/想岔了」，还是「步骤/实现出问题」？",
+        "哪一类最让你头疼——记不住概念、推导算错，还是代码写不对？",
+    ],
+}
+
+
+def _question_for(focus: str, ask_count: int) -> str:
+    """按该维度「已被追问次数」选问法：首问用主问法，重问轮换替代问法（不原样重发）。
+
+    ask_count = 调用方 asked_keys 中该 focus 的出现次数（每追问一次累加一次）。
+    """
+    if ask_count <= 0:
+        return _QUESTIONS[focus]
+    variants = _REPHRASE.get(focus) or [_QUESTIONS[focus]]
+    return variants[(ask_count - 1) % len(variants)]
 
 _PROBE_ORDER: list[str] = [k for k, _ in PORTRAIT_DIMENSIONS]
 # 收敛阈值：采集到 ≥6 维（赛题「≥6 维异质画像」口径，与前端「满 6 维」门控一致）。
@@ -65,15 +107,20 @@ def _next_focus(filled: set[str], asked: set[str]) -> str | None:
     return None
 
 
-def _compose_reply(updates: list[dict[str, Any]], focus: str, first_turn: bool) -> str:
-    """组装回复：对本轮抽取的简短确认 + 针对下一维度的追问。"""
+def _compose_reply(
+    updates: list[dict[str, Any]], focus: str, first_turn: bool, ask_count: int = 0
+) -> str:
+    """组装回复：对本轮抽取的简短确认 + 针对下一维度的追问。
+
+    ask_count>0 表示该维度此前已问过（模糊回答致重问）→ 换措辞，不原样重发。
+    """
     if updates:
         ack = "了解了。"
     elif first_turn:
         ack = "好的，我们开始吧。"
     else:
         ack = "好的。"
-    return f"{ack}{_QUESTIONS[focus]}"
+    return f"{ack}{_question_for(focus, ask_count)}"
 
 
 def respond(
@@ -113,7 +160,9 @@ def respond(
     if done:
         reply, suggestions = _CLOSING_REPLY, []
     else:
-        reply = _compose_reply(updates, focus, first_turn)
+        # 该维度此前被追问的次数（focus 落到「已问维度」即重问场景）→ 换措辞，严禁原样重发
+        ask_count = asked_keys.count(focus)
+        reply = _compose_reply(updates, focus, first_turn, ask_count)
         suggestions = list(_SUGGESTIONS[focus])
     return {
         "reply": reply,

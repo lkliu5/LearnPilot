@@ -14,7 +14,9 @@ import AdminMetrics from './pages/admin/AdminMetrics'
 import AdminUsers from './pages/admin/AdminUsers'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
-import { getUser, clearAuth } from './services/api'
+import { getUser, clearAuth, getToken, isTokenExpired, USE_REAL_API } from './services/api'
+import { useJourney } from './store/journey'
+import { useMastery } from './store/mastery'
 import './styles/App.css'
 
 export type PageType =
@@ -45,15 +47,35 @@ const ADMIN_PAGE_TO_HASH: Partial<Record<PageType, string>> = {
 }
 const isAdminPage = (page: PageType) => page.startsWith('admin-')
 
+/**
+ * 刷新后恢复登录态（issue#3）：联调下 token 持久化在 localStorage，启动时若 token
+ * 存在且未过期则直接进应用，跳过 Landing/Login（与 journey/portrait 持久化 store 同
+ * 风格）；过期 / 无 token 则照常落地登录页。同步计算初始 stage 避免「先闪登录再跳转」。
+ */
+const restorableSession = USE_REAL_API && !!getToken() && !isTokenExpired()
+const restoredUser = restorableSession ? getUser() : null
+const restoredRole: 'learner' | 'admin' = restoredUser?.role === 'admin' ? 'admin' : 'learner'
+
 function App() {
-  const [stage, setStage] = useState<Stage>('landing')
-  const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
+  const [stage, setStage] = useState<Stage>(restorableSession ? 'app' : 'landing')
+  const [currentPage, setCurrentPage] = useState<PageType>(
+    restorableSession && restoredRole === 'admin' ? 'admin-kb' : 'dashboard'
+  )
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   /** 登录响应 role（15.1）：admin 进管理端视图；mock 模式无登录态时按 learner 处理 */
-  const [role, setRole] = useState<'learner' | 'admin'>('learner')
+  const [role, setRole] = useState<'learner' | 'admin'>(restoredRole)
   const isAdmin = role === 'admin'
   /** 主滚动容器引用：页面切换时由 ScrollToTop 归零 */
   const mainRef = useRef<HTMLElement>(null)
+
+  /** 刷新恢复登录态时，拉取旅程 / 掌握度权威态（与登录回调同口径，仅挂载执行一次）。 */
+  useEffect(() => {
+    if (!restorableSession) return
+    Promise.all([useJourney.getState().loadJourney(), useMastery.getState().load()]).catch((e) =>
+      console.error('[app] 恢复会话拉取状态失败', e)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** 统一导航入口：非 admin 访问管理页一律拦回首页；管理页同步 hash 深链 */
   const navigate = (page: PageType) => {

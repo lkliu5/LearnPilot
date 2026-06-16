@@ -447,3 +447,50 @@ def test_video_other_kp_and_errors(client, learner_headers):
         json={"kpId": "nn", "difficulty": "地狱"},
     )
     assert res.status_code == 400 and res.json()["code"] == 1001
+
+
+# ---- 8.5 知识图解（issue#7：经 LLMClient 真实生成，mock/deepseek 双模式） --------
+
+def test_diagram_per_topic_via_llm(client, learner_headers):
+    """知识图解经 LLMClient 按主题生成：mock 下不同知识点产出不同 Mermaid，恒以 flowchart 开头。"""
+    nn = client.get("/api/v1/resource/diagram/nn", headers=learner_headers).json()["data"]
+    cnn = client.get("/api/v1/resource/diagram/cnn", headers=learner_headers).json()["data"]
+    assert set(nn.keys()) == {"mermaid"} and set(cnn.keys()) == {"mermaid"}
+    assert nn["mermaid"].startswith("flowchart")
+    assert cnn["mermaid"].startswith("flowchart")
+    assert nn["mermaid"] != cnn["mermaid"]  # 按主题真实生成，绝非写死一张
+    # 未知知识点 → 1004
+    res = client.get("/api/v1/resource/diagram/no_such_kp", headers=learner_headers)
+    assert res.status_code == 404 and res.json()["code"] == 1004
+
+
+def test_diagram_deepseek_generate_and_fallback(client, learner_headers, monkeypatch):
+    """deepseek 真实生成 Mermaid + 契约清洗；非法输出回落确定性主题模板（图解始终可渲染）。"""
+    # 合法 Mermaid（带 ``` 围栏）→ 清洗后采用
+    def good_chat(prompt, system=None, history=None):
+        return "```mermaid\nflowchart TD\n  A[\"题目\"] --> B[\"解析\"]\n```"
+
+    monkeypatch.setattr(settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(llm_deepseek, "chat", good_chat)
+    llm_mod._client = None
+    try:
+        data = client.get("/api/v1/resource/diagram/ml", headers=learner_headers).json()["data"]
+        assert data["mermaid"].startswith("flowchart TD")
+        assert "```" not in data["mermaid"]  # 围栏被清洗
+    finally:
+        monkeypatch.setattr(settings, "llm_provider", "mock")
+        llm_mod._client = None
+
+    # 非法输出（非 flowchart）→ 回落主题模板（仍以 flowchart 开头）
+    def bad_chat(prompt, system=None, history=None):
+        return "这是一段普通文字，不是 Mermaid"
+
+    monkeypatch.setattr(settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(llm_deepseek, "chat", bad_chat)
+    llm_mod._client = None
+    try:
+        data = client.get("/api/v1/resource/diagram/dl", headers=learner_headers).json()["data"]
+        assert data["mermaid"].startswith("flowchart")  # 回落兜底
+    finally:
+        monkeypatch.setattr(settings, "llm_provider", "mock")
+        llm_mod._client = None

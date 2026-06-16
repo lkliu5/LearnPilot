@@ -9,7 +9,7 @@ import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
-import { getLecture, getQuiz, submitQuiz, type LectureData } from '../services/resource'
+import { getDiagram, getLecture, getQuiz, submitQuiz, type LectureData } from '../services/resource'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
 import { consumeResourceEntryTab, getResourceKpId } from '../services/resourceNav'
 import { setWorkflowReplay } from '../services/workflowNav'
@@ -299,6 +299,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
      lectureMap 缓存各难度档 markdown */
   const [questions, setQuestions] = useState<QuizQuestion[]>(USE_REAL_API ? [] : quizQuestions)
   const [lectureMap, setLectureMap] = useState<Record<string, string>>({})
+  /* 知识图解 Mermaid：联调按当前 kpId 经后端 LLMClient 真实生成；mock 用本地常量 */
+  const [diagramChart, setDiagramChart] = useState<string>('')
   /* B10：各难度档讲义的真实溯源 sources 与产出工作流 id（联调用，驱动溯源徽章/「查看生成过程」）*/
   const [lectureSources, setLectureSources] = useState<Record<string, SourceRef[]>>({})
   const [lectureWf, setLectureWf] = useState<Record<string, string | null>>({})
@@ -332,6 +334,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     getLecture(kpId, level)
       .then((d) => applyLecture(level, d))
       .catch((e) => console.error('[resource] 加载讲义失败', e))
+    getDiagram(kpId)
+      .then((d) => setDiagramChart(d.mermaid))
+      .catch((e) => console.error('[resource] 加载知识图解失败', e))
     // 仅挂载时执行一次（level 初值为「初级」；kpId 挂载期内不变）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -609,8 +614,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
         {tab === 'diagram' && (
           <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">神经元前向传播 / 反向更新流程图：</div>
-            <MermaidDiagram chart={mermaidChart} />
+            <div className="resource-modal-hint">「{kpName}」知识脉络图（AI 按当前主题生成，可缩放/拖拽）：</div>
+            {USE_REAL_API && !diagramChart ? (
+              <div className="resource-loading">「{kpName}」的知识图解生成中，请稍候…</div>
+            ) : (
+              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mermaidChart} />
+            )}
           </Suspense>
         )}
         {tab === 'external' && (

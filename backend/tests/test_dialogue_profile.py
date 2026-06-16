@@ -216,6 +216,57 @@ def test_completes_only_at_six_dims_even_when_focus_exhausted():
     assert done["focus"] is None
 
 
+def test_reask_uses_different_wording_not_verbatim():
+    """issue#2：模糊回答致同一维度需再次追问时，必须换措辞，严禁原样重发同一句问题。
+
+    场景：已采集 5 维、缺 error_preference；该维度首问与重问应推进同一 focus，
+    但回复文案不同（首问主问法 → 重问替代问法），且仍为追问态、不提前收尾。
+    """
+    known = [
+        "knowledge_base", "prior_experience", "learning_goal",
+        "cognitive_style", "learning_pace",
+    ]
+    # 首问 error_preference：asked 尚不含该维度（ask_count=0）→ 主问法
+    first = dialogue_agent.respond(
+        context=None, history=[{"role": "user", "content": "x"}],
+        message="嗯嗯",  # mock 抽取为空（模糊回答）
+        known_keys=known,
+        asked_keys=["prior_experience", "learning_goal", "cognitive_style", "learning_pace"],
+        first_turn=False,
+    )
+    assert first["focus"] == "error_preference"
+    # 重问 error_preference：asked 已含该维度一次（ask_count=1）→ 替代问法
+    second = dialogue_agent.respond(
+        context=None, history=[{"role": "user", "content": "x"}],
+        message="嗯嗯",
+        known_keys=known,
+        asked_keys=[
+            "prior_experience", "learning_goal", "cognitive_style",
+            "learning_pace", "error_preference",
+        ],
+        first_turn=False,
+    )
+    assert second["focus"] == "error_preference"
+    assert second["diagnosisComplete"] is False  # 仅 5 维，仍追问收敛
+    assert second["suggestions"]
+    # 关键断言：重问与首问问法不同（不原样重发同一句）
+    assert second["reply"] != first["reply"]
+
+    # 再连问一次（ask_count=2）→ 仍与上一次不同，连续重问也不复读
+    third = dialogue_agent.respond(
+        context=None, history=[{"role": "user", "content": "x"}],
+        message="嗯嗯",
+        known_keys=known,
+        asked_keys=[
+            "prior_experience", "learning_goal", "cognitive_style",
+            "learning_pace", "error_preference", "error_preference",
+        ],
+        first_turn=False,
+    )
+    assert third["focus"] == "error_preference"
+    assert third["reply"] != second["reply"]
+
+
 def test_new_session_runs_dialogue_even_with_completed_portrait(client):
     """回归：已有完整持久化画像的返回用户，开新会话仍正常多轮对话，不每轮即收尾。
 

@@ -177,7 +177,7 @@ const MOCK_SCRIPT: MockTurn[] = [
       { key: 'prior_experience', label: '先验经验', value: '有 Python 工程实践（爬虫 / 脚本）', confidence: 0.8, source: 'dialogue' },
       { key: 'knowledge_base', label: '知识基础', value: '有编程基础，ML 理论一般', score: 55, confidence: 0.7, source: 'dialogue' },
     ],
-    suggestions: ['系统学过一些', '主要靠项目里边用边查', '基本零基础'],
+    suggestions: ['完整学过一些', '主要靠项目里边用边查', '基本零基础'],
     diagnosisComplete: false,
   },
   {

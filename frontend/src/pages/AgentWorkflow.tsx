@@ -29,6 +29,7 @@ const WORKFLOW_ARTIFACTS = [
   { tab: 'mindmap', emoji: '🧠', label: '思维导图', desc: '由讲义结构化的知识脑图' },
   { tab: 'video', emoji: '🎬', label: '讲解视频', desc: '配套讲解视频脚本与播放' },
   { tab: 'quiz', emoji: '✍️', label: '分阶测试题', desc: '巩固检验的分阶测验题' },
+  { tab: 'diagram', emoji: '📊', label: '知识图解', desc: '按主题真实生成的 Mermaid 知识脉络图' },
 ] as const
 
 gsap.registerPlugin(useGSAP, MotionPathPlugin)

@@ -69,6 +69,25 @@ export function clearAuth(): void {
   }
 }
 
+/**
+ * 判断 JWT 是否已过期（解析 payload.exp，单位秒）。用于刷新后恢复登录态：
+ * token 存在且未过期才恢复，过期则照常跳登录。无法解析 / 无 exp 时**不主动判过期**
+ * （返回 false），把最终裁决交给后端 401/1002 兜底，避免误登出。无 token → 视为过期。
+ */
+export function isTokenExpired(token: string | null = getToken()): boolean {
+  if (!token) return true
+  try {
+    const part = token.split('.')[1] ?? ''
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded)) as { exp?: number }
+    if (typeof payload.exp !== 'number') return false
+    return payload.exp * 1000 <= Date.now()
+  } catch {
+    return false
+  }
+}
+
 /** 业务错误（信封 code 非 0）。携带 code 便于上层分支处理。 */
 export class ApiError extends Error {
   code: number

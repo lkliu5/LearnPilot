@@ -106,7 +106,14 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
         setTyping(false)
         setMsgs((m) => [...m, { role: 'agent', text: acc }])
       } else {
-        setMsgs((m) => [...m.slice(0, -1), { role: 'agent', text: acc }])
+        // 仅当末条确为正在流式的 agent 气泡时才改写其文本；否则追加新气泡，
+        // 杜绝误把用户气泡覆盖成 agent（修正气泡 role 归属，issue#2）。
+        setMsgs((m) => {
+          const last = m[m.length - 1]
+          return last && last.role === 'agent'
+            ? [...m.slice(0, -1), { role: 'agent', text: acc }]
+            : [...m, { role: 'agent', text: acc }]
+        })
       }
     }
 

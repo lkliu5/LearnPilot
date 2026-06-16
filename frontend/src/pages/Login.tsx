@@ -65,6 +65,19 @@ export default function Login({ onLogin }: LoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
+    // 客户端前置校验（即时反馈，避免无谓请求）；重名等仍以后端为权威（返回 code 1001）。
+    // 注册要求：用户名非空 + 密码至少 6 位（与后端密码规则一致），不满足即拒并提示。
+    const uname = username.trim()
+    if (isRegister) {
+      if (!uname) {
+        window.alert('请填写用户名')
+        return
+      }
+      if (password.length < 6) {
+        window.alert('密码至少 6 位，请重新设置')
+        return
+      }
+    }
     setLoading(true)
     // mock 模式：模拟鉴权（前端演示），1s 后进入系统（注册 → 进入画像诊断引导）
     if (!USE_REAL_API) {

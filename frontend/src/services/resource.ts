@@ -44,6 +44,11 @@ export function submitQuiz(
   return apiPost<QuizSubmitResult>(`/quiz/${kpId}/submit`, { answers: payload })
 }
 
+/** 8.5 知识图解（Mermaid）：经 LLMClient 按当前知识点真实生成（mock/真实双模式）。 */
+export function getDiagram(kpId: string): Promise<{ mermaid: string }> {
+  return apiGet<{ mermaid: string }>(`/resource/diagram/${kpId}`)
+}
+
 /** 8.6 外部资源聚合（聚合 Agent 检索 + 审核 Agent 评分，已按相关度降序）。 */
 export function getExternalResources(kpId: string): Promise<ExternalResource[]> {
   return apiGet<ExternalResource[]>(`/resource/external/${kpId}`)
