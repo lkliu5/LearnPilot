@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     llm_temperature: float = 0.3
 
+    # 内容安全过滤（app/core/content_safety.py）：所有 LLM 生成文本返回前统一过滤。
+    # - enabled：总开关（默认开）；
+    # - model_check：可选的模型级二次校验（真实 provider 下用 LLMClient 通道做轻量
+    #   违规分类补漏，失败回落词表；mock / 无 Key 自动不生效，默认关，避免拖慢链路）；
+    # - lexicon_path：可选扩充词库（每行 `类别:词`，类别取 political|porn|
+    #   violence_terror|illegal_harmful|abuse_discrimination），缺省仅用内置种子词表。
+    content_safety_enabled: bool = True
+    content_safety_model_check: bool = False
+    content_safety_lexicon_path: str = ""
+
     # 15.3 逐句接地阈值：句子与来源切片最大 embedding 相似度低于该值 → 未接地。
     # 默认 0.6 为 bge-small-zh-v1.5 实测标定值（B5-b：逐句相似度中位数 ≈0.73，
     # 接地句多落 0.6-0.9，文档示例 0.75 会把 ~62% 真实接地句误判为幻觉）；
