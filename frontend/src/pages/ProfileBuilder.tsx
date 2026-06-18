@@ -279,7 +279,7 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     narrative?.sources.find((s) => s.id === activeSource)?.label ??
     materials.find((m) => m.id === activeSource)?.label
 
-  const finish = () => {
+  const finish = (jobInfo?: { targetJobName: string; matchPct: number }) => {
     // 表单入口：把多模态输入映射为「与对话诊断同一套 canonical 维度」的权威画像（不再另造
     // 一套知识点雷达），写入 store（学情概览据此合成）；联调时覆盖写后端 StudentPortrait，
     // 使三条路径产出同一份、同维度的权威画像，重做即覆盖、不分叉。
@@ -290,7 +290,8 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
         saveStudentPortrait(snapshot).catch((e) => console.error('[profile] 画像覆盖写入失败', e))
       }
     }
-    completeDiagnosis(targetJob ? { targetJobName: targetJob.name, matchPct } : undefined)
+    // 对话路径：用对话算出的岗位匹配（jobInfo）；表单路径：用 Step3 岗位对标结果
+    completeDiagnosis(jobInfo ?? (targetJob ? { targetJobName: targetJob.name, matchPct } : undefined))
     onNavigate?.('learning-path')
   }
 
@@ -742,7 +743,7 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
                 <button className="profile-builder__back-btn" onClick={() => setStep('confirm')}>
                   返回确认
                 </button>
-                <button className="profile-builder__next-btn" onClick={finish}>
+                <button className="profile-builder__next-btn" onClick={() => finish()}>
                   生成针对性学习路径 →
                 </button>
               </div>

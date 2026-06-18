@@ -8,7 +8,9 @@ import {
   profileDialogueStream,
   type PortraitDimension,
 } from '../services/profileDialogue'
+import { getJobMatch, type JobMatchResult } from '../services/jobMatch'
 import { usePortrait } from '../store/portrait'
+import { useMastery } from '../store/mastery'
 import './ProfileDialogue.css'
 
 /**
@@ -23,8 +25,9 @@ const OPENING =
 const OPENING_CHIPS = ['计算机本科，会点 Python', '非科班，自学中', '有工作经验想转 AI']
 
 interface Props {
-  /** 诊断完成后的衔接：沿用既有 completeDiagnosis + 导航流程 */
-  onFinish: () => void
+  /** 诊断完成后的衔接：沿用既有 completeDiagnosis + 导航流程。
+   *  jobInfo（C-fix 批2）：对话采集到目标岗位时算出的岗位匹配，打通学情概览目标岗位口径。 */
+  onFinish: (jobInfo?: { targetJobName: string; matchPct: number }) => void
   context?: { major?: string; goal?: string }
 }
 
@@ -44,6 +47,10 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
   /** 「学情概况确认」弹窗：诊断完成且满 6 维才弹（防止确认到不足维度的画像） */
   const [showConfirm, setShowConfirm] = useState(false)
   const setPortrait = usePortrait((s) => s.setPortrait)
+  const masteryStatus = useMastery((s) => s.status)
+
+  /** 岗位匹配（C-fix 批2）：对话采集到目标岗位后，用现有静态岗位库算匹配度 + 能力缺口 */
+  const [jobMatch, setJobMatch] = useState<JobMatchResult | null>(null)
 
   const filledCount = CANONICAL_DIMS.filter((c) => dims[c.key]).length
   const allDimsFilled = filledCount >= CANONICAL_DIMS.length
@@ -53,11 +60,30 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
     if (complete && allDimsFilled) setShowConfirm(true)
   }, [complete, allDimsFilled])
 
-  // 确认画像：落快照（学情概览据此合成）→ 走既有完成流程（completeDiagnosis + 解锁学习路径）
+  // 诊断收敛后据「学习目标」维度算岗位匹配（现有静态岗位库，不联网）；无目标岗位则不展示
+  useEffect(() => {
+    if (!(complete && allDimsFilled)) return
+    const goal = dims['learning_goal']?.value ?? ''
+    if (!goal) {
+      setJobMatch(null)
+      return
+    }
+    const masteredKps = Object.entries(masteryStatus)
+      .filter(([, v]) => v === 'passed')
+      .map(([k]) => k)
+    let cancelled = false
+    getJobMatch(goal, { masteredKps })
+      .then((r) => { if (!cancelled) setJobMatch(r) })
+      .catch((e) => console.error('[profile-dialogue] 岗位匹配失败', e))
+    return () => { cancelled = true }
+  }, [complete, allDimsFilled, dims, masteryStatus])
+
+  // 确认画像：落快照（学情概览据此合成）→ 走既有完成流程（completeDiagnosis + 解锁学习路径）；
+  // 带上岗位匹配结果，使学情概览的目标岗位/匹配度有真实出处、口径一致。
   const handleConfirm = () => {
     setPortrait(Object.values(dims), portraitTs)
     setShowConfirm(false)
-    onFinish()
+    onFinish(jobMatch ? { targetJobName: jobMatch.jobName, matchPct: jobMatch.matchPct } : undefined)
   }
 
   // 进页拉取当前画像（联调时可能已有历史维度；mock 返回空画像）
@@ -172,6 +198,7 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
         open={showConfirm}
         dims={dims}
         updatedAt={portraitTs}
+        jobMatch={jobMatch}
         onConfirm={handleConfirm}
         onClose={() => setShowConfirm(false)}
       />
