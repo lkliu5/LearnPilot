@@ -3,7 +3,7 @@
  * （接口文档第 8 章讲义/外部资源 / 第 9 章测验/错题强化，接口 16/17/21/23/24/25）。
  */
 import { apiGet, apiPost } from './api'
-import type { QuizQuestion } from '../components/QuizRenderer'
+import type { QuizQuestion, ShortAnswerGrade } from '../components/QuizRenderer'
 import type { ExternalResource } from '../components/ResourceAggregator'
 
 export interface LectureData {
@@ -27,11 +27,15 @@ export function getQuiz(kpId: string): Promise<{ questions: QuizQuestion[] }> {
 }
 
 export interface QuizSubmitResult {
+  /** 综合得分 0-100（客观题 + 简答 AI 折算，≥60 通过） */
   score: number
   passed: boolean
+  /** 客观题答对数（简答不计入此项） */
   correctCount: number
   total: number
   wrong: QuizQuestion[]
+  /** 简答题 AI 评分明细（每题 0-100 + 点评） */
+  shortAnswers: ShortAnswerGrade[]
   masteryUpdated: { id: string; status: string } | null
 }
 

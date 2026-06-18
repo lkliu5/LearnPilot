@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import QuizRenderer, { type QuizQuestion } from '../components/QuizRenderer'
+import QuizRenderer, { type QuizQuestion, type QuizGrade, type ShortAnswerGrade } from '../components/QuizRenderer'
 import SourceTrace, { type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
@@ -162,9 +162,12 @@ A = relu(Z)
 
 const LEVELS = ['入门', '初级', '高级'] as const
 
+/* 分阶测试（mock 兜底）：10 题——单选/多选/判断客观题 + 末尾 1 道简答题，
+   与后端种子题库 nn 逐字对齐（联调走 GET /quiz/nn 真实题库）。简答题 options 为空、
+   correct_answer 存参考要点、explanation 存参考答案。 */
 const quizQuestions: QuizQuestion[] = [
   {
-    question_id: 'q1',
+    question_id: 'nn_q1',
     question_type: 'single',
     question_text: '一个神经元的运算顺序是？',
     options: [
@@ -176,7 +179,7 @@ const quizQuestions: QuizQuestion[] = [
     explanation: '神经元先对输入加权求和，再加上偏置，最后通过激活函数得到输出。',
   },
   {
-    question_id: 'q2',
+    question_id: 'nn_q2',
     question_type: 'multiple',
     question_text: '以下哪些是常见的激活函数？（多选）',
     options: [
@@ -189,7 +192,7 @@ const quizQuestions: QuizQuestion[] = [
     explanation: 'ReLU、Sigmoid、Tanh 都是常见激活函数；Gradient（梯度）是反向传播中的概念，不是激活函数。',
   },
   {
-    question_id: 'q3',
+    question_id: 'nn_q3',
     question_type: 'boolean',
     question_text: 'ReLU 激活函数有助于缓解梯度消失问题。',
     options: [
@@ -199,7 +202,157 @@ const quizQuestions: QuizQuestion[] = [
     correct_answer: 'true',
     explanation: 'ReLU 在正区间梯度恒为 1，相比 Sigmoid 能有效缓解深层网络的梯度消失问题。',
   },
+  {
+    question_id: 'nn_q4',
+    question_type: 'single',
+    question_text: '在前向传播中，神经网络的作用是？',
+    options: [
+      { option_id: 'a', option_text: '根据当前参数由输入计算出预测输出' },
+      { option_id: 'b', option_text: '根据误差更新权重参数' },
+      { option_id: 'c', option_text: '计算损失函数对权重的梯度' },
+      { option_id: 'd', option_text: '对训练数据进行随机打乱' },
+    ],
+    correct_answer: 'a',
+    explanation: '前向传播是指由输入逐层计算到输出的过程；更新权重和计算梯度属于反向传播阶段。',
+  },
+  {
+    question_id: 'nn_q5',
+    question_type: 'single',
+    question_text: '引入激活函数最主要的目的是？',
+    options: [
+      { option_id: 'a', option_text: '加快矩阵乘法的运算速度' },
+      { option_id: 'b', option_text: '为网络引入非线性表达能力' },
+      { option_id: 'c', option_text: '减少网络的参数数量' },
+      { option_id: 'd', option_text: '防止输入数据出现缺失值' },
+    ],
+    correct_answer: 'b',
+    explanation: '若没有非线性激活函数，多层线性变换的叠加仍等价于单层线性变换，网络无法拟合复杂的非线性关系。',
+  },
+  {
+    question_id: 'nn_q6',
+    question_type: 'boolean',
+    question_text: '如果所有隐藏层都不使用激活函数（即仅做线性变换），那么无论叠加多少层，整个网络都等价于一个线性模型。',
+    options: [
+      { option_id: 'true', option_text: '正确' },
+      { option_id: 'false', option_text: '错误' },
+    ],
+    correct_answer: 'true',
+    explanation: '多个线性变换的复合仍然是线性变换，因此缺少非线性激活的多层网络等价于单层线性模型。',
+  },
+  {
+    question_id: 'nn_q7',
+    question_type: 'multiple',
+    question_text: '关于梯度下降法，以下说法正确的是？（多选）',
+    options: [
+      { option_id: 'a', option_text: '沿损失函数负梯度方向更新参数' },
+      { option_id: 'b', option_text: '学习率控制每次参数更新的步长' },
+      { option_id: 'c', option_text: '学习率过大可能导致损失震荡甚至发散' },
+      { option_id: 'd', option_text: '梯度下降一定能找到全局最优解' },
+    ],
+    correct_answer: ['a', 'b', 'c'],
+    explanation: '梯度下降沿负梯度方向更新参数，学习率决定步长且过大易震荡发散；但对于非凸损失，梯度下降只能保证收敛到局部最优或鞍点，不保证全局最优。',
+  },
+  {
+    question_id: 'nn_q8',
+    question_type: 'single',
+    question_text: '偏置（bias）在神经元中的主要作用是？',
+    options: [
+      { option_id: 'a', option_text: '对输入特征进行归一化' },
+      { option_id: 'b', option_text: '为激活函数提供可平移的截距项' },
+      { option_id: 'c', option_text: '随机丢弃部分神经元' },
+      { option_id: 'd', option_text: '对权重施加 L2 惩罚' },
+    ],
+    correct_answer: 'b',
+    explanation: '偏置相当于线性函数中的截距，使决策边界可以平移，而不必强制通过原点，增强了模型的表达能力。',
+  },
+  {
+    question_id: 'nn_q9',
+    question_type: 'boolean',
+    question_text: '将一个神经网络的所有权重都初始化为相同的常数（如全 0）是一种好的做法。',
+    options: [
+      { option_id: 'true', option_text: '正确' },
+      { option_id: 'false', option_text: '错误' },
+    ],
+    correct_answer: 'false',
+    explanation: '权重全部初始化为相同值会导致同一层神经元在前向和反向传播中完全对称、更新一致，无法学到不同特征，因此需要随机初始化打破对称性。',
+  },
+  {
+    question_id: 'nn_q10',
+    question_type: 'short_answer',
+    question_text: '请简述神经网络中前向传播与反向传播的含义及二者的关系。',
+    options: [],
+    correct_answer: [
+      '前向传播：由输入逐层计算得到预测输出',
+      '反向传播：由输出端的损失反向逐层计算梯度',
+      '反向传播依赖链式法则',
+      '前向结果用于计算损失，反向梯度用于更新参数',
+      '二者交替迭代完成训练',
+    ],
+    explanation:
+      '前向传播是指给定输入后，依据当前网络参数从输入层经隐藏层逐层计算，最终得到预测输出，并据此计算损失函数值。反向传播则是从输出端的损失出发，利用链式法则反向逐层计算损失对各层权重和偏置的梯度。二者紧密关联：前向传播提供了计算损失所需的中间结果，反向传播据此求得梯度，再由梯度下降等优化器更新参数。训练过程就是前向传播与反向传播不断交替迭代，直至损失收敛。',
+  },
 ]
+
+/* 简答题本地确定性评分（mock 兜底，与后端 LLMClient._mock_score_short_answer 同口径：
+   参考要点字符二元组覆盖度）。联调模式由后端 AI 评分回填，不走此函数。 */
+const answerBigrams = (t: string): Set<string> => {
+  const s = (t || '').toLowerCase().replace(/\s+/g, '')
+  const out = new Set<string>()
+  for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2))
+  return out
+}
+const pointCoverage = (point: string, answer: string): number => {
+  const pb = answerBigrams(point)
+  if (pb.size === 0) return 0
+  const ab = answerBigrams(answer)
+  let hit = 0
+  pb.forEach((b) => { if (ab.has(b)) hit++ })
+  return hit / pb.size
+}
+const scoreShortLocally = (points: string[], answer: string): { score: number; comment: string } => {
+  const ans = (answer || '').trim()
+  if (!ans) return { score: 0, comment: points.length ? `未作答。参考要点：${points.join('；')}` : '未作答。' }
+  if (!points.length) return { score: ans.length >= 16 ? 70 : ans.length >= 6 ? 50 : 30, comment: '已作答，按作答完整度给分。' }
+  const per = points.map((p) => ({ c: pointCoverage(p, ans), p }))
+  const covered = per.filter((x) => x.c >= 0.34).map((x) => x.p)
+  const missing = per.filter((x) => x.c < 0.34).map((x) => x.p)
+  const avg = per.reduce((s, x) => s + x.c, 0) / per.length
+  const score = Math.max(0, Math.min(100, Math.round(Math.min(1, avg / 0.5) * 100)))
+  const parts: string[] = []
+  if (covered.length) parts.push(`已覆盖：${covered.join('、')}`)
+  if (missing.length) parts.push(`可补充：${missing.join('、')}`)
+  return { score, comment: parts.length ? `${parts.join('；')}。` : '已完成评分。' }
+}
+const arraysEqualLocal = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',')
+/** mock 综合判分：客观题等权 + 简答 AI 折算（与后端 services.quiz.submit 同口径）。 */
+const gradeQuizLocally = (
+  qs: QuizQuestion[],
+  answers: Record<string, string | string[]>
+): QuizGrade => {
+  let objectiveCorrect = 0
+  let shortSum = 0
+  const shortAnswers: ShortAnswerGrade[] = []
+  for (const q of qs) {
+    if (q.question_type === 'short_answer') {
+      const a = answers[q.question_id]
+      const text = typeof a === 'string' ? a : ''
+      const points = Array.isArray(q.correct_answer) ? q.correct_answer : []
+      const g = scoreShortLocally(points, text)
+      shortSum += g.score
+      shortAnswers.push({ questionId: q.question_id, score: g.score, comment: g.comment })
+    } else {
+      const a = answers[q.question_id]
+      const ok = Array.isArray(q.correct_answer)
+        ? Array.isArray(a) && arraysEqualLocal(a, q.correct_answer)
+        : a === q.correct_answer
+      if (ok) objectiveCorrect++
+    }
+  }
+  const total = qs.length
+  const score = total ? Math.round(((objectiveCorrect + shortSum / 100) / total) * 100) : 0
+  return { score, passed: score >= 60, shortAnswers }
+}
 
 /* 思维导图大纲（由生成 Agent 从讲义结构化得到）*/
 const mindmapMarkdown = `# 神经网络基础
@@ -306,6 +459,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
   const [regenerating, setRegenerating] = useState(false)
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
+  /* 综合判分结果（含简答 AI 评分）：提交后回填给 QuizRenderer 渲染分数/点评 */
+  const [quizGrade, setQuizGrade] = useState<QuizGrade | null>(null)
   const [trustOpen, setTrustOpen] = useState(false)
 
   /* 联调数据源（mock 模式下不使用，保持现有常量驱动）：
@@ -372,14 +527,23 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     answers?: Record<string, string | string[]>
   ) => {
     setWrongQs(wrong)
-    if (!submitted) return
+    if (!submitted) {
+      setQuizGrade(null) // 重做：清空上次综合判分
+      return
+    }
     if (USE_REAL_API) {
-      // 提交作答给后端判分；≥60 后端联动置 passed，再拉取掌握度刷新徽章
+      // 提交作答给后端判分（客观题 + 简答 AI 评分）；≥60 后端联动置 passed
       submitQuiz(kpId, answers ?? {})
-        .then(() => loadMastery())
+        .then((r) => {
+          setQuizGrade({ score: r.score, passed: r.passed, shortAnswers: r.shortAnswers })
+          loadMastery()
+        })
         .catch((e) => console.error('[resource] 提交测验失败', e))
-    } else if ((questions.length - wrong.length) / questions.length >= 0.6) {
-      markPassed(kpId)
+    } else {
+      // mock：本地综合判分（客观 + 简答确定性评分），≥60 点亮已掌握
+      const grade = gradeQuizLocally(questions, answers ?? {})
+      setQuizGrade(grade)
+      if (grade.passed) markPassed(kpId)
     }
   }
 
@@ -609,7 +773,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               通过即点亮「已掌握」并推进进度（答对 ≥ 60% 判定通过）。
             </div>
             {questions.length > 0 ? (
-              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
+              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} grade={quizGrade} />
             ) : (
               <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
             )}
@@ -625,7 +789,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       <PageHeader
         title="个性化学习资源"
         highlight="学习资源"
-        subtitle="AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 难度自适应"
+        subtitle="AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 讲义按难度自适应生成"
         badges={[
           { label: '当前知识点', value: kpName },
           {
@@ -633,7 +797,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             value: STATUS_LABEL[kpStatus],
             tone: kpStatus === 'passed' ? 'safe' : kpStatus === 'pending-check' ? 'accent' : 'default',
           },
-          { label: '适配难度', value: level, tone: 'accent' },
+          { label: '讲义难度', value: level, tone: 'accent' },
           { label: 'RAG 引用文档', value: 12 },
         ]}
         actions={
