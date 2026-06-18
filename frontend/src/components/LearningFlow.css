@@ -419,6 +419,21 @@
 }
 .gate__passed-btn:hover { filter: brightness(1.05); }
 
+/* 终点 gate 锁定态：学习步骤未走完时呈现，不渲染测试 */
+.gate__locked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--gray-100, #f3f4f6), rgba(255, 255, 255, 0.5));
+  border: 1px dashed var(--gray-300, #d1d5db);
+}
+.gate__locked-icon { font-size: 1.6rem; filter: grayscale(0.2); }
+.gate__locked-text { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.gate__locked-text strong { font-size: 0.92rem; color: var(--ink, #1f2937); }
+.gate__locked-text span { font-size: 0.8rem; line-height: 1.6; color: var(--gray-600, #4b5563); }
+
 /* ===== 模式切换（有序学习 / 资源中枢）===== */
 .flow-mode {
   display: inline-flex;

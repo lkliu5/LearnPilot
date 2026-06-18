@@ -16,6 +16,10 @@ dist-ssr/
 *.sqlite
 *.sqlite3
 *.db
+# SQLite WAL 模式的伴生文件（运行时产物，不入库）
+*.db-wal
+*.db-shm
+*.db-journal
 chroma/
 .chroma/
 backend/data/

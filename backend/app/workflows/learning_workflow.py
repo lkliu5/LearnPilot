@@ -14,6 +14,7 @@ B5-b 接入真实 RAG 检索与真实 LLM，本文件拓扑与 trace 结构不�
 """
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from datetime import datetime, timezone
@@ -27,6 +28,8 @@ from app.agents.critic_agent import run_critic
 from app.agents.diagnostic_agent import run_diagnostic
 from app.agents.generator_agent import run_generator
 from app.models.entities import KnowledgePoint, WorkflowTrace
+from app.services import mastery as mastery_service
+from app.services import student_portrait as portrait_service
 
 # critic 评分阈值：validationScore < 阈值 → 回 generator 重试
 VALIDATION_THRESHOLD = 0.8
@@ -43,6 +46,28 @@ Retriever = Callable[[str, str, str], list[dict[str, Any]]]
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _portrait_summary(portrait: dict[str, Any]) -> str:
+    """异质学生画像 → 诊断 prompt 用的 profileSummary 文本（因人而异）。
+
+    可量化维度（带 score）渲染「标签 N分」，定性维度渲染「标签：取值」；
+    空画像（尚未诊断）落通用基线占位，使 Mock 模式仍可由该用户掌握度派生差异。
+    """
+    dims = portrait.get("dimensions") or []
+    parts: list[str] = []
+    for d in dims:
+        label = d.get("label") or d.get("key") or ""
+        if not label:
+            continue
+        score = d.get("score")
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            parts.append(f"{label} {int(score)}分")
+        else:
+            value = (d.get("value") or "").strip()
+            if value:
+                parts.append(f"{label}：{value}")
+    return "；".join(parts) if parts else "画像尚未采集（按通用基线诊断）"
 
 
 def _list_reducer(left: list | None, right: list | None) -> list:
@@ -155,10 +180,19 @@ def _build_graph(db: Session, retriever: Retriever, disable_critic: bool = False
     # 直接放行首版生成、不做接地校验与重试/降级，用于度量「去掉审核闭环」的幻觉率。
     def diagnostic_node(state: WorkflowState) -> dict:
         started, t0 = _now_iso(), time.perf_counter()
+        # 读当前用户真实画像 + 掌握度 → 因人而异的学情诊断（不再用写死的通用模板）。
+        # user_id 缺省（极端兜底）时退化为空画像 / 空掌握度，仍可跑通。
+        user_id = state.get("user_id") or ""
+        portrait = (
+            portrait_service.get_portrait(db, user_id) if user_id else {"dimensions": []}
+        )
+        status_map = mastery_service.get_status_map(db, user_id) if user_id else {}
         res = run_diagnostic(
             db,
             kp_id=state["kp_id"],
             kp_name=state["kp_name"],
+            profile_summary=_portrait_summary(portrait),
+            mastery_status=json.dumps(status_map, ensure_ascii=False),
             target_job=state.get("target_job", ""),
         )
         summary = res["output"]["summary"]

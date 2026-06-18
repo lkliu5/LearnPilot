@@ -10,12 +10,17 @@ conftest 已做测试库隔离根治"未来累积"；本脚本一次性清掉"�
 - 连带删除所有含 user_id 列的表中属于这些用户的行（mastery/journeys/
   workflow_traces/student_portraits，按 PRAGMA 动态识别，对未来新表也安全）；
 - 共享缓存（resource_cache，按 kp+难度而非 user_id）与种子数据不动；
-- 删除前自动备份 zhixue.db.bak-<ts>（仓库 .gitignore 已忽略 db 备份）。
+- 删除前自动备份 zhixue-<ts>.db.bak（仓库 .gitignore 已忽略 db 备份）。
+
+安全热备份：用 SQLite 在线备份 API（`Connection.backup()`）而非 `shutil.copy2`
+裸拷文件——后者在服务仍持有 db 时拷到的可能是不一致快照（WAL 模式下更会漏掉
+未 checkpoint 的内容），且与运行中句柄相互干扰可触发 `disk I/O error`。在线备份
+对运行中的库生成一致快照、互不干扰；本脚本所有写连接亦设 busy_timeout，锁竞争
+时重试而非直接报错。服务运行时可安全执行本脚本。
 
 用法：python scripts/cleanup_dev_test_accounts.py
 """
 import os
-import shutil
 import sqlite3
 import sys
 import time
@@ -27,13 +32,22 @@ SEED_IDS = ("u_10000", "u_10001")  # admin / learner_001
 if not os.path.exists(DB):
     sys.exit(f"找不到 dev 库：{DB}")
 
-# 1) 备份（命名以 .db.bak 结尾，命中 .gitignore 的 *.db.bak，不进版本库）
+# 1) 在线备份（一致快照，服务运行时安全；命名命中 .gitignore 的 *.db.bak）
 ts = time.strftime("%Y%m%d-%H%M%S")
 bak = os.path.join(os.path.dirname(DB), f"zhixue-{ts}.db.bak")
-shutil.copy2(DB, bak)
+_src = sqlite3.connect(DB, timeout=30)
+_dst = sqlite3.connect(bak)
+try:
+    with _dst:
+        _src.backup(_dst)  # SQLite 原生在线备份，不裸拷文件
+finally:
+    _dst.close()
+    _src.close()
 print(f"[backup] {bak}")
 
-con = sqlite3.connect(DB)
+# timeout=30：锁竞争时重试至多 30s 而非立即报错（服务并发访问同库时更稳）
+con = sqlite3.connect(DB, timeout=30)
+con.execute("PRAGMA busy_timeout=30000")
 con.execute("PRAGMA foreign_keys=OFF")  # 手动按表清理，避免 FK 报错
 cur = con.cursor()
 

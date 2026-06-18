@@ -6,6 +6,7 @@ import SourceTrace, { type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import LearningFlow from '../components/LearningFlow'
+import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
@@ -231,40 +232,33 @@ const mermaidChart = `flowchart LR
   O -. 反向传播更新 .-> W
 `
 
-/* Tab 按语义分三组：学习内容 / 练习检验 / 辅助拓展 */
-const TAB_GROUPS = [
-  {
-    name: '学习内容',
-    tone: 'primary',
-    tabs: [
-      { id: 'lecture', emoji: '📖', label: '定制讲义' },
-      { id: 'video', emoji: '🎬', label: '讲解视频' },
-      { id: 'mindmap', emoji: '🧠', label: '思维导图' },
-      { id: 'diagram', emoji: '📊', label: '知识图解' },
-    ],
-  },
-  {
-    name: '练习检验',
-    tone: 'accent',
-    tabs: [
-      { id: 'code', emoji: '💻', label: '代码实操' },
-      { id: 'quiz', emoji: '✍️', label: '分阶测试' },
-    ],
-  },
-  {
-    name: '辅助拓展',
-    tone: 'muted',
-    tabs: [
-      { id: 'external', emoji: '🔗', label: '资源推荐' },
-      { id: 'tutor', emoji: '💬', label: '导学对话' },
-    ],
-  },
-] as const
+/* 资源中枢可打开的全部内容（5 张插画卡 + 测试 + 两个辅助项）；
+   插画卡走 layoutId 共享元素过场，其余从主按钮/小 chip 打开。 */
+type Tab = 'lecture' | 'video' | 'mindmap' | 'diagram' | 'code' | 'quiz' | 'external' | 'tutor'
 
-type Tab = (typeof TAB_GROUPS)[number]['tabs'][number]['id']
+/* 每个内容的详情头部主题色（沿用插画浅底，保持卡片→详情视觉连续）*/
+const RESOURCE_META: Record<Tab, { title: string; theme: string }> = {
+  lecture: { title: '定制讲义', theme: '#e7f4ee' },
+  video: { title: '讲解视频', theme: '#e8f0fb' },
+  mindmap: { title: '思维导图', theme: '#efeafb' },
+  diagram: { title: '知识图解', theme: '#fbf2e2' },
+  code: { title: '代码实操', theme: '#eceef3' },
+  quiz: { title: '分阶测试', theme: 'color-mix(in srgb, var(--success-500) 14%, var(--surface))' },
+  external: { title: '资源推荐', theme: 'color-mix(in srgb, var(--primary) 12%, var(--surface))' },
+  tutor: { title: '导学对话', theme: 'color-mix(in srgb, var(--primary) 12%, var(--surface))' },
+}
 
-const ALL_TAB_IDS = TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id))
-const isTab = (v: string | null): v is Tab => !!v && (ALL_TAB_IDS as readonly string[]).includes(v)
+/* 学习内容 → 插画卡片网格（与 ResourceIllustration 的 5 个类型一一对应）*/
+const RESOURCE_CARDS: { id: ResourceIllustrationType; title: string; desc: string }[] = [
+  { id: 'lecture', title: '定制讲义', desc: '根据你的学习路径生成的个性化讲义，难度自适应、RAG 可溯源。' },
+  { id: 'video', title: '讲解视频', desc: '动画演示与案例讲解，配同步旁白，更直观地理解知识点。' },
+  { id: 'mindmap', title: '思维导图', desc: '把讲义结构化成知识脉络图，构建完整的知识体系。' },
+  { id: 'diagram', title: '知识图解', desc: '图文结合的方式，更清晰地展示前向/反向的知识关系。' },
+  { id: 'code', title: '代码实操', desc: '浏览器内可运行的示例，改完即时看结果，加深实践应用。' },
+]
+
+const ALL_TAB_IDS = Object.keys(RESOURCE_META)
+const isTab = (v: string | null): v is Tab => !!v && ALL_TAB_IDS.includes(v)
 
 /** 从讲义 markdown 提取标题大纲（跳过代码块内的 # 注释行），供思维导图结构化 */
 function lectureOutline(md: string): string {
@@ -288,13 +282,14 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const kpId = USE_REAL_API ? getResourceKpId() : CURRENT_KP_ID
   /* 进入模式：「开始学习」→ flow（费曼+康奈尔有序流）；「查看资源」→ browse（8-tab 中枢）*/
   const [mode, setMode] = useState<ResourceMode>(() => getResourceMode())
-  /* 落点 Tab：路径页「查看资源」落资源推荐，「开始学习」落默认讲义（一次性参数，读后即清）*/
-  const [tab, setTab] = useState<Tab>(() => {
+  /* 资源详情过场：openId=当前打开的内容（null=只显示卡片网格）。
+     落点：路径页「查看资源」带的落点 Tab 会直接展开对应内容；无显式落点则停在网格。 */
+  const [openId, setOpenId] = useState<Tab | null>(() => {
     const t = consumeResourceEntryTab()
-    return isTab(t) ? t : 'lecture'
+    return isTab(t) ? t : null
   })
 
-  /* 费曼缺口「回看」：切到资源中枢自由浏览，落对应资源 Tab */
+  /* 费曼缺口「回看」：切到资源中枢，直接展开对应资源详情 */
   const REVIEW_KIND_TO_TAB: Record<string, Tab> = {
     lecture: 'lecture',
     video: 'video',
@@ -306,7 +301,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   }
   const handleReview = (ref: ReviewRef) => {
     setMode('browse')
-    setTab(REVIEW_KIND_TO_TAB[ref.kind] ?? 'lecture')
+    setOpenId(REVIEW_KIND_TO_TAB[ref.kind] ?? 'lecture')
   }
   const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
   const [regenerating, setRegenerating] = useState(false)
@@ -467,6 +462,163 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     onNavigate?.('workflow')
   }
 
+  /* ---------- 资源详情过场：打开 / 关闭 + Esc + 焦点管理 + 滚动锁 ---------- */
+  const ILLUSTRATED = new Set<Tab>(['lecture', 'video', 'mindmap', 'diagram', 'code'])
+  const openCard = (id: Tab) => {
+    // 进入「分阶测试」沿用既有检验前置：未掌握时置 pending-check（passed 不回退）
+    if (id === 'quiz' && kpStatus === 'learning') goCheck(kpId)
+    setOpenId(id)
+  }
+  const closeCard = () => setOpenId(null)
+
+  /* 打开详情时：Esc 关闭、锁背景滚动、关闭后焦点回到触发元素 */
+  useEffect(() => {
+    if (!openId) return
+    const prev = document.activeElement as HTMLElement | null
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+      prev?.focus?.()
+    }
+  }, [openId])
+
+  /* 单个内容的真实渲染（复用既有 /resource/* 数据与多模态组件）*/
+  const renderBody = (id: Tab) => {
+    switch (id) {
+      case 'lecture':
+        return (
+          <>
+            {/* 难度自适应再生成（讲义专属操作，归位到讲义详情）*/}
+            <div className="level-switch">
+              <span className="level-switch__label">难度自适应：</span>
+              <div className="level-switch__seg">
+                {LEVELS.map((lv) => (
+                  <button
+                    key={lv}
+                    className={`level-switch__btn ${level === lv ? 'level-switch__btn--active' : ''}`}
+                    onClick={() => changeLevel(lv)}
+                    disabled={regenerating}
+                  >
+                    {lv}
+                  </button>
+                ))}
+              </div>
+              <span className="level-switch__hint">切换难度，AI 实时重生成讲义</span>
+            </div>
+
+            {/* B10：本档讲义产出工作流（仅联调）——查看生成过程 / 重新生成进行中提示 */}
+            {USE_REAL_API && regenRunning && (
+              <div className="lecture-regen-bar">
+                <span className="lecture-regen-bar__progress">
+                  <span className="lecture-regen-bar__orb" />
+                  多智能体工作流 · {regenPhase}…
+                </span>
+              </div>
+            )}
+            {USE_REAL_API && !regenRunning && lectureWf[level] && (
+              <div className="lecture-regen-bar">
+                <button type="button" className="lecture-regen-bar__link" onClick={viewGenerationProcess}>
+                  查看生成过程 →
+                </button>
+              </div>
+            )}
+
+            {/* RAG 溯源（针对讲义内容，归位到讲义详情底部工具条上方）*/}
+            <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
+
+            <div className="lecture-body">
+              {activeLecture ? (
+                <MarkdownRenderer content={activeLecture} />
+              ) : (
+                <div className="resource-loading">「{kpName}」的定制讲义生成中，请稍候…</div>
+              )}
+              <AnimatePresence>
+                {regenerating && (
+                  <motion.div
+                    className="lecture-regen"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="lecture-regen__orb" />
+                    <span>领域知识生成 Agent 正在按新难度重生成讲义…</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </>
+        )
+      case 'video':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">AI 生成的讲解视频（Remotion 渲染）+ 同步旁白，点击播放：</div>
+            <VideoLecture />
+          </Suspense>
+        )
+      case 'mindmap':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">AI 已将讲义结构化为知识脉络图，可缩放/拖拽：</div>
+            {activeMindmap ? (
+              <MindMap markdown={activeMindmap} />
+            ) : (
+              <div className="resource-loading">「{kpName}」的讲义生成后将自动结构化为思维导图…</div>
+            )}
+          </Suspense>
+        )
+      case 'code':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完左侧代码即时看结果：</div>
+            <CodeSandbox />
+          </Suspense>
+        )
+      case 'diagram':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">「{kpName}」知识脉络图（AI 按当前主题生成，可缩放/拖拽）：</div>
+            {USE_REAL_API && !diagramChart ? (
+              <div className="resource-loading">「{kpName}」的知识图解生成中，请稍候…</div>
+            ) : (
+              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mermaidChart} />
+            )}
+          </Suspense>
+        )
+      case 'external':
+        return (
+          <Suspense fallback={<Loading />}>
+            <ResourceAggregator />
+          </Suspense>
+        )
+      case 'tutor':
+        return (
+          <Suspense fallback={<Loading />}>
+            <SocraticTutor />
+          </Suspense>
+        )
+      case 'quiz':
+        return (
+          <>
+            <div className="resource-modal-hint">
+              通过即点亮「已掌握」并推进进度（答对 ≥ 60% 判定通过）。
+            </div>
+            {questions.length > 0 ? (
+              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
+            ) : (
+              <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
+            )}
+            {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
+          </>
+        )
+    }
+  }
+
   return (
     <div className="resource-page">
       {/* 统一标题区：锚条 + 高亮 + 状态徽章组 */}
@@ -548,197 +700,120 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       )}
 
       {mode === 'browse' && (
-      <RevealGroup>
-      {/* Tab 切换 */}
-      <RevealItem className="resource-tabs">
-        {TAB_GROUPS.map((g) => (
-          <div className={`resource-tab-group resource-tab-group--${g.tone}`} key={g.name}>
-            <div className="resource-tab-group__head">
-              <span className="resource-tab-group__dot" />
-              <span className="resource-tab-group__label">{g.name}</span>
-            </div>
-            <div className="resource-tab-group__items">
-              {g.tabs.map((t) => (
-                <button
-                  key={t.id}
-                  className={`resource-tab ${tab === t.id ? 'resource-tab--active' : ''}`}
-                  onClick={() => setTab(t.id)}
+        <RevealGroup>
+          {/* 学习内容 → 插画卡片网格（点击走 layoutId 过场展开详情）*/}
+          <RevealItem className="rescard-grid">
+            {RESOURCE_CARDS.map((c) => (
+              <motion.button
+                key={c.id}
+                type="button"
+                className="rescard"
+                onClick={() => openCard(c.id)}
+                whileHover={{ y: -5 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <motion.span
+                  className="rescard__illu"
+                  layoutId={`res-illu-${c.id}`}
+                  style={{ background: RESOURCE_META[c.id].theme }}
                 >
-                  <span className="resource-tab__emoji">{t.emoji}</span>
-                  <span className="resource-tab__text">{t.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </RevealItem>
+                  <ResourceIllustration type={c.id} />
+                </motion.span>
+                <span className="rescard__meta">
+                  <span className="rescard__title">{c.title}</span>
+                  <span className="rescard__desc">{c.desc}</span>
+                </span>
+              </motion.button>
+            ))}
+          </RevealItem>
 
-      {/* 内容卡片 */}
-      <RevealItem className="resource-card">
-        {tab === 'lecture' && (
-          <>
-            {/* 难度自适应再生成 */}
-            <div className="level-switch">
-              <span className="level-switch__label">难度自适应：</span>
-              <div className="level-switch__seg">
-                {LEVELS.map((lv) => (
-                  <button
-                    key={lv}
-                    className={`level-switch__btn ${level === lv ? 'level-switch__btn--active' : ''}`}
-                    onClick={() => changeLevel(lv)}
-                    disabled={regenerating}
-                  >
-                    {lv}
-                  </button>
-                ))}
-              </div>
-              <span className="level-switch__hint">切换难度，AI 实时重生成讲义</span>
-            </div>
+          {/* 阶段测试不再挂在资源中枢——它是有序学习流唯一的「终点 gate」（见 LearningFlow）。
+             资源中枢仅用于自由浏览各形态资源，避免「看视频时却显示测试已完成」的跨资源串显。
+             去测试请切到「🧭 有序学习」，走完学习步骤后在末尾解锁。 */}
+          <RevealItem className="browse-hint">
+            <span className="browse-hint__icon">🏁</span>
+            <span className="browse-hint__text">
+              阶段测试在「<button type="button" className="browse-hint__link" onClick={() => setMode('flow')}>🧭 有序学习</button>」流程末尾——
+              走完视频 / 讲义 / 图解 / 笔记 / 费曼 / 实操后自动解锁，通过即点亮「已掌握」并推进进度。
+            </span>
+          </RevealItem>
 
-            {/* B10：讲义重新生成闭环（仅联调）——重新生成 + 迷你进度 + 查看生成过程 */}
+          {/* 辅助项降级：次要小 chip 工具行（不与内容卡争视觉权重）*/}
+          <RevealItem className="aux-chips">
+            <span className="aux-chips__label">更多工具</span>
+            <button type="button" className="aux-chip" onClick={() => openCard('tutor')}>
+              💬 导学对话
+            </button>
+            <button type="button" className="aux-chip" onClick={() => openCard('external')}>
+              🔗 资源推荐
+            </button>
             {USE_REAL_API && (
-              <div className="lecture-regen-bar">
-                <button
-                  type="button"
-                  className="lecture-regen-bar__btn"
-                  onClick={() => setRegenConfirm(true)}
-                  disabled={regenRunning || regenerating}
-                >
-                  {regenRunning ? '工作流生成中…' : '🔄 重新生成'}
-                </button>
-                {regenRunning && (
-                  <span className="lecture-regen-bar__progress">
-                    <span className="lecture-regen-bar__orb" />
-                    多智能体工作流 · {regenPhase}…
-                  </span>
-                )}
-                {!regenRunning && lectureWf[level] && (
-                  <button
-                    type="button"
-                    className="lecture-regen-bar__link"
-                    onClick={viewGenerationProcess}
-                  >
-                    查看生成过程 →
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                className="aux-chip"
+                onClick={() => setRegenConfirm(true)}
+                disabled={regenRunning || regenerating}
+              >
+                {regenRunning ? `⏳ 重新生成中 · ${regenPhase}…` : '🔄 重新生成讲义'}
+              </button>
             )}
-
-            <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
-
-            <div className="lecture-body">
-              {activeLecture ? (
-                <MarkdownRenderer content={activeLecture} />
-              ) : (
-                <div className="resource-loading">「{kpName}」的定制讲义生成中，请稍候…</div>
-              )}
-              <AnimatePresence>
-                {regenerating && (
-                  <motion.div
-                    className="lecture-regen"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <div className="lecture-regen__orb" />
-                    <span>领域知识生成 Agent 正在按新难度重生成讲义…</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </>
-        )}
-        {tab === 'video' && (
-          <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">AI 生成的讲解视频（Remotion 渲染）+ 同步旁白，点击播放：</div>
-            <VideoLecture />
-          </Suspense>
-        )}
-        {tab === 'mindmap' && (
-          <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">AI 已将讲义结构化为知识脉络图，可缩放/拖拽：</div>
-            {activeMindmap ? (
-              <MindMap markdown={activeMindmap} />
-            ) : (
-              <div className="resource-loading">「{kpName}」的讲义生成后将自动结构化为思维导图…</div>
-            )}
-          </Suspense>
-        )}
-        {tab === 'code' && (
-          <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完左侧代码即时看结果：</div>
-            <CodeSandbox />
-          </Suspense>
-        )}
-        {tab === 'diagram' && (
-          <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">「{kpName}」知识脉络图（AI 按当前主题生成，可缩放/拖拽）：</div>
-            {USE_REAL_API && !diagramChart ? (
-              <div className="resource-loading">「{kpName}」的知识图解生成中，请稍候…</div>
-            ) : (
-              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mermaidChart} />
-            )}
-          </Suspense>
-        )}
-        {tab === 'external' && (
-          <Suspense fallback={<Loading />}>
-            <ResourceAggregator />
-          </Suspense>
-        )}
-        {tab === 'quiz' && (
-          <>
-            {questions.length > 0 ? (
-              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} />
-            ) : (
-              <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
-            )}
-            {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
-          </>
-        )}
-        {tab === 'tutor' && (
-          <Suspense fallback={<Loading />}>
-            <SocraticTutor />
-          </Suspense>
-        )}
-      </RevealItem>
-
-      {/* 单一主线：学（任选形态）→ 检验（分阶测试）→ 通过即掌握，唯一下一步 */}
-      <RevealItem className="flow-next">
-        <div className="flow-next__text">
-          <span className="flow-next__step">
-            {STATUS_LABEL[kpStatus]} · {kpName}
-          </span>
-          <span className="flow-next__desc">
-            {kpStatus === 'passed'
-              ? '已通过分阶测试，该知识点标记为「已掌握」，进度已同步到学习路径、知识图谱与学情概览'
-              : kpStatus === 'pending-check'
-                ? '完成下方分阶测试（答对 ≥ 60%）即可标记掌握'
-                : '任选学习形态学完后，去分阶测试检验掌握度——「完成」以通过测试为准'}
-          </span>
-        </div>
-        {kpStatus === 'passed' ? (
-          <button className="flow-next__btn" type="button" onClick={() => onNavigate?.('learning-path')}>
-            ✓ 已掌握，去学下一个 →
-          </button>
-        ) : kpStatus === 'pending-check' ? (
-          <button className="flow-next__btn" type="button" onClick={() => setTab('quiz')}>
-            去完成分阶测试 →
-          </button>
-        ) : (
-          <button
-            className="flow-next__btn"
-            type="button"
-            onClick={() => {
-              goCheck(kpId)
-              setTab('quiz')
-            }}
-          >
-            我学好了，去检验 →
-          </button>
-        )}
-      </RevealItem>
-      </RevealGroup>
+          </RevealItem>
+        </RevealGroup>
       )}
+
+      {/* 资源详情过场：layoutId 共享元素「长大」成详情头部，内容淡入；× / Esc / 点遮罩关闭 */}
+      <AnimatePresence>
+        {mode === 'browse' && openId && (
+          <motion.div
+            className="rescard-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeCard}
+            role="dialog"
+            aria-modal="true"
+            aria-label={RESOURCE_META[openId].title}
+          >
+            <motion.div className="rescard-detail" onClick={(e) => e.stopPropagation()}>
+              {ILLUSTRATED.has(openId) ? (
+                <motion.div
+                  className="rescard-detail__head"
+                  layoutId={`res-illu-${openId}`}
+                  style={{ background: RESOURCE_META[openId].theme }}
+                >
+                  <ResourceIllustration type={openId as ResourceIllustrationType} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  className="rescard-detail__head rescard-detail__head--plain"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  style={{ background: RESOURCE_META[openId].theme }}
+                />
+              )}
+              <h3 className="rescard-detail__title">{RESOURCE_META[openId].title}</h3>
+              <button
+                type="button"
+                className="rescard-detail__close"
+                onClick={closeCard}
+                autoFocus
+                aria-label="关闭"
+              >
+                ×
+              </button>
+
+              <motion.div
+                className="rescard-detail__body"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12, duration: 0.25 }}
+              >
+                {renderBody(openId)}
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* B10：重新生成确认弹层（约需 20 秒提示） */}
       <AnimatePresence>

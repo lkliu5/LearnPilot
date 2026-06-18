@@ -52,6 +52,34 @@ def get_portrait(db: Session, user_id: str) -> dict[str, Any]:
     return _serialize(_get_or_create(db, user_id))
 
 
+def replace_portrait(
+    db: Session, user_id: str, dimensions: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """整份覆盖写入权威画像（接口文档 17.4「重做诊断 = 覆盖更新」）。
+
+    简历 / 手动填写路径确认画像时调用：把已映射为 canonical 维度（与对话诊断同一套
+    key）的整份画像写入同一行 StudentPortrait，**不与历史合并**（覆盖），从而三条
+    路径产出的是同一份、同维度的权威画像；重做即覆盖、不分叉。
+    维度按 PORTRAIT_DIMENSIONS 稳定排序，每维补 updatedAt。
+    """
+    row = _get_or_create(db, user_id)
+    stamp = _now_iso()
+    cleaned: list[dict[str, Any]] = []
+    for dim in dimensions:
+        key = dim.get("key")
+        if not key:
+            continue
+        merged = dict(dim)
+        merged["updatedAt"] = stamp
+        cleaned.append(merged)
+    cleaned.sort(key=lambda d: _ORDER.get(d["key"], len(_ORDER)))
+    row.dimensions = cleaned
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _serialize(row)
+
+
 def apply_updates(
     db: Session, user_id: str, updates: list[dict[str, Any]]
 ) -> dict[str, Any]:

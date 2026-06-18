@@ -9,7 +9,7 @@
  * Mock-first：无后端（USE_REAL_API=false）时走本地脚本化多轮对话，逐 token 模拟流式 +
  * 边问边抽画像，保证「无任何 API Key 跑通全链路」。
  */
-import { ApiError, USE_REAL_API, apiGet, getToken } from './api'
+import { ApiError, USE_REAL_API, apiGet, apiPut, getToken } from './api'
 
 /** 17.2 PortraitDimension（亦即 17.1 portraitUpdates[] / event:portrait 的 updates[] 元素） */
 export interface PortraitDimension {
@@ -73,6 +73,16 @@ export function getStudentPortrait(): Promise<StudentPortrait> {
   if (USE_REAL_API) return apiGet<StudentPortrait>('/profile/student-portrait')
   // mock：尚无诊断数据，返回空画像（17.3 约定，非错误）
   return Promise.resolve({ dimensions: [], version: 'v1', updatedAt: new Date().toISOString() })
+}
+
+/**
+ * 覆盖写入权威画像（17.4）。简历 / 手动路径「确认画像」时调用，把已映射为 canonical
+ * 维度的整份画像整体覆盖写入同一行 StudentPortrait（重做即覆盖、不分叉）。
+ * mock 模式下无后端，前端 store 已是权威，故直接 no-op（成功）。
+ */
+export function saveStudentPortrait(dimensions: PortraitDimension[]): Promise<void> {
+  if (!USE_REAL_API) return Promise.resolve()
+  return apiPut<unknown>('/profile/student-portrait', { dimensions }).then(() => undefined)
 }
 
 /* ============ 真实后端 SSE（镜像 tutor.ts，新增 event:portrait 处理） ============ */

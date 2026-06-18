@@ -24,6 +24,7 @@ from app.schemas.profile import (
     DialogueRequest,
     DiagnosisCompleteRequest,
     NarrativeRequest,
+    StudentPortraitWriteRequest,
 )
 from app.services import profile as profile_service
 from app.services import profile_dialogue as dialogue_service
@@ -128,4 +129,21 @@ async def student_portrait(
 ):
     """获取异质学生动态画像（接口文档 17.3）。无数据 → 空画像占位（dimensions:[]）。"""
     data = portrait_service.get_portrait(db, user.id)
+    return success(data)
+
+
+@router.put("/profile/student-portrait")
+async def write_student_portrait(
+    body: StudentPortraitWriteRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """覆盖写入权威画像（接口文档 17.4，C-fix）。
+
+    简历 / 手动填写路径「确认画像」时调用：把表单输入映射为与对话诊断同一套
+    canonical 维度后整份覆盖写入 StudentPortrait，使三条路径产出同一份、同维度的
+    权威画像；重做即覆盖、不分叉（与对话诊断 17.1 边问边抽共用同一行）。
+    """
+    dimensions = [d.model_dump(exclude_none=True) for d in body.dimensions]
+    data = portrait_service.replace_portrait(db, user.id, dimensions)
     return success(data)

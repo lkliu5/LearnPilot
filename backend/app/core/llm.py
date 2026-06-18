@@ -1828,14 +1828,45 @@ class LLMClient:
 
     @staticmethod
     def _mock_diagnosis(variables: dict[str, Any]) -> dict[str, Any]:
-        """诊断 Agent mock：定位薄弱知识点（确定性：取基线最低两维对应 kp）。"""
+        """诊断 Agent mock：基于**该用户真实画像 + 掌握度**定位薄弱点（因人而异）。
+
+        - 薄弱点：目标 kp + 该用户尚未通过（status≠passed）的其它知识点；不足 3 项时
+          以固定后备维度补齐，保证输出稳定；
+        - 诊断依据（reasoning）引用该用户画像摘要与掌握度计数，不同用户 / 不同掌握度
+          → 文案不同，不再是全局同一句模板。
+        """
         target_kp = variables.get("kpId") or "attention"
         target_name = variables.get("kpName") or target_kp
-        weak = [target_kp] + [k for k in ("transformer", "finetune") if k != target_kp]
+        profile_summary = (variables.get("profileSummary") or "").strip()
+        try:
+            mastery_map = json.loads(variables.get("masteryStatus") or "{}")
+            if not isinstance(mastery_map, dict):
+                mastery_map = {}
+        except (ValueError, TypeError):
+            mastery_map = {}
+
+        not_passed = [
+            k for k, v in mastery_map.items() if v != "passed" and k != target_kp
+        ]
+        weak = [target_kp] + not_passed
+        for fallback in ("transformer", "finetune"):
+            if len(weak) >= 3:
+                break
+            if fallback not in weak:
+                weak.append(fallback)
+        weak = weak[:3]
+
+        passed_n = sum(1 for v in mastery_map.values() if v == "passed")
+        pending_n = sum(1 for v in mastery_map.values() if v != "passed")
+        basis = profile_summary[:60] if profile_summary else "画像尚未采集（按通用基线）"
+        reasoning = (
+            f"依据该用户画像（{basis}）与掌握度（已通过 {passed_n} 项、待巩固 "
+            f"{pending_n} 项）：「{target_name}」等 {len(weak)} 处为当前薄弱点。"
+        )
         return {
-            "weakKpIds": weak[:3],
-            "summary": f"检测到 {len(weak[:3])} 处知识盲区，建议优先学习「{target_name}」",
-            "reasoning": "依据画像基线与掌握度：注意力机制/Transformer/大模型微调维度偏弱。",
+            "weakKpIds": weak,
+            "summary": f"检测到 {len(weak)} 处薄弱点，建议优先学习「{target_name}」",
+            "reasoning": reasoning,
         }
 
     def _mock_generation(self, variables: dict[str, Any]) -> dict[str, Any]:

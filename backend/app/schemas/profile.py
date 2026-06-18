@@ -70,6 +70,27 @@ class GeneratePathRequest(BaseModel):
     targetJobId: str | None = None
 
 
+class PortraitDimensionItem(BaseModel):
+    """单个画像维度（接口文档 17.2 PortraitDimension）。
+
+    简历 / 手动路径把表单输入映射为与对话诊断同一套 canonical key 后回写。
+    updatedAt 由服务端统一加盖，请求体可不带。
+    """
+
+    key: str
+    label: str
+    value: str = ""
+    score: int | None = None  # 仅可量化维度（如知识基础）0-100
+    confidence: float = 0.6
+    source: str = "manual"  # dialogue|manual|inferred
+
+
+class StudentPortraitWriteRequest(BaseModel):
+    """PUT /profile/student-portrait 请求体（接口文档 17.4，覆盖写入权威画像）。"""
+
+    dimensions: list[PortraitDimensionItem] = Field(default_factory=list)
+
+
 class DialogueRequest(BaseModel):
     """POST /profile/dialogue 请求体（接口文档 17.1，对话式画像诊断）。
 

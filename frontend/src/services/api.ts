@@ -182,5 +182,7 @@ export async function apiRequestWithCode<T = unknown>(
 export const apiGet = <T>(path: string): Promise<T> => apiRequest<T>(path, { method: 'GET' })
 export const apiPost = <T>(path: string, body?: unknown): Promise<T> =>
   apiRequest<T>(path, { method: 'POST', body })
+export const apiPut = <T>(path: string, body?: unknown): Promise<T> =>
+  apiRequest<T>(path, { method: 'PUT', body })
 export const apiPostForm = <T>(path: string, form: FormData): Promise<T> =>
   apiRequest<T>(path, { method: 'POST', form })

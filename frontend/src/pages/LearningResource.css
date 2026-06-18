@@ -1023,3 +1023,258 @@
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.32);
 }
 .regen-modal__btn--primary:hover { filter: brightness(1.05); }
+
+/* ============================================================
+   资源中枢 · 卡片式（插画卡网格 + layoutId 详情过场）
+   ============================================================ */
+
+/* ----- 插画卡片网格 ----- */
+.rescard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.rescard {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.rescard:hover {
+  box-shadow: var(--shadow-glass-hover);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+}
+
+/* 缩略图：浅底板 + 圆角，layoutId 在此元素上做共享元素过场 */
+.rescard__illu {
+  display: block;
+  aspect-ratio: 220 / 170;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.res-illu {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rescard__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 2px 2px;
+}
+.rescard__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.rescard__desc {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+/* ----- 分阶测试：独立绿色主行 ----- */
+/* 资源中枢内的轻量提示：阶段测试已迁回「有序学习」终点 gate，此处仅引导 */
+.browse-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  border: 1px dashed color-mix(in srgb, var(--primary) 32%, transparent);
+}
+.browse-hint__icon { font-size: 1.3rem; flex-shrink: 0; }
+.browse-hint__text { font-size: 0.82rem; line-height: 1.7; color: var(--ink-soft); }
+.browse-hint__link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+}
+.browse-hint__link:hover { text-decoration: underline; }
+
+.quiz-gate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--success-500) 16%, var(--surface)),
+    color-mix(in srgb, var(--success-500) 7%, var(--surface)));
+  border: 1.5px solid color-mix(in srgb, var(--success-500) 38%, transparent);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--success-500) 16%, transparent);
+}
+.quiz-gate__text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 240px;
+}
+.quiz-gate__kicker {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--success-700);
+}
+.quiz-gate__desc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--success-700) 72%, var(--ink-soft));
+}
+.quiz-gate__mastery {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+.quiz-gate__mastery--passed {
+  color: var(--success-700);
+  background: var(--success-50);
+  border-color: color-mix(in srgb, var(--success-500) 40%, transparent);
+}
+.quiz-gate__btn {
+  flex-shrink: 0;
+  padding: 11px 26px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--success-500), var(--success-600));
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--success-500) 36%, transparent);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.quiz-gate__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--success-500) 44%, transparent);
+}
+
+/* ----- 辅助项小 chip 工具行 ----- */
+.aux-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.aux-chips__label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  margin-right: 2px;
+}
+.aux-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.aux-chip:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
+  color: var(--ink);
+}
+.aux-chip:disabled { cursor: progress; opacity: 0.7; }
+
+/* ----- 详情过场：遮罩 + 详情卡 ----- */
+.rescard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(16px, 5vh, 56px) var(--space-md);
+  overflow-y: auto;
+  background: rgba(var(--ink-rgb), 0.42);
+  backdrop-filter: blur(3px);
+}
+.rescard-detail {
+  position: relative;
+  width: min(880px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+}
+.rescard-detail__head {
+  position: relative;
+  height: 132px;
+  overflow: hidden;
+}
+.rescard-detail__head .res-illu {
+  width: 100%;
+  height: 100%;
+}
+.rescard-detail__head--plain { height: 72px; }
+
+.rescard-detail__title {
+  margin: 0;
+  padding: 16px var(--space-xl) 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+.rescard-detail__close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(var(--ink-rgb), 0.5);
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.rescard-detail__close:hover { background: rgba(var(--ink-rgb), 0.72); transform: rotate(90deg); }
+
+.rescard-detail__body {
+  padding: var(--space-md) var(--space-xl) var(--space-xl);
+}
+
+/* 窄屏：单列卡 + 测试主行堆叠 */
+@media (max-width: 640px) {
+  .quiz-gate { flex-direction: column; align-items: stretch; }
+  .quiz-gate__btn { width: 100%; }
+  .rescard-detail__body { padding: var(--space-md) var(--space-md) var(--space-lg); }
+  .rescard-detail__title { padding-left: var(--space-md); padding-right: var(--space-md); }
+}

@@ -10,7 +10,7 @@ import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
 import { usePortrait } from '../store/portrait'
 import type { JobMarket } from '../services/jobMarket'
-import type { PortraitDimension } from '../services/profileDialogue'
+import { CANONICAL_DIMS, saveStudentPortrait, type PortraitDimension } from '../services/profileDialogue'
 import { generateNarrative, type Narrative, type SourceRef } from '../services/profileNarrative'
 import { USE_REAL_API } from '../services/api'
 import { generateNarrativeApi, parseProfile } from '../services/profile'
@@ -57,6 +57,37 @@ function emptyProfile(): ParsedProfile {
     goal: { value: '', source: 'manual' },
     skills: RADAR_DIMS.map((name) => ({ name, level: 50, source: 'manual' })),
   }
+}
+
+/** canonical 维度标签表（与对话诊断 17.2 同一套 key/label，保证三条路径同维度） */
+const CANON_LABEL: Record<string, string> = Object.fromEntries(CANONICAL_DIMS.map((d) => [d.key, d.label]))
+
+/**
+ * 把简历 / 手动表单输入映射为「与对话诊断同一套 canonical 异质画像维度」。
+ * 注意：RADAR_DIMS 的 6 维知识点自评是「知识掌握/岗位对标雷达」（另一类图、并存不变），
+ * 这里产出的是「学情概览」用的权威异质画像——三条路径据此完全一致、不再另造一套雷达。
+ * 表单未直接采集的维度（认知风格 / 学习节奏）标 inferred + 低置信度（防杜撰，留待对话补全）。
+ */
+function toCanonicalPortrait(draft: ParsedProfile): PortraitDimension[] {
+  const skills = draft.skills
+  const avg = skills.length ? Math.round(skills.reduce((s, k) => s + k.level, 0) / skills.length) : 50
+  const weakest = skills.reduce((min, k) => (k.level < min.level ? k : min), skills[0])
+  const dim = (
+    key: string,
+    value: string,
+    confidence: number,
+    source: PortraitDimension['source'],
+    score?: number
+  ): PortraitDimension => ({ key, label: CANON_LABEL[key] ?? key, value, score, confidence, source })
+
+  return [
+    dim('knowledge_base', `${draft.major.value || '专业'}背景，能力自评均值 ${avg}`, 0.7, 'manual', avg),
+    dim('prior_experience', `${draft.education.value || '—'} · ${draft.major.value || '—'}`, 0.7, 'manual'),
+    dim('learning_goal', draft.goal.value || '—', 0.8, 'manual'),
+    dim('error_preference', `${weakest?.name ?? '部分知识点'}偏薄弱（自评 ${weakest?.level ?? 0}）`, 0.5, 'inferred'),
+    dim('cognitive_style', '待对话诊断补全', 0.4, 'inferred'),
+    dim('learning_pace', '待对话诊断补全', 0.4, 'inferred'),
+  ]
 }
 
 /**
@@ -249,17 +280,15 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     materials.find((m) => m.id === activeSource)?.label
 
   const finish = () => {
-    // 表单入口：仅写学情概览快照（不弹确认弹窗）——把能力自评映射为画像维度，供首页合成真实概览
+    // 表单入口：把多模态输入映射为「与对话诊断同一套 canonical 维度」的权威画像（不再另造
+    // 一套知识点雷达），写入 store（学情概览据此合成）；联调时覆盖写后端 StudentPortrait，
+    // 使三条路径产出同一份、同维度的权威画像，重做即覆盖、不分叉。
     if (draft) {
-      const snapshot: PortraitDimension[] = draft.skills.map((s) => ({
-        key: s.name,
-        label: s.name,
-        value: `自评 ${s.level}`,
-        score: s.level,
-        confidence: 0.7,
-        source: s.source === 'manual' ? 'manual' : 'dialogue',
-      }))
+      const snapshot = toCanonicalPortrait(draft)
       setPortrait(snapshot)
+      if (USE_REAL_API) {
+        saveStudentPortrait(snapshot).catch((e) => console.error('[profile] 画像覆盖写入失败', e))
+      }
     }
     completeDiagnosis(targetJob ? { targetJobName: targetJob.name, matchPct } : undefined)
     onNavigate?.('learning-path')

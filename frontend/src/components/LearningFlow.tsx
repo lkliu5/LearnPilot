@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from './MarkdownRenderer'
 import QuizRenderer, { type QuizQuestion } from './QuizRenderer'
@@ -110,6 +110,11 @@ export default function LearningFlow({
 
   const steps = progress?.steps ?? {}
   const completedCount = progress?.completedCount ?? 0
+  /* 终点 gate 解锁条件：6 个学习步骤全部完成才呈现/解锁阶段测试——
+     学习内容没走完时测试不可作答、不可完成（阶段测试是唯一的终点 gate）。 */
+  const allStepsDone = (['video', 'lecture', 'diagram', 'note', 'feynman', 'practice'] as StepKey[]).every(
+    (k) => steps[k]
+  )
 
   /** 标记某步骤完成/取消并刷新进度（18.3 POST）。 */
   const toggleStep = (step: StepKey, done: boolean) => {
@@ -119,8 +124,17 @@ export default function LearningFlow({
   }
 
   const phase = PHASES[phaseIdx]
+  const isLastPhase = phaseIdx === PHASES.length - 1
   const goNext = () => setPhaseIdx((i) => Math.min(i + 1, PHASES.length - 1))
   const goPrev = () => setPhaseIdx((i) => Math.max(i - 1, 0))
+
+  /* 走完最后一段（实操）→ 引导去独立的阶段测试 gate：滚动定位 + 置 pending-check */
+  const gateRef = useRef<HTMLElement>(null)
+  const goToGate = () => {
+    // 仅在学习步骤全部完成后才前置 pending-check（未走完不进入检验态）
+    if (allStepsDone) onGoCheck()
+    gateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const handleQuiz = (
     wrong: QuizQuestion[],
@@ -270,19 +284,26 @@ export default function LearningFlow({
         <button type="button" className="flow__nav-btn" onClick={goPrev} disabled={phaseIdx === 0}>
           ← 上一步
         </button>
-        <span className="flow__nav-hint">{phase.desc}</span>
-        <button
-          type="button"
-          className="flow__nav-btn flow__nav-btn--primary"
-          onClick={goNext}
-          disabled={phaseIdx === PHASES.length - 1}
-        >
-          下一步 →
-        </button>
+        <span className="flow__nav-hint">
+          {isLastPhase
+            ? allStepsDone
+              ? '过程已走完，下一步去末尾的阶段测试检验掌握度'
+              : '完成全部 6 个学习步骤后，末尾的阶段测试将自动解锁'
+            : phase.desc}
+        </span>
+        {isLastPhase ? (
+          <button type="button" className="flow__nav-btn flow__nav-btn--primary" onClick={goToGate}>
+            去阶段测试检验 →
+          </button>
+        ) : (
+          <button type="button" className="flow__nav-btn flow__nav-btn--primary" onClick={goNext}>
+            下一步 →
+          </button>
+        )}
       </div>
 
       {/* ===== 阶段测试 · 独立 gate（与学习内容明确分区）===== */}
-      <section className="gate">
+      <section className="gate" ref={gateRef}>
         <div className="gate__head">
           <div className="gate__head-text">
             <span className="gate__kicker">独立检验 · GATE</span>
@@ -306,6 +327,18 @@ export default function LearningFlow({
             <button className="gate__passed-btn" type="button" onClick={() => onNavigate?.('learning-path')}>
               去学下一个 →
             </button>
+          </div>
+        ) : !allStepsDone ? (
+          /* 学习内容没走完 → 测试锁定，不渲染 QuizRenderer（不可作答 / 不可完成） */
+          <div className="gate__locked">
+            <span className="gate__locked-icon">🔒</span>
+            <div className="gate__locked-text">
+              <strong>阶段测试未解锁</strong>
+              <span>
+                先完成上面的 6 个学习步骤（当前 {completedCount}/6），测试将在末尾自动解锁——
+                通过测试即点亮「已掌握」并推进学习路径进度。
+              </span>
+            </div>
           </div>
         ) : questions.length > 0 ? (
           <>
