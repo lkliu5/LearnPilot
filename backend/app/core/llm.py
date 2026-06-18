@@ -409,6 +409,23 @@ _DIAGRAM_TEMPLATES: dict[str, str] = {
 
 
 _QUESTION_TYPES = ("single", "multiple", "boolean")
+# 简答题型（C-fix 批2，9.1 扩展）：options 为空，correct_answer 存参考要点列表，
+# explanation 存参考答案；判分经 LLMClient.score_short_answer（mock 确定性兜底）。
+SHORT_ANSWER_TYPE = "short_answer"
+
+
+def _char_bigrams(text: str) -> set[str]:
+    """字符二元组集合（简答评分用，确定性、语言无关，无需分词/Key）。"""
+    t = re.sub(r"\s+", "", (text or "").lower())
+    return {t[i : i + 2] for i in range(len(t) - 1)}
+
+
+def _point_coverage(point: str, answer: str) -> float:
+    """单个参考要点被作答覆盖的程度（0-1，字符二元组召回）。"""
+    pb = _char_bigrams(point)
+    if not pb:
+        return 0.0
+    return len(pb & _char_bigrams(answer)) / len(pb)
 
 
 def audit_practice(practice: dict[str, Any]) -> list[str]:
@@ -1007,6 +1024,86 @@ class LLMClient:
             f"> 小结：完成本节后建议进入「测验」巩固，或切到「高级版」深入。"
         )
 
+    # ---- 简答题 AI 评分（接口文档 9.3，C-fix 批2） -----------------------------
+    def score_short_answer(
+        self,
+        question_text: str,
+        reference_points: list[str],
+        reference_answer: str,
+        student_answer: str,
+    ) -> dict[str, Any]:
+        """简答题对照参考要点评分（0-100 + 简短点评）。
+
+        - mock 或空作答：确定性评分（参考要点字符二元组覆盖度），无任何 Key 不崩；
+        - deepseek：真实评分 + 契约清洗（score 截断 0-100 整数、comment 非空）；
+          上游异常 → 回落确定性评分（演示兜底，不向路由抛 2001）。
+        """
+        self._ensure_supported()
+        answer = (student_answer or "").strip()
+        points = [p for p in (reference_points or []) if isinstance(p, str) and p.strip()]
+        if self.is_mock or not answer:
+            return self._mock_score_short_answer(answer, points)
+        try:
+            return self._deepseek_score_short_answer(
+                question_text, points, reference_answer, answer
+            )
+        except LLMGenerationError as exc:
+            logger.warning("简答评分真实生成失败，回落确定性评分：%s", exc)
+            return self._mock_score_short_answer(answer, points)
+
+    @staticmethod
+    def _mock_score_short_answer(answer: str, points: list[str]) -> dict[str, Any]:
+        """确定性简答评分：参考要点字符二元组覆盖度 → 0-100 + 覆盖/待补点评。"""
+        answer = (answer or "").strip()
+        if not answer:
+            tail = "参考要点：" + "；".join(points) if points else ""
+            return {"score": 0, "comment": ("未作答。" + tail).strip()}
+        if not points:
+            score = 70 if len(answer) >= 16 else 50 if len(answer) >= 6 else 30
+            return {"score": score, "comment": "已作答，按作答完整度给分。"}
+        per = [(_point_coverage(p, answer), p) for p in points]
+        covered = [p for c, p in per if c >= 0.34]
+        missing = [p for c, p in per if c < 0.34]
+        avg = sum(c for c, _ in per) / len(per)
+        # 覆盖各要点二元组的约一半即满分（鼓励复述关键概念，而非逐字照抄参考答案）
+        score = max(0, min(100, round(min(1.0, avg / 0.5) * 100)))
+        parts: list[str] = []
+        if covered:
+            parts.append("已覆盖：" + "、".join(covered))
+        if missing:
+            parts.append("可补充：" + "、".join(missing))
+        return {"score": score, "comment": ("；".join(parts) + "。") if parts else "已完成评分。"}
+
+    def _deepseek_score_short_answer(
+        self,
+        question_text: str,
+        points: list[str],
+        reference_answer: str,
+        answer: str,
+    ) -> dict[str, Any]:
+        """真实简答评分 + 契约清洗（score 0-100 整数、comment 非空）。"""
+        system = (
+            "你是严谨的简答题阅卷老师。对照参考要点与参考答案给学生作答打分，"
+            '仅输出 JSON：{"score": 0, "comment": "..."}。'
+            "score 为 0-100 整数，按要点覆盖程度与准确性评分；comment 为一句中文点评，"
+            "指出答到的要点与缺漏，不超过 60 字；禁止编造学生未写的内容。"
+        )
+        payload = {
+            "question": question_text,
+            "referencePoints": points,
+            "referenceAnswer": reference_answer,
+            "studentAnswer": answer,
+        }
+        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict) or "score" not in data:
+            raise LLMGenerationError("简答评分输出无法解析为契约 JSON")
+        try:
+            score = max(0, min(100, int(data["score"])))
+        except (TypeError, ValueError) as exc:
+            raise LLMGenerationError("简答评分 score 非法") from exc
+        comment = str(data.get("comment") or "").strip() or "已完成评分。"
+        return {"score": score, "comment": comment}
 
     # ---- 视频讲解分镜脚本（接口文档 8.3，画面/旁白随知识点动态生成） ----------
     def generate_video_script(

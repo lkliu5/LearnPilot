@@ -379,7 +379,8 @@ def test_quiz_pass_drives_mastery_passed_in_steps(client, fresh_headers):
     before = client.get("/api/v1/learning/steps/nn", headers=fresh_headers).json()["data"]
     assert before["mastery"] != "passed"
 
-    # 复用既有 9.1 测验提交：全对 → score≥60 → masteryUpdated:passed
+    # 复用既有 9.1 测验提交：客观全对 + 简答按参考要点作答 → 综合 ≥60 → masteryUpdated:passed
+    # （C-fix 批2：nn 扩到 10 题，含末尾 1 道简答题 nn_q10）
     submit = client.post(
         "/api/v1/quiz/nn/submit",
         headers=fresh_headers,
@@ -387,6 +388,13 @@ def test_quiz_pass_drives_mastery_passed_in_steps(client, fresh_headers):
             {"question_id": "nn_q1", "answer": "b"},
             {"question_id": "nn_q2", "answer": ["a", "b", "d"]},
             {"question_id": "nn_q3", "answer": "true"},
+            {"question_id": "nn_q4", "answer": "a"},
+            {"question_id": "nn_q5", "answer": "b"},
+            {"question_id": "nn_q6", "answer": "true"},
+            {"question_id": "nn_q7", "answer": ["a", "b", "c"]},
+            {"question_id": "nn_q8", "answer": "b"},
+            {"question_id": "nn_q9", "answer": "false"},
+            {"question_id": "nn_q10", "answer": "前向传播由输入逐层计算得到预测输出并计算损失；反向传播利用链式法则反向逐层计算梯度用于更新参数；二者交替迭代完成训练。"},
         ]},
     ).json()["data"]
     assert submit["passed"] is True

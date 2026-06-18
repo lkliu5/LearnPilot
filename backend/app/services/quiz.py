@@ -18,7 +18,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.llm import LLMGenerationError, audit_practice, get_llm
+from app.core.llm import (
+    SHORT_ANSWER_TYPE,
+    LLMGenerationError,
+    audit_practice,
+    get_llm,
+)
 from app.models.entities import KnowledgePoint, QuizQuestion
 from app.schemas.resource import QuizAnswerItem
 from app.services import mastery as mastery_service
@@ -43,11 +48,23 @@ def _question_to_dict(q: QuizQuestion) -> dict[str, Any]:
 
 
 def _list_questions(db: Session, kp_id: str) -> list[QuizQuestion]:
-    return (
+    """题目列表（接口文档 9.1）。简答题恒置末尾，客观题按题号自然序（q1<…<q9<q10）。
+
+    种子 question_id 形如 {kp}_q{n}，纯字符串排序会把 q10 排到 q2 前；按
+    (是否简答, id 长度, id) 排序既保证简答收尾，又让客观题按题号递增。
+    """
+    rows = (
         db.query(QuizQuestion)
         .filter(QuizQuestion.kp_id == kp_id)
-        .order_by(QuizQuestion.question_id)
         .all()
+    )
+    return sorted(
+        rows,
+        key=lambda q: (
+            q.question_type == SHORT_ANSWER_TYPE,
+            len(q.question_id),
+            q.question_id,
+        ),
     )
 
 
@@ -72,7 +89,14 @@ def _is_correct(question: QuizQuestion, answer: Any) -> bool:
 def submit(
     db: Session, user_id: str, kp_id: str, answers: list[QuizAnswerItem]
 ) -> dict[str, Any]:
-    """提交作答并判分（接口文档 9.1）。≥60 联动掌握度置 passed。"""
+    """提交作答并判分（接口文档 9.1，C-fix 批2 含简答 AI 评分）。
+
+    综合得分口径：客观题（single/multiple/boolean）每题等权，答对计 1；简答题
+    （short_answer）经 LLMClient.score_short_answer 给 0-100 分后按等权一题折算
+    （score/100）。综合分 = (客观答对数 + Σ简答分/100) / 总题数 × 100（四舍五入）。
+    综合 ≥ 60 → passed，并联动掌握度置 passed（7.3）。简答评分明细随回包返回
+    （additive：shortAnswers[]），前端展示 AI 评分/点评。
+    """
     if db.get(KnowledgePoint, kp_id) is None:
         raise UnknownKnowledgePoint(kp_id)
 
@@ -81,14 +105,36 @@ def submit(
     answer_map = {a.question_id: a.answer for a in answers}
 
     wrong: list[dict[str, Any]] = []
-    correct_count = 0
+    short_answers: list[dict[str, Any]] = []
+    objective_correct = 0
+    short_score_sum = 0.0
+    llm = get_llm()
     for q in questions:
-        if _is_correct(q, answer_map.get(q.question_id)):
-            correct_count += 1
+        if q.question_type == SHORT_ANSWER_TYPE:
+            student = answer_map.get(q.question_id)
+            student_text = student if isinstance(student, str) else ""
+            points = q.correct_answer if isinstance(q.correct_answer, list) else []
+            graded = llm.score_short_answer(
+                q.question_text, points, q.explanation or "", student_text
+            )
+            short_score_sum += graded["score"]
+            short_answers.append(
+                {
+                    "questionId": q.question_id,
+                    "score": graded["score"],
+                    "comment": graded["comment"],
+                }
+            )
+        elif _is_correct(q, answer_map.get(q.question_id)):
+            objective_correct += 1
         else:
             wrong.append(_question_to_dict(q))
 
-    score = round(correct_count / total * 100) if total else 0
+    if total:
+        combined_units = objective_correct + short_score_sum / 100.0
+        score = round(combined_units / total * 100)
+    else:
+        score = 0
     passed = score >= PASS_SCORE
 
     mastery_updated: dict[str, Any] | None = None
@@ -99,9 +145,10 @@ def submit(
     return {
         "score": score,
         "passed": passed,
-        "correctCount": correct_count,
+        "correctCount": objective_correct,
         "total": total,
         "wrong": wrong,
+        "shortAnswers": short_answers,
         "masteryUpdated": mastery_updated,
     }
 

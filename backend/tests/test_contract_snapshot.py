@@ -40,7 +40,7 @@ SOURCE_KINDS = {"resume", "ocr", "text", "manual"}
 MATERIAL_KINDS = {"doc", "image", "text"}
 SOURCE_TYPES = {"教材", "论文", "文档", "课程"}
 EXTERNAL_TYPES = {"视频", "论文", "文档", "课程"}
-QUESTION_TYPES = {"single", "multiple", "boolean"}
+QUESTION_TYPES = {"single", "multiple", "boolean", "short_answer"}
 TASK_STATUS = {"pending", "running", "succeeded", "failed"}
 WF_PHASES = {"idle", "diagnosis", "generation", "validation", "complete"}
 AGENT_STATUS = {"idle", "running", "success", "error"}
@@ -152,11 +152,18 @@ def _assert_quiz_question(q: dict) -> None:
                "options", "correct_answer", "explanation"})
     assert q["question_type"] in QUESTION_TYPES
     assert isinstance(q["question_text"], str) and q["question_text"]
+    correct = q["correct_answer"]
+    if q["question_type"] == "short_answer":
+        # 简答题（C-fix 批2）：options 为空，correct_answer 为参考要点列表，
+        # explanation 为参考答案（AI 评分见 services.quiz）。
+        assert q["options"] == []
+        assert isinstance(correct, list) and correct and all(isinstance(p, str) for p in correct)
+        assert isinstance(q["explanation"], str)
+        return
     assert isinstance(q["options"], list) and len(q["options"]) >= 2
     for opt in q["options"]:
         _exact(opt, {"option_id", "option_text"})
     option_ids = {o["option_id"] for o in q["options"]}
-    correct = q["correct_answer"]
     if q["question_type"] == "multiple":
         assert isinstance(correct, list) and correct
         assert set(correct) <= option_ids
@@ -496,17 +503,31 @@ def test_23_quiz(client, learner):
 
 
 def test_24_quiz_submit(client, learner):
-    answers = [
-        {"question_id": q["question_id"], "answer": q["correct_answer"]}
-        for q in shared["quiz_questions"]
-    ]
+    # 客观题以正确答案作答；简答题（C-fix 批2）以「参考要点」拼接文本作答，
+    # 触发 AI 评分（mock 确定性给高覆盖分），综合 ≥60 → passed。
+    questions = shared["quiz_questions"]
+    short_ids = {q["question_id"] for q in questions if q["question_type"] == "short_answer"}
+    objective = [q for q in questions if q["question_type"] != "short_answer"]
+    answers = []
+    for q in questions:
+        if q["question_type"] == "short_answer":
+            answers.append({"question_id": q["question_id"], "answer": "；".join(q["correct_answer"])})
+        else:
+            answers.append({"question_id": q["question_id"], "answer": q["correct_answer"]})
     data = _data(client.post(f"{API}/quiz/nn/submit", headers=learner,
                              json={"answers": answers}))
     _exact(data, {"score", "passed", "correctCount", "total",
-                  "wrong", "masteryUpdated"})
-    assert data["score"] == 100 and data["passed"] is True
-    assert data["correctCount"] == data["total"] == len(answers)
+                  "wrong", "shortAnswers", "masteryUpdated"})
+    assert data["total"] == len(answers)
+    assert data["correctCount"] == len(objective)  # 简答不计入客观答对数
     assert data["wrong"] == []
+    assert data["score"] >= 60 and data["passed"] is True  # 客观全对 + 简答高覆盖
+    assert isinstance(data["shortAnswers"], list) and len(data["shortAnswers"]) == len(short_ids)
+    for sa in data["shortAnswers"]:
+        _exact(sa, {"questionId", "score", "comment"})
+        assert sa["questionId"] in short_ids
+        assert isinstance(sa["score"], int) and 0 <= sa["score"] <= 100
+        assert isinstance(sa["comment"], str) and sa["comment"]
     _exact(data["masteryUpdated"], {"id", "status"})
     assert data["masteryUpdated"] == {"id": "nn", "status": "passed"}
 
