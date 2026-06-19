@@ -31,6 +31,21 @@ class TutorChatRequest(BaseModel):
     message: str
 
 
+class TutorSuggestRequest(BaseModel):
+    """POST /resource/tutor/suggest 请求体（接口文档 8.8，C-fix 批3-bonus）。"""
+
+    kpId: str
+    question: str  # 学生的困惑/提问（或"我没懂"上下文）
+
+
+class TutorGenerateRequest(BaseModel):
+    """POST /resource/tutor/generate 请求体（接口文档 8.8）。"""
+
+    kpId: str
+    problemPoint: str | None = None  # suggest 返回的问题点，可空（缺省按知识点核心概念）
+    types: list[str] = Field(default_factory=list)  # 勾选的资源类型子集
+
+
 class QuizAnswerItem(BaseModel):
     """单题作答（接口文档 9.1）。answer：single/boolean 为 str，multiple 为 str[]。"""
 

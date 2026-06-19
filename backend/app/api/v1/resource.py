@@ -24,9 +24,16 @@ from app.core.envelope import fail, success
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
-from app.schemas.resource import LectureRequest, TutorChatRequest, VideoRequest
+from app.schemas.resource import (
+    LectureRequest,
+    TutorChatRequest,
+    TutorGenerateRequest,
+    TutorSuggestRequest,
+    VideoRequest,
+)
 from app.services import resource as resource_service
 from app.services import tutor as tutor_service
+from app.services import tutor_resource as tutor_resource_service
 
 router = APIRouter(tags=["resource"])
 
@@ -150,6 +157,42 @@ async def tutor_chat(
         )
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
+    return success(data)
+
+
+@router.post("/resource/tutor/suggest")
+async def tutor_suggest(
+    body: TutorSuggestRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """智能辅导·问题点识别 + 资源生成清单（接口文档 8.8，C-fix 批3-bonus）。"""
+    try:
+        data = tutor_resource_service.suggest(db, body.kpId, body.question)
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
+    return success(data)
+
+
+@router.post("/resource/tutor/generate")
+async def tutor_generate(
+    body: TutorGenerateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """智能辅导·按需生成勾选的针对性资源（接口文档 8.8）。复用既有讲义/图解/视频/例题能力。"""
+    try:
+        data = tutor_resource_service.generate(
+            db, user.id, body.kpId, body.problemPoint, body.types
+        )
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    except resource_service.InvalidDifficulty:
+        return fail(code=1001, message="难度档非法", status_code=400)
     except LLMGenerationError as exc:
         return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)

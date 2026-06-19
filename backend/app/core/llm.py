@@ -187,6 +187,54 @@ def _mock_tutor_reply(message: str) -> tuple[str, list[str]]:
     return _TUTOR_FALLBACK[0], list(_TUTOR_FALLBACK[1])
 
 
+# ---- 智能辅导·按需资源生成（接口文档 8.8，C-fix 批3-bonus） --------------------
+# 学生提问/「我没懂」→ 识别问题点 → 给出针对性资源生成清单 → 勾选按需生成。
+# 资源类型与现有生成能力一一对应：diagram(8.5) / video(8.3) / example(LLM) / lecture(8.2 片段)。
+REMEDIAL_TYPES: tuple[str, ...] = ("diagram", "example", "video", "lecture")
+
+# 问题点识别关键词 → 规范问题点短语（mock；deepseek 走真实识别）。
+_REMEDIAL_KEYWORDS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"激活|relu|sigmoid|tanh|非线性", re.I), "激活函数与非线性"),
+    (re.compile(r"反向|梯度|backprop|链式|求导"), "反向传播与梯度"),
+    (re.compile(r"加权|求和|权重|偏置|bias", re.I), "神经元加权求和与偏置"),
+    (re.compile(r"卷积|池化|感受野|卷积核"), "卷积与池化"),
+    (re.compile(r"注意力|attention|qkv|q/k/v|多头", re.I), "自注意力机制"),
+    (re.compile(r"位置编码|position", re.I), "位置编码"),
+    (re.compile(r"过拟合|正则|泛化"), "过拟合与正则化"),
+    (re.compile(r"优化器|sgd|adam|学习率", re.I), "优化器与学习率"),
+    (re.compile(r"lora|微调|peft|对齐|rlhf|dpo", re.I), "大模型微调与对齐"),
+]
+
+# type → (标题模板, 预计内容模板)，{point} 占位问题点
+_REMEDIAL_TYPE_META: dict[str, tuple[str, str]] = {
+    "diagram": ("知识图解：{point}", "用流程图直观呈现「{point}」的关键步骤与依赖关系"),
+    "example": ("例题精讲：{point}", "一道围绕「{point}」的例题 + 分步解析"),
+    "video": ("短视频讲解：{point}", "3-5 个分镜的动画讲解，配旁白逐步拆解「{point}」"),
+    "lecture": ("补充讲义片段：{point}", "针对「{point}」的精炼讲义片段，含要点与小结"),
+}
+
+
+def _mock_identify_problem(question: str, kp_name: str) -> str:
+    """从学生提问识别问题点（mock 关键词匹配，未命中回落知识点核心概念）。"""
+    for pattern, point in _REMEDIAL_KEYWORDS:
+        if pattern.search(question or ""):
+            return point
+    return f"{kp_name}的核心概念"
+
+
+def _build_remedial_suggestions(point: str) -> list[dict[str, Any]]:
+    """据问题点构建针对性资源生成清单（4 项，对应现有生成能力）。"""
+    return [
+        {
+            "id": f"r-{t}",
+            "type": t,
+            "title": _REMEDIAL_TYPE_META[t][0].format(point=point),
+            "expect": _REMEDIAL_TYPE_META[t][1].format(point=point),
+        }
+        for t in REMEDIAL_TYPES
+    ]
+
+
 # ---- 对话式画像诊断（接口文档 17.1 / 17.2，C1-b） ------------------------------
 
 
@@ -1558,6 +1606,145 @@ class LLMClient:
         if self.is_mock:
             return _mock_tutor_reply(message)[1]
         return []
+
+    # ---- 智能辅导·按需资源生成（接口文档 8.8，C-fix 批3-bonus） ---------------
+    def suggest_remedial_resources(
+        self, kp_name: str, question: str
+    ) -> dict[str, Any]:
+        """识别问题点 + 给出针对性资源生成清单（8.8）。
+
+        返回 {problemPoint, suggestions:[{id,type,title,expect}]}，type ∈ REMEDIAL_TYPES。
+        - mock：关键词识别问题点 + 模板清单；
+        - deepseek：真实识别 + 清洗（type 白名单、title/expect 非空，不足回落模板）。
+        无 Key 也能跑（mock 兜底）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            point = _mock_identify_problem(question, kp_name)
+            return {"problemPoint": point, "suggestions": _build_remedial_suggestions(point)}
+        try:
+            return self._deepseek_suggest_remedial(kp_name, question)
+        except LLMGenerationError as exc:
+            logger.warning("资源建议真实生成失败，回落模板清单：%s", exc)
+            point = _mock_identify_problem(question, kp_name)
+            return {"problemPoint": point, "suggestions": _build_remedial_suggestions(point)}
+
+    def _deepseek_suggest_remedial(self, kp_name: str, question: str) -> dict[str, Any]:
+        system = (
+            f"你是「{kp_name}」的辅导助手。学生提出了一个困惑，请先用一句话精炼概括其"
+            "「问题点」，再给出可按需生成的针对性学习资源清单。仅输出 JSON："
+            '{"problemPoint": "...", "suggestions": [{"type": "diagram", '
+            '"title": "...", "expect": "..."}]}。'
+            f"type 只能取 {list(REMEDIAL_TYPES)}（图解/例题/短视频/补充讲义片段），"
+            "每种最多 1 项；title 简短、expect 说明预计内容；禁止编造与问题点无关的资源。"
+        )
+        raw = llm_deepseek.chat(f"学生困惑：{question}", system=system)
+        data = _extract_json(raw)
+        point = ""
+        suggestions: list[dict[str, Any]] = []
+        if isinstance(data, dict):
+            point = str(data.get("problemPoint") or "").strip()
+            seen: set[str] = set()
+            for s in data.get("suggestions") or []:
+                if not isinstance(s, dict):
+                    continue
+                t = s.get("type")
+                if t not in REMEDIAL_TYPES or t in seen:
+                    continue
+                title = str(s.get("title") or "").strip()
+                expect = str(s.get("expect") or "").strip()
+                if not title or not expect:
+                    continue
+                seen.add(t)
+                suggestions.append({"id": f"r-{t}", "type": t, "title": title, "expect": expect})
+        if not point:
+            point = _mock_identify_problem(question, kp_name)
+        if len(suggestions) < 2:  # 兜底：保证清单可用
+            suggestions = _build_remedial_suggestions(point)
+        return {"problemPoint": point, "suggestions": suggestions}
+
+    def generate_remedial_content(
+        self, kind: str, kp_name: str, problem_point: str
+    ) -> dict[str, Any]:
+        """按需生成例题 / 补充讲义片段（8.8；diagram/video 复用既有资源服务）。
+
+        kind=='example' → {title, statement, solution}；
+        kind=='lecture' → {title, markdown}。mock 确定性 / deepseek 真实 + 兜底。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return self._mock_remedial_content(kind, kp_name, problem_point)
+        try:
+            return self._deepseek_remedial_content(kind, kp_name, problem_point)
+        except LLMGenerationError as exc:
+            logger.warning("按需资源真实生成失败，回落确定性内容：%s", exc)
+            return self._mock_remedial_content(kind, kp_name, problem_point)
+
+    @staticmethod
+    def _mock_remedial_content(kind: str, kp_name: str, point: str) -> dict[str, Any]:
+        """确定性例题 / 讲义片段（mock / deepseek 兜底）。"""
+        if kind == "example":
+            return {
+                "title": f"例题 · {point}",
+                "statement": (
+                    f"【例题】围绕「{point}」：请说明它在「{kp_name}」中的作用，"
+                    "并用一个具体例子说明其工作过程。"
+                ),
+                "solution": (
+                    f"解析：\n1. 先明确「{point}」的定义与要解决的问题；\n"
+                    f"2. 结合「{kp_name}」的整体流程，定位它处于哪一步、起什么作用；\n"
+                    "3. 举一个最小例子，代入数据走一遍，观察输入到输出的变化；\n"
+                    f"小结：抓住「{point}」的本质，即可举一反三。"
+                ),
+            }
+        # 默认 lecture 片段
+        return {
+            "title": f"补充讲义 · {point}",
+            "markdown": (
+                f"# 补充讲义 · {point}\n\n"
+                f"> 针对你在「{kp_name}」中卡住的「{point}」，这里做一段精炼补充。\n\n"
+                f"## 一、它解决什么问题\n\n「{point}」是「{kp_name}」的关键一环——"
+                "先理解它「要做什么」，再看「怎么做」。\n\n"
+                "## 二、关键要点\n\n"
+                f"- 抓住「{point}」的输入、变换与输出三段式；\n"
+                "- 留意它与相邻概念的衔接关系（前一步给它什么、它给后一步什么）；\n"
+                "- 用一个最小例子复现，建立可迁移的直觉。\n\n"
+                f"## 三、一句话小结\n\n理解「{point}」的本质，就抓住了这一段的核心。"
+            ),
+        }
+
+    def _deepseek_remedial_content(
+        self, kind: str, kp_name: str, problem_point: str
+    ) -> dict[str, Any]:
+        """真实例题 / 讲义片段 + 契约清洗。"""
+        if kind == "example":
+            system = (
+                f"你是「{kp_name}」的辅导老师。针对学生的问题点「{problem_point}」出一道例题"
+                '并给出分步解析，仅输出 JSON：{"title": "...", "statement": "...", "solution": "..."}。'
+                "statement 为题干、solution 为分步解析，紧扣问题点，简体中文。"
+            )
+            raw = llm_deepseek.chat(f"问题点：{problem_point}", system=system)
+            data = _extract_json(raw)
+            if not isinstance(data, dict) or not str(data.get("statement") or "").strip():
+                raise LLMGenerationError("例题输出无法解析为契约 JSON")
+            return {
+                "title": str(data.get("title") or f"例题 · {problem_point}").strip(),
+                "statement": str(data["statement"]).strip(),
+                "solution": str(data.get("solution") or "").strip() or "（解析略）",
+            }
+        system = (
+            f"你是「{kp_name}」的讲义作者。针对学生的问题点「{problem_point}」写一段精炼的补充"
+            '讲义片段（Markdown），仅输出 JSON：{"title": "...", "markdown": "..."}。'
+            "markdown 用二级标题分节、紧扣问题点、200-400 字，简体中文。"
+        )
+        raw = llm_deepseek.chat(f"问题点：{problem_point}", system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict) or not str(data.get("markdown") or "").strip():
+            raise LLMGenerationError("讲义片段输出无法解析为契约 JSON")
+        return {
+            "title": str(data.get("title") or f"补充讲义 · {problem_point}").strip(),
+            "markdown": str(data["markdown"]).strip(),
+        }
 
     # ---- 康奈尔线索生成（接口文档 18.1，C2） -------------------------------
     def generate_cornell_cues(

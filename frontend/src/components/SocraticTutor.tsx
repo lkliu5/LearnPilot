@@ -2,6 +2,9 @@ import { useState, useRef } from 'react'
 import { USE_REAL_API } from '../services/api'
 import { tutorChatStream } from '../services/tutor'
 import { getResourceKpId } from '../services/resourceNav'
+import { suggestResources, type RemedialSuggestResult } from '../services/tutorResource'
+import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
+import TutorResourcePanel from './TutorResourcePanel'
 import ChatPanel, { type ChatMsg as Msg } from './ChatPanel'
 
 /* 苏格拉底式导学：用引导式提问而非直接喂答案。
@@ -68,9 +71,29 @@ export default function SocraticTutor() {
     }
   }
 
+  /* 智能辅导·按需资源生成（8.8）：识别问题点 → 资源生成清单（学生勾选按需生成） */
+  const [lastUser, setLastUser] = useState('')
+  const [suggestion, setSuggestion] = useState<RemedialSuggestResult | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
+  const askForHelp = async () => {
+    if (suggesting) return
+    setSuggesting(true)
+    const kpId = getResourceKpId()
+    const kpName = KNOWLEDGE_POINTS.find((k) => k.id === kpId)?.name ?? '当前知识点'
+    const question = lastUser || '我没懂这个知识点，需要更直观的针对性资源'
+    try {
+      setSuggestion(await suggestResources(kpId, question, kpName))
+    } catch (e) {
+      console.error('[tutor] 资源建议失败', e)
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   const send = () => {
     const text = input.trim()
     if (!text || typing) return
+    setLastUser(text)
     setMsgs((m) => [...m, { role: 'user', text }])
     setInput('')
     setTyping(true)
@@ -91,19 +114,31 @@ export default function SocraticTutor() {
   const sessionRef = useRef<string | undefined>(undefined)
 
   return (
-    <ChatPanel
-      avatar="🦉"
-      title="苏格拉底导学助手"
-      subtitle="引导式提问 · 不直接给答案，帮你自己想通"
-      msgs={msgs}
-      typing={typing}
-      chips={chips}
-      onChip={setInput}
-      input={input}
-      onInput={setInput}
-      onSend={send}
-      placeholder="说说你的想法，我来引导你…"
-      sending={typing}
-    />
+    <div className="socratic-wrap">
+      <ChatPanel
+        avatar="🦉"
+        title="苏格拉底导学助手"
+        subtitle="引导式提问 · 不直接给答案，帮你自己想通"
+        msgs={msgs}
+        typing={typing}
+        chips={chips}
+        onChip={setInput}
+        input={input}
+        onInput={setInput}
+        onSend={send}
+        placeholder="说说你的想法，我来引导你…"
+        sending={typing}
+      />
+
+      {/* 智能辅导触发：卡住时一键识别问题点并给出针对性资源生成清单（8.8） */}
+      <div className="socratic-help">
+        <button className="socratic-help__btn" onClick={askForHelp} disabled={suggesting}>
+          {suggesting ? '正在识别问题点…' : '🆘 我没懂，帮我生成针对性资源'}
+        </button>
+        {suggestion && <span className="socratic-help__hint">已根据你的问题识别盲区 ↓</span>}
+      </div>
+
+      {suggestion && <TutorResourcePanel suggestion={suggestion} />}
+    </div>
   )
 }
