@@ -6,6 +6,7 @@ import AgentStatusCard from '../components/AgentStatusCard'
 import CountUp from '../components/CountUp'
 import BlurText from '@/components/BlurText/BlurText'
 import GuideCard from '../components/GuideCard'
+import LearningEvalPanel from '../components/LearningEvalPanel'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useMastery } from '../store/mastery'
 import { useJourney } from '../store/journey'
@@ -13,6 +14,7 @@ import { usePortrait } from '../store/portrait'
 import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { getDashboardOverview, synthesizeOverview, type DashboardOverview } from '../services/dashboard'
+import { getLearningEvaluation, synthesizeEvaluation, type LearningEvaluation } from '../services/learningEval'
 import type { PageType } from '../App'
 import './Dashboard.css'
 
@@ -70,6 +72,31 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
       alive = false
     }
   }, [masteryStatus, diagnosed])
+
+  /* 学习过程评估（接口文档 12.2，评估 Agent）：联调取后端真实行为评估；mock 由掌握度合成。
+     掌握度变化（做题通过/进度推进）→ 重取，保持评估随学习活动联动。 */
+  const [evaluation, setEvaluation] = useState<LearningEvaluation | null>(null)
+  useEffect(() => {
+    if (!USE_REAL_API || !diagnosed) return
+    let alive = true
+    getLearningEvaluation()
+      .then((d) => alive && setEvaluation(d))
+      .catch((e) => console.error('[dashboard] 加载学习评估失败', e))
+    return () => {
+      alive = false
+    }
+  }, [masteryStatus, diagnosed])
+  const masteredIds = useMemo(
+    () => KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').map((k) => k.id),
+    [masteryStatus]
+  )
+  const evalData =
+    USE_REAL_API && evaluation
+      ? evaluation
+      : synthesizeEvaluation(
+          KNOWLEDGE_POINTS.map((k) => ({ id: k.id, name: k.name })),
+          masteredIds
+        )
 
   /* 由真实画像合成的概览（综合分/水平/雷达/强弱项）——确认弹窗同源，口径一致 */
   const synth = useMemo(() => synthesizeOverview(portraitDims), [portraitDims])
@@ -159,6 +186,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
         )}
         <span className="dashboard__target-summary-cta">查看完整对标 →</span>
       </motion.button>
+
+      {/* 学习评估面板（接口文档 12.2，评估 Agent）：多维评估 + 方法建议 + 动态调整 */}
+      <motion.div variants={itemVariants}>
+        <LearningEvalPanel evaluation={evalData} onNavigate={onNavigate} />
+      </motion.div>
 
       {/* V3.0 三栏式顶部信息栏 */}
       <motion.div className="dashboard__header" variants={itemVariants}>

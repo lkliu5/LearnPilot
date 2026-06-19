@@ -289,3 +289,23 @@ class LearningNote(Base):
     main_notes: Mapped[str] = mapped_column(Text, default="")
     summary: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class QuizAttempt(Base):
+    """测验作答历史埋点（C-fix 批3：学习过程评估行为数据层）。
+
+    每次 9.1 提交落一行（轻量埋点），供「学习评估 Agent」聚合做题表现/趋势/效率。
+    与既有判分链路解耦——只记录结果快照，不改 quiz/Mastery 判分逻辑；**无外键耦合**
+    （user_id/kp_id 仅作隔离/分组键），不改既有表结构。
+    """
+
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    score: Mapped[int] = mapped_column(Integer, default=0)  # 综合得分 0-100
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)  # 客观答对数
+    total: Mapped[int] = mapped_column(Integer, default=0)  # 总题数
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)

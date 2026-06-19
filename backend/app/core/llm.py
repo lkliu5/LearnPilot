@@ -1105,6 +1105,124 @@ class LLMClient:
         comment = str(data.get("comment") or "").strip() or "已完成评分。"
         return {"score": score, "comment": comment}
 
+    # ---- 学习过程评估叙述（接口文档 12.2，C-fix 批3） --------------------------
+    def evaluate_learning(
+        self, signals: dict[str, Any], metrics: dict[str, Any]
+    ) -> dict[str, Any]:
+        """学习评估叙述：综述 + 学习方法建议 + 动态调整建议。
+
+        - 动态调整（adjustment）**始终确定性派生**（保证 nextKpId 合法、不被幻觉）；
+        - 综述/方法建议：mock 据信号模板 / deepseek 真实生成 + 契约清洗，上游异常回落 mock。
+        无任何 Key 也能跑通（mock 兜底）。
+        """
+        self._ensure_supported()
+        adjustment = self._eval_adjustment(signals, metrics)
+        if self.is_mock:
+            narrative = self._mock_eval_narrative(signals, metrics)
+        else:
+            try:
+                narrative = self._deepseek_eval_narrative(signals, metrics)
+            except LLMGenerationError as exc:
+                logger.warning("学习评估真实生成失败，回落确定性叙述：%s", exc)
+                narrative = self._mock_eval_narrative(signals, metrics)
+        return {
+            "summary": narrative["summary"],
+            "suggestions": narrative["suggestions"],
+            "adjustment": adjustment,
+        }
+
+    @staticmethod
+    def _eval_adjustment(signals: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
+        """确定性动态调整建议：下一步知识点（薄弱点优先）+ 难度建议 + 行动。"""
+        dims = {d["key"]: d["score"] for d in metrics.get("dimensions", [])}
+        weak = metrics.get("weakPoints") or []
+        attempts = signals.get("attemptCount", 0)
+        trend = metrics.get("trend", "stable")
+        if weak:
+            nxt = weak[0]
+            next_id, next_name = nxt.get("kpId"), nxt.get("name")
+            action = f"下一步优先攻克「{next_name}」：先看讲义 + 图解，再做阶段测试。"
+        else:
+            next_id = next_name = None
+            action = "核心知识点已全部通过，可转入复习巩固或挑战更高难度内容。"
+        qp = dims.get("quiz_performance", 0)
+        mp = dims.get("mastery_progress", 0)
+        if trend == "declining" or (attempts and qp < 60):
+            difficulty_advice = "建议将讲义难度下调到「入门」，先夯实基础概念。"
+        elif mp >= 80 and qp >= 80:
+            difficulty_advice = "建议将讲义难度上调到「高级」，深入数学形式化与工程细节。"
+        else:
+            difficulty_advice = "建议维持「初级」难度，稳步推进、边学边测。"
+        return {
+            "nextKpId": next_id,
+            "nextKpName": next_name,
+            "difficultyAdvice": difficulty_advice,
+            "action": action,
+        }
+
+    @staticmethod
+    def _mock_eval_narrative(
+        signals: dict[str, Any], metrics: dict[str, Any]
+    ) -> dict[str, Any]:
+        """确定性评估综述 + 方法建议（mock / deepseek 兜底）。"""
+        trend_label = {"improving": "稳步上升", "declining": "有所下滑", "stable": "基本平稳"}
+        dims = {d["key"]: d["score"] for d in metrics.get("dimensions", [])}
+        mastered = signals["masteredCount"]
+        total = signals["totalCore"]
+        attempts = signals["attemptCount"]
+        weak = metrics.get("weakPoints") or []
+        if attempts:
+            summary = (
+                f"你已掌握 {mastered}/{total} 个核心知识点，近 {attempts} 次测验平均最佳 "
+                f"{signals['avgBestScore']} 分，分数趋势{trend_label[metrics['trend']]}，"
+                f"整体处于「{metrics['level']}」阶段。"
+            )
+        else:
+            summary = (
+                f"你已掌握 {mastered}/{total} 个核心知识点，尚无测验记录，整体处于"
+                f"「{metrics['level']}」阶段，建议尽快做一次阶段测试以校准学情。"
+            )
+        suggestions: list[str] = []
+        if weak:
+            names = "、".join(w["name"] for w in weak)
+            suggestions.append(f"优先复习薄弱点：{names}，配合讲义/图解后重做阶段测试巩固。")
+        if metrics["trend"] == "declining":
+            suggestions.append("近期测验分数下滑，建议放慢节奏、回看讲义并用费曼讲解自检。")
+        elif metrics["trend"] == "improving":
+            suggestions.append("学习状态向好，保持当前节奏，可适当增加练习难度。")
+        if dims.get("engagement", 0) < 50:
+            suggestions.append("学习投入偏低，建议多用康奈尔笔记与费曼讲解加深理解。")
+        if dims.get("mastery_progress", 0) >= 80:
+            suggestions.append("基础掌握扎实，可尝试上调讲义难度到「高级」拓展深度。")
+        if not suggestions:
+            suggestions.append("继续按学习路径推进，保持测验与笔记的规律使用。")
+        return {"summary": summary, "suggestions": suggestions[:4]}
+
+    def _deepseek_eval_narrative(
+        self, signals: dict[str, Any], metrics: dict[str, Any]
+    ) -> dict[str, Any]:
+        """真实评估综述 + 方法建议 + 契约清洗（summary 非空、suggestions 为非空 str 列表）。"""
+        system = (
+            "你是学习数据分析师。基于给定的学习行为信号与多维指标，给出一句中文学习综述与"
+            '2-4 条具体可执行的学习方法建议，仅输出 JSON：{"summary": "...", '
+            '"suggestions": ["...", "..."]}。综述不超过 80 字；建议聚焦薄弱点复习、'
+            "节奏与难度调整、笔记/费曼等方法；禁止编造未提供的数据。"
+        )
+        payload = {"signals": signals, "metrics": metrics}
+        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict):
+            raise LLMGenerationError("学习评估输出无法解析为契约 JSON")
+        summary = str(data.get("summary") or "").strip()
+        suggestions = [
+            str(s).strip()
+            for s in (data.get("suggestions") or [])
+            if isinstance(s, str) and str(s).strip()
+        ]
+        if not summary or not suggestions:
+            raise LLMGenerationError("学习评估输出缺少 summary/suggestions")
+        return {"summary": summary, "suggestions": suggestions[:4]}
+
     # ---- 视频讲解分镜脚本（接口文档 8.3，画面/旁白随知识点动态生成） ----------
     def generate_video_script(
         self, kp_id: str, kp_name: str, difficulty: str, description: str = ""
