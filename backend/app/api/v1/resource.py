@@ -25,6 +25,7 @@ from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.schemas.resource import (
+    ExternalAggregateRequest,
     LectureRequest,
     TutorChatRequest,
     TutorGenerateRequest,
@@ -32,6 +33,7 @@ from app.schemas.resource import (
     VideoRequest,
 )
 from app.services import resource as resource_service
+from app.services import resource_search as resource_search_service
 from app.services import tutor as tutor_service
 from app.services import tutor_resource as tutor_resource_service
 
@@ -91,6 +93,28 @@ async def external_resources(
         data = resource_service.external_resources(db, kp_id)
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
+    return success(data)
+
+
+@router.post("/resource/external/aggregate")
+async def external_aggregate(
+    body: ExternalAggregateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """外部资源·AI 联网搜索聚合（接口文档 8.6 增量，C-fix 批3-bonus）。
+
+    按当前知识点 + 用户薄弱点联网搜索 → 聚合 Agent 整理 + critic 评分；无搜索能力 →
+    种子兜底（online=false）。后端代理联网，规避配额/跨域。mock 兜底可跑。
+    """
+    try:
+        data = resource_search_service.aggregate(
+            db, user.id, body.kpId, body.query, body.weakPoints
+        )
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)
 
 

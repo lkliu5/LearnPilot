@@ -695,8 +695,31 @@
   border: 1px solid rgba(37, 99, 235, 0.15);
 }
 .agg__head-icon { font-size: 1.5rem; }
-.agg__head-title { font-size: 0.95rem; font-weight: 700; color: var(--gray-800); }
+.agg__head-main { flex: 1; min-width: 0; }
+.agg__head-title { font-size: 0.95rem; font-weight: 700; color: var(--gray-800); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .agg__head-sub { font-size: 0.78rem; color: var(--gray-500); margin-top: 2px; }
+.agg__badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.agg__badge--online { color: #fff; background: linear-gradient(135deg, var(--primary-500), var(--purple-500)); }
+.agg__badge--offline { color: var(--gray-600); background: var(--gray-100); border: 1px solid var(--gray-200); }
+.agg__refresh {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--primary-200);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--primary-600);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.agg__refresh:hover:not(:disabled) { background: var(--primary-50); }
+.agg__refresh:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* 嵌入播放 */
 .agg__embed {

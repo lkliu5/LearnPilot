@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { USE_REAL_API } from '../services/api'
-import { getExternalResources } from '../services/resource'
+import { aggregateExternalResources } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
 
 type ResType = '视频' | '论文' | '文档' | '课程'
@@ -80,20 +80,28 @@ const typeMeta: Record<ResType, { icon: string; color: string }> = {
 export default function ResourceAggregator() {
   const [active, setActive] = useState<string | null>(null)
 
-  /* 联调数据源：GET /resource/external/{kpId}（接口 21，已按相关度降序）覆盖，
-     kpId 来自 resourceNav 路由传参通道（随学习路径「开始学习/查看资源」切换）；
-     mock 模式不请求，初值即本地精选示例，渲染零差异 */
+  /* 联调数据源（8.6 增量）：POST /resource/external/aggregate —— AI 联网搜索聚合
+     （后端代理联网 + 聚合 Agent 整理 + critic 评分；无搜索能力 → 种子兜底 online=false）。
+     kpId 来自 resourceNav 路由通道；mock 模式不请求，初值即本地精选示例，渲染零差异。 */
   const [list, setList] = useState<ExternalResource[]>(resources)
-  useEffect(() => {
+  const [online, setOnline] = useState<boolean | null>(null)
+  const [loading, setLoading] = useState(false)
+  const loadAggregate = useCallback(async () => {
     if (!USE_REAL_API) return
-    let alive = true
-    getExternalResources(getResourceKpId())
-      .then((rs) => alive && setList(rs))
-      .catch((e) => console.error('[external] 加载外部资源失败', e)) // 失败保留本地示例兜底
-    return () => {
-      alive = false
+    setLoading(true)
+    try {
+      const res = await aggregateExternalResources(getResourceKpId())
+      setList(res.items)
+      setOnline(res.online)
+    } catch (e) {
+      console.error('[external] 联网聚合失败，保留示例兜底', e)
+    } finally {
+      setLoading(false)
     }
   }, [])
+  useEffect(() => {
+    void loadAggregate()
+  }, [loadAggregate])
 
   const activeRes = list.find((r) => r.id === active && r.embed)
 
@@ -101,10 +109,22 @@ export default function ResourceAggregator() {
     <div className="agg">
       <div className="agg__head">
         <span className="agg__head-icon">🔗</span>
-        <div>
-          <div className="agg__head-title">AI 已为你精选 {list.length} 个优质外部资源</div>
-          <div className="agg__head-sub">资源聚合 Agent 检索 · 审核 Agent 按相关性 + 来源可信度评分排序</div>
+        <div className="agg__head-main">
+          <div className="agg__head-title">
+            AI 已为你精选 {list.length} 个优质外部资源
+            {USE_REAL_API && online !== null && (
+              <span className={`agg__badge ${online ? 'agg__badge--online' : 'agg__badge--offline'}`}>
+                {online ? '🌐 联网搜索聚合' : '📦 离线兜底（未配置搜索 API）'}
+              </span>
+            )}
+          </div>
+          <div className="agg__head-sub">资源聚合 Agent 联网检索 · 审核 Agent 按相关性 + 来源可信度评分排序</div>
         </div>
+        {USE_REAL_API && (
+          <button className="agg__refresh" onClick={() => void loadAggregate()} disabled={loading}>
+            {loading ? '联网搜索中…' : '🔄 重新联网搜索'}
+          </button>
+        )}
       </div>
 
       {/* 嵌入播放区 */}
@@ -167,7 +187,9 @@ export default function ResourceAggregator() {
       </div>
 
       <p className="agg__note">
-        演示数据为 AI 精选示例；生产环境由后端聚合 Agent 调用 YouTube / B站 / arXiv / 慕课等 API，经审核 Agent 过滤低质与不相关资源。
+        {USE_REAL_API && online === false
+          ? '当前未配置联网搜索 API（走种子库兜底）。配置 SEARCH_PROVIDER=tavily + SEARCH_API_KEY 后，即由后端联网搜索 + 聚合/审核 Agent 实时产出。'
+          : '由后端聚合 Agent 联网检索 YouTube / B站 / arXiv / 慕课等资源，经审核 Agent 过滤低质与不相关资源并评分排序。'}
       </p>
     </div>
   )

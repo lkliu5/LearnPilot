@@ -46,6 +46,14 @@ class TutorGenerateRequest(BaseModel):
     types: list[str] = Field(default_factory=list)  # 勾选的资源类型子集
 
 
+class ExternalAggregateRequest(BaseModel):
+    """POST /resource/external/aggregate 请求体（接口文档 8.6 增量）。"""
+
+    kpId: str
+    query: str | None = None  # 自定义检索式，可空（缺省由知识点 + 薄弱点构造）
+    weakPoints: list[str] = Field(default_factory=list)  # 薄弱点，可空（缺省由 Mastery 派生）
+
+
 class QuizAnswerItem(BaseModel):
     """单题作答（接口文档 9.1）。answer：single/boolean 为 str，multiple 为 str[]。"""
 

@@ -235,6 +235,33 @@ def _build_remedial_suggestions(point: str) -> list[dict[str, Any]]:
     ]
 
 
+# ---- 外部资源·联网搜索聚合（接口文档 8.6 增量，C-fix 批3-bonus） ----------------
+_AGG_TYPES: tuple[str, ...] = ("视频", "论文", "文档", "课程")
+# 来源可信度启发式（critic 评分兜底口径）：命中关键词 → 基础可信分
+_CREDIBILITY_HINTS: list[tuple[tuple[str, ...], int]] = [
+    (("arxiv", "nature", "acm", "ieee", "openreview"), 97),
+    (("stanford", "cs231n", "cs224n", ".edu", "mit", "deeplearningbook", "harvard"), 95),
+    (("pytorch", "tensorflow", "huggingface", "developers.google", "scikit-learn"), 93),
+    (("coursera", "3blue1brown", "bilibili", "youtube", "jalammar"), 90),
+]
+
+
+def _credibility_of(source: str, url: str) -> int:
+    """据来源域名/URL 估可信度（mock critic 评分兜底）。"""
+    s = f"{source} {url}".lower()
+    for keys, score in _CREDIBILITY_HINTS:
+        if any(k in s for k in keys):
+            return score
+    return 82
+
+
+def _clamp_score(value: Any, default: int = 0) -> int:
+    try:
+        return max(0, min(100, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 # ---- 对话式画像诊断（接口文档 17.1 / 17.2，C1-b） ------------------------------
 
 
@@ -1745,6 +1772,128 @@ class LLMClient:
             "title": str(data.get("title") or f"补充讲义 · {problem_point}").strip(),
             "markdown": str(data["markdown"]).strip(),
         }
+
+    # ---- 外部资源·联网搜索聚合（接口文档 8.6 增量，C-fix 批3-bonus） ----------
+    def aggregate_resources(
+        self,
+        kp_name: str,
+        weak_points: list[str],
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """聚合 Agent 整理 + critic 评分（接口文档 8.6）。
+
+        candidates 为联网搜索命中（或种子兜底）[{title,url,source,snippet,type,embed?,duration?}]，
+        输出按相关度降序的 8.6 资源清单 [{id,type,title,source,url,relevance,credibility,reason,embed?,duration?}]。
+        - mock：确定性评分（字符二元组相关度 + 来源可信度启发式 + 模板理由）；
+        - deepseek：真实排序/评分/理由 + 契约清洗（**URL 必须取自候选，杜绝幻觉链接**）。
+        """
+        self._ensure_supported()
+        cands = [
+            c for c in candidates
+            if isinstance(c, dict) and str(c.get("url") or "").strip() and str(c.get("title") or "").strip()
+        ]
+        if not cands:
+            return []
+        if self.is_mock:
+            return self._mock_aggregate(kp_name, weak_points, cands)
+        try:
+            return self._deepseek_aggregate(kp_name, weak_points, cands)
+        except LLMGenerationError as exc:
+            logger.warning("资源聚合评分真实生成失败，回落确定性评分：%s", exc)
+            return self._mock_aggregate(kp_name, weak_points, cands)
+
+    @staticmethod
+    def _agg_item(cand: dict[str, Any], idx: int, *, type_: str, rel: int, cred: int, reason: str) -> dict[str, Any]:
+        item: dict[str, Any] = {
+            "id": f"agg-{idx}",
+            "type": type_ if type_ in _AGG_TYPES else (cand.get("type") if cand.get("type") in _AGG_TYPES else "文档"),
+            "title": str(cand.get("title")),
+            "source": str(cand.get("source") or "web"),
+            "url": str(cand.get("url")),
+            "relevance": rel,
+            "credibility": cred,
+            "reason": reason,
+        }
+        if cand.get("embed"):
+            item["embed"] = cand["embed"]
+        if cand.get("duration"):
+            item["duration"] = cand["duration"]
+        return item
+
+    @staticmethod
+    def _mock_aggregate(
+        kp_name: str, weak_points: list[str], cands: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """确定性聚合评分（字符二元组相关度 + 来源可信度 + 模板理由）。"""
+        target = _char_bigrams(kp_name + "".join(weak_points))
+        wp = weak_points[0] if weak_points else kp_name
+        scored: list[tuple[int, dict[str, Any]]] = []
+        for i, c in enumerate(cands, start=1):
+            text = f"{c.get('title', '')} {c.get('snippet', '')} {c.get('source', '')}"
+            overlap = (len(target & _char_bigrams(text)) / len(target)) if target else 0.0
+            rel = max(60, min(99, round(60 + overlap * 39)))
+            cred = _credibility_of(str(c.get("source", "")), str(c.get("url", "")))
+            reason = f"契合你当前「{kp_name}」的学习，对补强「{wp}」很有帮助。"
+            scored.append((rel, LLMClient._agg_item(c, i, type_=str(c.get("type") or ""), rel=rel, cred=cred, reason=reason)))
+        scored.sort(key=lambda e: e[0], reverse=True)
+        return [it for _, it in scored][:8]
+
+    def _deepseek_aggregate(
+        self, kp_name: str, weak_points: list[str], cands: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """真实聚合排序/评分/理由 + 契约清洗（URL 白名单防幻觉）。"""
+        by_url = {str(c["url"]): c for c in cands}
+        listing = [
+            {
+                "title": c.get("title"),
+                "url": c.get("url"),
+                "source": c.get("source"),
+                "snippet": str(c.get("snippet") or "")[:200],
+                "type": c.get("type"),
+            }
+            for c in cands
+        ]
+        system = (
+            "你是学习资源聚合与审核 Agent。从候选搜索结果中筛选并排序出对该学习者最有价值的优质"
+            '资源，仅输出 JSON：{"items": [{"type": "视频", "title": "...", "source": "...", '
+            '"url": "...", "relevance": 0, "credibility": 0, "reason": "..."}]}。'
+            f"type 只能取 {list(_AGG_TYPES)}；relevance/credibility 为 0-100 整数（相关度结合"
+            "知识点与薄弱点、可信度结合来源权威性）；reason 一句中文说明为何推荐（结合薄弱点）；"
+            "**url 必须原样取自候选列表，禁止编造或改写链接**；按 relevance 降序，最多 8 条。"
+        )
+        payload = {"knowledgePoint": kp_name, "weakPoints": weak_points, "candidates": listing}
+        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        data = _extract_json(raw)
+        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+            raise LLMGenerationError("资源聚合输出无法解析为契约 JSON")
+        items: list[dict[str, Any]] = []
+        for it in data["items"]:
+            if not isinstance(it, dict):
+                continue
+            url = str(it.get("url") or "").strip()
+            cand = by_url.get(url)
+            if cand is None:  # 防幻觉：只接受候选列表内的真实 URL
+                continue
+            reason = str(it.get("reason") or "").strip() or "与当前学习高度相关。"
+            merged = dict(cand)
+            if it.get("title"):
+                merged["title"] = it["title"]
+            if it.get("source"):
+                merged["source"] = it["source"]
+            items.append(
+                LLMClient._agg_item(
+                    merged,
+                    len(items) + 1,
+                    type_=str(it.get("type") or ""),
+                    rel=_clamp_score(it.get("relevance"), 75),
+                    cred=_clamp_score(it.get("credibility"), 85),
+                    reason=reason,
+                )
+            )
+        if not items:
+            raise LLMGenerationError("资源聚合输出不含有效候选")
+        items.sort(key=lambda x: x["relevance"], reverse=True)
+        return items[:8]
 
     # ---- 康奈尔线索生成（接口文档 18.1，C2） -------------------------------
     def generate_cornell_cues(

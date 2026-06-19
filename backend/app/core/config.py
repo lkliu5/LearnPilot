@@ -89,6 +89,17 @@ class Settings(BaseSettings):
     job_market_dir: str = "../frontend/public/data/job-market"
     job_market_offline: bool = False
 
+    # 外部资源联网搜索（接口文档 8.6 增量，C-fix 批3-bonus）：可插拔搜索 provider。
+    # - search_provider：none（无搜索能力，走种子兜底/offline）| tavily（Tavily Web Search API）；
+    #   未来可扩展 serpapi / bing / youtube / arxiv，接口签名不变。
+    # - search_api_key：对应 provider 的密钥（经 .env 注入；缺省为空 → 自动回落 offline 兜底）。
+    # 缺省 none，无密钥也能跑（mock/种子兜底，CLAUDE.md 纪律）。
+    search_provider: str = "none"
+    search_api_key: str = ""
+    search_base_url: str = "https://api.tavily.com"
+    search_timeout_seconds: float = 12.0
+    search_max_results: int = 8
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:

@@ -58,6 +58,27 @@ export function getExternalResources(kpId: string): Promise<ExternalResource[]> 
   return apiGet<ExternalResource[]>(`/resource/external/${kpId}`)
 }
 
+/** 8.6 增量：外部资源 AI 联网搜索聚合（按 kp + 薄弱点，后端代理联网，无能力→种子兜底）。 */
+export interface ExternalAggregateResult {
+  kpId: string
+  kpName: string
+  /** 搜索 provider 名（none=未配置搜索 API） */
+  provider: string
+  /** 是否真实联网命中（false=种子离线兜底） */
+  online: boolean
+  items: ExternalResource[]
+}
+export function aggregateExternalResources(
+  kpId: string,
+  opts?: { query?: string; weakPoints?: string[] }
+): Promise<ExternalAggregateResult> {
+  return apiPost<ExternalAggregateResult>('/resource/external/aggregate', {
+    kpId,
+    query: opts?.query,
+    weakPoints: opts?.weakPoints ?? [],
+  })
+}
+
 /** 9.2 错题强化卡：薄弱点 + 强化讲解 + 一道针对性追加练习。 */
 export interface ReinforceCard {
   questionId: string
