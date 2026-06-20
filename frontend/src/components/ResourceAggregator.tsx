@@ -77,6 +77,42 @@ const typeMeta: Record<ResType, { icon: string; color: string }> = {
   课程: { icon: '🎓', color: 'var(--warning-600)' },
 }
 
+/**
+ * 从外部链接解析出可嵌入的站内播放地址（YouTube / Bilibili）。
+ * 联网搜索结果只有外链、无 embed 字段——对可解析出视频 ID 的源生成 embed，恢复站内播放；
+ * 不可嵌入的来源返回 undefined（回落「打开原站」）。仅作用于资源推荐的外部视频。
+ */
+function deriveEmbed(url: string): string | undefined {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '').replace(/^m\./, '')
+    // YouTube：watch?v=ID / youtu.be/ID / embed|shorts/ID
+    if (host === 'youtube.com') {
+      const v = u.searchParams.get('v')
+      if (v) return `https://www.youtube.com/embed/${v}`
+      const seg = u.pathname.match(/^\/(?:embed|shorts)\/([\w-]+)/)
+      if (seg) return `https://www.youtube.com/embed/${seg[1]}`
+    }
+    if (host === 'youtu.be') {
+      const id = u.pathname.slice(1).split('/')[0]
+      if (id) return `https://www.youtube.com/embed/${id}`
+    }
+    // Bilibili：video/BVxxxx 或 video/avNNN
+    if (host.endsWith('bilibili.com')) {
+      const bv = u.pathname.match(/video\/(BV[\w]+)/i)
+      if (bv) return `https://player.bilibili.com/player.html?bvid=${bv[1]}&page=1&high_quality=1&danmaku=0`
+      const av = u.pathname.match(/video\/av(\d+)/i)
+      if (av) return `https://player.bilibili.com/player.html?aid=${av[1]}&page=1&high_quality=1&danmaku=0`
+    }
+  } catch {
+    /* 非法 URL → 不可嵌入 */
+  }
+  return undefined
+}
+
+/** 资源的站内播放地址：优先后端给的 embed，否则从链接解析（YouTube/Bilibili）。 */
+const embedOf = (r: ExternalResource): string | undefined => r.embed ?? deriveEmbed(r.url)
+
 export default function ResourceAggregator() {
   const [active, setActive] = useState<string | null>(null)
 
@@ -103,7 +139,8 @@ export default function ResourceAggregator() {
     void loadAggregate()
   }, [loadAggregate])
 
-  const activeRes = list.find((r) => r.id === active && r.embed)
+  const activeRes = list.find((r) => r.id === active)
+  const activeEmbed = activeRes ? embedOf(activeRes) : undefined
 
   return (
     <div className="agg">
@@ -127,8 +164,8 @@ export default function ResourceAggregator() {
         )}
       </div>
 
-      {/* 嵌入播放区 */}
-      {activeRes && (
+      {/* 嵌入播放区（站内播放可嵌入的外部视频） */}
+      {activeRes && activeEmbed && (
         <motion.div
           className="agg__embed"
           initial={{ opacity: 0, height: 0 }}
@@ -140,9 +177,9 @@ export default function ResourceAggregator() {
           </div>
           <iframe
             className="agg__iframe"
-            src={activeRes.embed}
+            src={activeEmbed}
             title={activeRes.title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; compute-pressure; web-share"
             allowFullScreen
           />
         </motion.div>
@@ -176,7 +213,7 @@ export default function ResourceAggregator() {
               </div>
 
               <div className="agg__actions">
-                {r.embed && (
+                {embedOf(r) && (
                   <button className="agg__btn agg__btn--play" onClick={() => setActive(r.id)}>▶ 内嵌观看</button>
                 )}
                 <a className="agg__btn agg__btn--open" href={r.url} target="_blank" rel="noreferrer">↗ 原站打开</a>
