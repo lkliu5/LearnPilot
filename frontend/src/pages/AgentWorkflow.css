@@ -430,6 +430,59 @@
   padding: var(--space-md);
 }
 
+/* 学习过程评估 Agent 区块（大屏内独立参与方，非编排节点） */
+.workflow-eval {
+  margin-top: var(--space-lg, 24px);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: var(--space-md);
+}
+.workflow-eval__intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: var(--space-md, 16px);
+}
+.workflow-eval__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-50), var(--purple-50));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.workflow-eval__intro-text { min-width: 0; }
+.workflow-eval__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+.workflow-eval__tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--purple-600, #7c3aed);
+  background: var(--purple-50, #f5f3ff);
+  border: 1px solid var(--purple-100, #ede9fe);
+}
+.workflow-eval__desc {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--gray-500, #64748b);
+}
+.workflow-eval__desc strong { color: var(--primary-600, #4f46e5); }
+
 .sidebar-section h3 {
   font-size: 0.8125rem;
   font-weight: 600;

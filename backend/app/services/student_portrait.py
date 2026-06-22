@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,7 +21,14 @@ from sqlalchemy.orm import Session
 from app.core.llm import PORTRAIT_DIMENSIONS
 from app.models.entities import StudentPortrait
 
+logger = logging.getLogger(__name__)
+
 _ORDER: dict[str, int] = {k: i for i, (k, _) in enumerate(PORTRAIT_DIMENSIONS)}
+
+
+def _empty_portrait() -> dict[str, Any]:
+    """干净空画像（17.3「尚未开始诊断」占位）：新用户/空数据/兜底均返回此结构。"""
+    return {"dimensions": [], "version": "v1", "updatedAt": None}
 
 
 def _now_iso() -> str:
@@ -48,8 +56,17 @@ def _get_or_create(db: Session, user_id: str) -> StudentPortrait:
 
 
 def get_portrait(db: Session, user_id: str) -> dict[str, Any]:
-    """获取当前最新画像（接口文档 17.3）。无数据 → 空画像占位。"""
-    return _serialize(_get_or_create(db, user_id))
+    """获取当前最新画像（接口文档 17.3）。无数据 → 空画像占位。
+
+    防御：新用户首访 get-or-create 已落空画像；若遇空数据/瞬时库异常（如并发建行、
+    旧库结构漂移），回落干净空态而非抛 500——保证「新用户调用恒得 200 空态」（任务4）。
+    """
+    try:
+        return _serialize(_get_or_create(db, user_id))
+    except Exception:  # noqa: BLE001 读接口降级：任何异常 → 200 空态，不向前端冒泡 500
+        logger.warning("读取学生画像失败，回落空态（user_id=%s）", user_id, exc_info=True)
+        db.rollback()
+        return _empty_portrait()
 
 
 def replace_portrait(

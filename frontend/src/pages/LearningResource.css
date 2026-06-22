@@ -1150,6 +1150,9 @@
   padding: 0 2px 2px;
 }
 .rescard__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1rem;
   font-weight: 700;
   color: var(--ink);
@@ -1158,6 +1161,39 @@
   font-size: 0.8rem;
   line-height: 1.6;
   color: var(--ink-soft);
+}
+
+/* ----- 选择性逐项生成面板（复用 TutorResourcePanel 的 .trp__* 样式，嵌入资源中枢顶部）----- */
+.rescard-genpanel {
+  margin-bottom: var(--space-md);
+}
+.rescard-genpanel .trp--embed {
+  margin-top: 0;
+}
+/* 面板内勾选清单两列排布（6 项更紧凑），窄屏回落单列 */
+.rescard-genpanel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+/* 未生成完成的资源卡：锁定态（不可点，弱化呈现）*/
+.rescard--locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.rescard--locked:hover {
+  box-shadow: var(--shadow-soft);
+  border-color: var(--line);
+}
+
+/* 资源推荐卡：无插画，纯底板 + emoji（与 5 张插画卡并列）*/
+.rescard__illu--plain {
+  display: grid;
+  place-items: center;
+}
+.rescard__emoji {
+  font-size: 2.4rem;
+  line-height: 1;
 }
 
 /* ----- 分阶测试：独立绿色主行 ----- */

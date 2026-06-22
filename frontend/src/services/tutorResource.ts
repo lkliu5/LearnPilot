@@ -5,6 +5,8 @@
  * 联调走后端（复用既有讲义/图解/视频/例题生成能力）；mock 模式前端确定性合成（同结构）。
  */
 import { USE_REAL_API, apiPost } from './api'
+import { aggregateExternalResources } from './resource'
+import type { ExternalResource } from '../components/ResourceAggregator'
 
 export type RemedialType = 'diagram' | 'example' | 'video' | 'lecture'
 
@@ -135,4 +137,61 @@ export async function generateResources(
     return mockContent(t, kpName, problemPoint)
   })
   return { kpId, problemPoint, results }
+}
+
+/**
+ * 资源推荐（联网聚合的外部资源）作为成果项之一接入按需生成。
+ * 复用既有 8.6 增量接口 aggregateExternalResources（不新增后端接口）；
+ * mock 模式 / 后端无搜索能力时由前端确定性合成兜底（与 ResourceAggregator 种子同口径）。
+ */
+export async function fetchRecommendations(
+  kpId: string,
+  problemPoint: string,
+  kpName = '当前知识点'
+): Promise<ExternalResource[]> {
+  if (USE_REAL_API) {
+    const res = await aggregateExternalResources(kpId, { weakPoints: [problemPoint] })
+    return res.items
+  }
+  return mockRecommendations(kpName, problemPoint)
+}
+
+/** mock 外部资源推荐：围绕问题点的确定性精选（无后端搜索时兜底，结构同 ExternalResource）。 */
+function mockRecommendations(kpName: string, point: string): ExternalResource[] {
+  return [
+    {
+      id: 'rec-video',
+      type: '视频',
+      title: `可视化讲解：${point}`,
+      source: 'YouTube · 3Blue1Brown',
+      url: 'https://www.youtube.com/watch?v=aircAruvnKk',
+      embed: 'https://www.youtube.com/embed/aircAruvnKk',
+      duration: '19:13',
+      relevance: 96,
+      credibility: 97,
+      reason: `用动画直观呈现「${point}」，契合你在「${kpName}」中卡住的盲区。`,
+    },
+    {
+      id: 'rec-course',
+      type: '课程',
+      title: `系统课程：从基础到「${point}」`,
+      source: 'Stanford 公开课 CS231n',
+      url: 'https://cs231n.github.io/',
+      duration: '系列',
+      relevance: 90,
+      credibility: 96,
+      reason: `权威课程循序讲透「${kpName}」相关脉络，适合补齐「${point}」的体系认知。`,
+    },
+    {
+      id: 'rec-doc',
+      type: '文档',
+      title: `动手实践：${point}`,
+      source: 'PyTorch 官方教程',
+      url: 'https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html',
+      duration: '实操',
+      relevance: 88,
+      credibility: 95,
+      reason: `把「${point}」落到可运行代码，边做边理解，巩固直觉。`,
+    },
+  ]
 }

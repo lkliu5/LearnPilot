@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { gsap } from 'gsap'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
@@ -17,6 +17,13 @@ import {
 import { consumeWorkflowReplay } from '../services/workflowNav'
 import { setResourceNav } from '../services/resourceNav'
 import { KNOWLEDGE_POINTS, CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import { useMastery } from '../store/mastery'
+import LearningEvalPanel from '../components/LearningEvalPanel'
+import {
+  getLearningEvaluation,
+  synthesizeEvaluation,
+  type LearningEvaluation,
+} from '../services/learningEval'
 import type { PageType } from '../App'
 import './AgentWorkflow.css'
 
@@ -96,6 +103,33 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
   const [resultModal, setResultModal] = useState<{ kpId: string; degraded: boolean } | null>(null)
   const [replaying, setReplaying] = useState(false)
   const lastFrameRef = useRef<WorkflowSnapshot | null>(null)
+
+  /* 学习过程评估 Agent（接口文档 12.2）：跨会话累积评估，独立于本次 LangGraph 运行路径，
+     作为大屏中的一个独立 Agent 区块呈现其最新多维评估产出。联调取后端真实行为评估；
+     mock / 后端不可用 → 由掌握度本地合成（同结构），保证大屏始终能体现评估能力。 */
+  const masteryStatus = useMastery((s) => s.status)
+  const [evaluation, setEvaluation] = useState<LearningEvaluation | null>(null)
+  useEffect(() => {
+    if (!USE_REAL_API) return
+    let alive = true
+    getLearningEvaluation()
+      .then((d) => alive && setEvaluation(d))
+      .catch((e) => console.error('[workflow] 加载学习评估失败，回退本地合成', e))
+    return () => {
+      alive = false
+    }
+  }, [masteryStatus])
+  const masteredIds = useMemo(
+    () => KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').map((k) => k.id),
+    [masteryStatus]
+  )
+  const evalData =
+    USE_REAL_API && evaluation
+      ? evaluation
+      : synthesizeEvaluation(
+          KNOWLEDGE_POINTS.map((k) => ({ id: k.id, name: k.name })),
+          masteredIds
+        )
 
   /* GSAP G1：测量节点真实坐标 → 生成曲线连线路径 → 粒子沿路径流动 */
   const networkRef = useRef<HTMLDivElement>(null)
@@ -752,6 +786,25 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
             </div>
           </div>
         </div>
+      </RevealItem>
+
+      {/* 学习过程评估 Agent：作为多智能体系统的独立参与方呈现（跨会话累积评估，
+          非单次生成工作流的编排节点），展示其最新多维评估输出，体现系统含评估能力 */}
+      <RevealItem className="workflow-eval">
+        <div className="workflow-eval__intro">
+          <span className="workflow-eval__icon">📈</span>
+          <div className="workflow-eval__intro-text">
+            <h3 className="workflow-eval__title">
+              学习过程评估 Agent
+              <span className="workflow-eval__tag">独立 Agent · 非编排节点</span>
+            </h3>
+            <p className="workflow-eval__desc">
+              区别于上方单次生成工作流的诊断/生成/审核节点，评估 Agent
+              <strong>跨会话持续运行</strong>，累积你的做题、进度与笔记行为，产出多维学情评估与动态调整建议。
+            </p>
+          </div>
+        </div>
+        <LearningEvalPanel evaluation={evalData} onNavigate={onNavigate} />
       </RevealItem>
       </RevealGroup>
 

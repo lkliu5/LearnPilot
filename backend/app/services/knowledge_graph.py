@@ -15,12 +15,15 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models.entities import KnowledgePoint
 from app.services import mastery as mastery_service
+
+logger = logging.getLogger(__name__)
 
 # 知识盲区阈值：未开始且种子掌握度低于该值 → category 3
 BLIND_SPOT_THRESHOLD = 20
@@ -85,11 +88,17 @@ def derive_node(status: str | None, base_value: int) -> tuple[int, int]:
 
 
 def derived_nodes(db: Session, user_id: str) -> list[dict[str, Any]]:
-    """12 节点 + 实时推导的 category/value（dashboard 聚合复用，保证口径严格一致）。"""
-    status_map = mastery_service.get_status_map(db, user_id)
-    kp_by_node = {
-        kp.graph_node_id: kp.id for kp in db.query(KnowledgePoint).all()
-    }
+    """12 节点 + 实时推导的 category/value（dashboard 聚合复用，保证口径严格一致）。
+
+    防御：12 节点为静态种子恒存在；掌握度/知识点映射查询若遇空数据或瞬时库异常，
+    回落为「全部未开始」推导（而非抛 500），保证新用户/空数据恒得 200 空态图谱（任务4）。
+    """
+    try:
+        status_map = mastery_service.get_status_map(db, user_id)
+        kp_by_node = {kp.graph_node_id: kp.id for kp in db.query(KnowledgePoint).all()}
+    except Exception:  # noqa: BLE001 读接口降级：用户态查询失败 → 按全未开始推导
+        logger.warning("知识图谱掌握度查询失败，按全未开始推导（user_id=%s）", user_id, exc_info=True)
+        status_map, kp_by_node = {}, {}
     nodes: list[dict[str, Any]] = []
     for node_id, name, base_value in _NODES:
         status = status_map.get(kp_by_node.get(node_id, ""))

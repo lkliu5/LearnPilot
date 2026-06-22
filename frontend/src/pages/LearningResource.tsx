@@ -11,7 +11,10 @@ import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
-import { getDiagram, getLecture, getQuiz, submitQuiz, type LectureData } from '../services/resource'
+import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
+import { fetchRecommendations } from '../services/tutorResource'
+import { StatusChip, type ItemStatus } from '../components/genStatus'
+import '../components/TutorResourcePanel.css'
 import type { ReviewRef } from '../services/learningFlow'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
 import { consumeResourceEntryTab, getResourceKpId, getResourceMode, type ResourceMode } from '../services/resourceNav'
@@ -413,6 +416,26 @@ const RESOURCE_CARDS: { id: ResourceIllustrationType; title: string; desc: strin
 const ALL_TAB_IDS = Object.keys(RESOURCE_META)
 const isTab = (v: string | null): v is Tab => !!v && ALL_TAB_IDS.includes(v)
 
+/* 主资源生成·可逐项生成的资源类型（5 张卡片 + 资源推荐并入成果区）。
+   复用会话二 TutorResourcePanel 的「勾选 → 逐项调用既有单类型生成接口 → 逐项进度/逐项呈现」体验。 */
+type GenType = 'lecture' | 'video' | 'mindmap' | 'diagram' | 'code' | 'external'
+const GEN_ICON: Record<GenType, string> = {
+  lecture: '📖',
+  video: '🎬',
+  mindmap: '🧠',
+  diagram: '📊',
+  code: '💻',
+  external: '🔗',
+}
+const GEN_OPTIONS: { type: GenType; title: string; expect: string }[] = [
+  { type: 'lecture', title: '定制讲义', expect: '按你的难度档生成的个性化讲义，RAG 可溯源' },
+  { type: 'video', title: '讲解视频', expect: '动画分镜 + 同步旁白的讲解视频' },
+  { type: 'mindmap', title: '思维导图', expect: '由讲义结构化的知识脉络图' },
+  { type: 'diagram', title: '知识图解', expect: '按当前主题真实生成的 Mermaid 知识脉络图' },
+  { type: 'code', title: '代码实操', expect: '浏览器内可运行的示例，改完即时看结果' },
+  { type: 'external', title: '资源推荐', expect: 'AI 联网聚合的优质外部资源（视频/课程/论文/文档），可打开学习' },
+]
+
 /** 从讲义 markdown 提取标题大纲（跳过代码块内的 # 注释行），供思维导图结构化 */
 function lectureOutline(md: string): string {
   let inFence = false
@@ -463,6 +486,32 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const [quizGrade, setQuizGrade] = useState<QuizGrade | null>(null)
   const [trustOpen, setTrustOpen] = useState(false)
 
+  /* ---------- 主资源生成·选择性逐项生成（复用会话二 TutorResourcePanel 的那套体验） ----------
+     勾选要生成的资源类型 → 逐项调用既有单类型生成接口（getLecture/getVideo/getDiagram，
+     思维导图由讲义结构化、代码为可运行示例占位）→ 每项独立状态 + 顶部总进度 → 生成完一项
+     即解锁对应卡片；资源推荐（fetchRecommendations 联网聚合）并入成果区为第 6 张卡片。
+     未开始生成时全部卡片可直接浏览（保留既有「查看资源」落点/费曼回看入口不回归）。 */
+  const [genPicked, setGenPicked] = useState<Set<GenType>>(() => new Set(GEN_OPTIONS.map((o) => o.type)))
+  const [genRunning, setGenRunning] = useState(false)
+  const [genStatus, setGenStatus] = useState<Partial<Record<GenType, ItemStatus>>>({})
+  const [recoCount, setRecoCount] = useState<number | null>(null)
+
+  const toggleGen = (t: GenType) =>
+    setGenPicked((prev) => {
+      const next = new Set(prev)
+      next.has(t) ? next.delete(t) : next.add(t)
+      return next
+    })
+
+  /* 生成派生态：未开始生成 → 卡片全部可浏览（不回归既有落点/回看入口）；
+     开始后未完成项锁定，完成项解锁；进度仅按勾选项统计。 */
+  const genStarted = Object.keys(genStatus).length > 0
+  const genLocked = (t: GenType) => genStarted && genStatus[t] !== 'done'
+  const genChosen = GEN_OPTIONS.filter((o) => genPicked.has(o.type))
+  const genTotal = genChosen.length
+  const genDone = genChosen.filter((o) => genStatus[o.type] === 'done' || genStatus[o.type] === 'error').length
+  const genProgress = genTotal ? Math.round((genDone / genTotal) * 100) : 0
+
   /* 联调数据源（mock 模式下不使用，保持现有常量驱动）：
      questions 来自 GET /quiz/{kp}（联调初值为空，避免拉取期间闪现 nn 演示题）；
      lectureMap 缓存各难度档 markdown */
@@ -492,6 +541,66 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const markPassed = useMastery((s) => s.markPassed)
   const loadMastery = useMastery((s) => s.load)
   const kpName = kpById(kpId)?.name ?? '当前知识点'
+
+  /* 单类型生成：复用既有单类型生成接口（types 传单元素逐次调用，契约不变）。
+     mock 模式内容为本地确定性常量，仅以短延时模拟「生成中」过程；external 走 fetchRecommendations。 */
+  const generateOne = async (t: GenType): Promise<void> => {
+    if (USE_REAL_API) {
+      switch (t) {
+        case 'lecture':
+        case 'mindmap': {
+          // 思维导图由讲义 markdown 实时结构化得到 → 复用既有讲义生成接口
+          const d = await getLecture(kpId, level)
+          applyLecture(level, d)
+          break
+        }
+        case 'video':
+          await getVideo(kpId, level) // 既有单类型视频接口（打开 VideoLecture 时复用同源数据）
+          break
+        case 'diagram': {
+          const d = await getDiagram(kpId)
+          setDiagramChart(d.mermaid)
+          break
+        }
+        case 'external': {
+          const items = await fetchRecommendations(kpId, kpName, kpName)
+          setRecoCount(items.length)
+          break
+        }
+        case 'code':
+          break // 代码实操为浏览器内可运行示例（CodeSandbox），无单独生成接口，直接就绪
+      }
+      return
+    }
+    // mock：内容为本地常量，短延时模拟逐项生成过程
+    if (t === 'external') {
+      const items = await fetchRecommendations(kpId, kpName, kpName)
+      setRecoCount(items.length)
+      return
+    }
+    await new Promise((r) => window.setTimeout(r, 480))
+  }
+
+  /* 逐项生成：勾选项 pending→running→done/error 逐个推进，生成完一项即解锁对应卡片；
+     未勾选项标记为「待生成」（不生成、卡片锁定），实现「未勾选的不生成」。 */
+  const runGeneration = async () => {
+    if (!genPicked.size || genRunning) return
+    const chosen = GEN_OPTIONS.filter((o) => genPicked.has(o.type)).map((o) => o.type)
+    setGenRunning(true)
+    setGenStatus(Object.fromEntries(GEN_OPTIONS.map((o) => [o.type, 'pending'])) as Record<GenType, ItemStatus>)
+    if (genPicked.has('external')) setRecoCount(null)
+    for (const t of chosen) {
+      setGenStatus((prev) => ({ ...prev, [t]: 'running' }))
+      try {
+        await generateOne(t)
+        setGenStatus((prev) => ({ ...prev, [t]: 'done' }))
+      } catch (e) {
+        console.error(`[resource] 生成「${t}」失败`, e)
+        setGenStatus((prev) => ({ ...prev, [t]: 'error' }))
+      }
+    }
+    setGenRunning(false)
+  }
 
   /* 联调初始化：拉取后端测验题 + 当前难度讲义 + 刷新掌握度（mock 模式跳过）*/
   useEffect(() => {
@@ -629,6 +738,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   /* ---------- 资源详情过场：打开 / 关闭 + Esc + 焦点管理 + 滚动锁 ---------- */
   const ILLUSTRATED = new Set<Tab>(['lecture', 'video', 'mindmap', 'diagram', 'code'])
   const openCard = (id: Tab) => {
+    // 选择性生成开启后：未生成完成的资源卡锁定，不可打开（quiz/tutor 不受逐项生成约束）
+    if (id !== 'quiz' && id !== 'tutor' && genLocked(id)) return
     // 进入「分阶测试」沿用既有检验前置：未掌握时置 pending-check（passed 不回退）
     if (id === 'quiz' && kpStatus === 'learning') goCheck(kpId)
     setOpenId(id)
@@ -865,30 +976,125 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
 
       {mode === 'browse' && (
         <RevealGroup>
-          {/* 学习内容 → 插画卡片网格（点击走 layoutId 过场展开详情）*/}
-          <RevealItem className="rescard-grid">
-            {RESOURCE_CARDS.map((c) => (
-              <motion.button
-                key={c.id}
-                type="button"
-                className="rescard"
-                onClick={() => openCard(c.id)}
-                whileHover={{ y: -5 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <motion.span
-                  className="rescard__illu"
-                  layoutId={`res-illu-${c.id}`}
-                  style={{ background: RESOURCE_META[c.id].theme }}
-                >
-                  <ResourceIllustration type={c.id} />
-                </motion.span>
-                <span className="rescard__meta">
-                  <span className="rescard__title">{c.title}</span>
-                  <span className="rescard__desc">{c.desc}</span>
+          {/* 选择性逐项生成面板（复用会话二 TutorResourcePanel 的勾选/进度/状态 UI 与样式）*/}
+          <RevealItem className="rescard-genpanel">
+            <div className="trp trp--embed">
+              <div className="trp__head">
+                <span className="trp__badge">✦ 资源生成</span>
+                <span className="trp__point">
+                  勾选要生成的学习资源，<strong>逐项生成</strong> —— 生成完一项即解锁对应卡片
                 </span>
-              </motion.button>
-            ))}
+              </div>
+              <p className="trp__hint">按需选择，未勾选的不生成；「资源推荐」为 AI 联网聚合，与讲义/视频/图解并列：</p>
+
+              <div className="trp__list rescard-genpanel__list">
+                {GEN_OPTIONS.map((o) => (
+                  <label key={o.type} className={`trp__item ${genPicked.has(o.type) ? 'is-picked' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={genPicked.has(o.type)}
+                      disabled={genRunning}
+                      onChange={() => toggleGen(o.type)}
+                    />
+                    <span className="trp__item-icon">{GEN_ICON[o.type]}</span>
+                    <span className="trp__item-body">
+                      <span className="trp__item-title">{o.title}</span>
+                      <span className="trp__item-expect">{o.expect}</span>
+                    </span>
+                    {genStatus[o.type] && <StatusChip status={genStatus[o.type]!} />}
+                  </label>
+                ))}
+              </div>
+
+              <button className="trp__gen" disabled={!genPicked.size || genRunning} onClick={() => void runGeneration()}>
+                {genRunning
+                  ? `正在逐项生成…（${genDone}/${genTotal}）`
+                  : genStarted
+                    ? `重新生成所选（${genPicked.size}）`
+                    : `生成所选（${genPicked.size}）`}
+              </button>
+
+              {genStarted && (
+                <div
+                  className="trp__progress"
+                  role="progressbar"
+                  aria-valuenow={genProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <span className="trp__progress-fill" style={{ width: `${genProgress}%` }} />
+                  <span className="trp__progress-text">
+                    {genRunning ? `生成中 ${genDone}/${genTotal}` : `已完成 ${genDone}/${genTotal}`}
+                  </span>
+                </div>
+              )}
+            </div>
+          </RevealItem>
+
+          {/* 学习内容 → 插画卡片网格（点击走 layoutId 过场展开详情；生成完成才解锁）*/}
+          <RevealItem className="rescard-grid">
+            {RESOURCE_CARDS.map((c) => {
+              const st = genStatus[c.id]
+              const locked = genLocked(c.id)
+              return (
+                <motion.button
+                  key={c.id}
+                  type="button"
+                  className={`rescard ${locked ? 'rescard--locked' : ''}`}
+                  onClick={() => openCard(c.id)}
+                  disabled={locked}
+                  whileHover={locked ? undefined : { y: -5 }}
+                  whileTap={locked ? undefined : { scale: 0.98 }}
+                >
+                  <motion.span
+                    className="rescard__illu"
+                    layoutId={`res-illu-${c.id}`}
+                    style={{ background: RESOURCE_META[c.id].theme }}
+                  >
+                    <ResourceIllustration type={c.id} />
+                  </motion.span>
+                  <span className="rescard__meta">
+                    <span className="rescard__title">
+                      {c.title}
+                      {st && <StatusChip status={st} />}
+                    </span>
+                    <span className="rescard__desc">{c.desc}</span>
+                  </span>
+                </motion.button>
+              )
+            })}
+
+            {/* 资源推荐并入成果区：作为第 6 张卡片与讲义/视频/图解并列，可打开 */}
+            {(() => {
+              const st = genStatus.external
+              const locked = genLocked('external')
+              return (
+                <motion.button
+                  key="external"
+                  type="button"
+                  className={`rescard ${locked ? 'rescard--locked' : ''}`}
+                  onClick={() => openCard('external')}
+                  disabled={locked}
+                  whileHover={locked ? undefined : { y: -5 }}
+                  whileTap={locked ? undefined : { scale: 0.98 }}
+                >
+                  <span className="rescard__illu rescard__illu--plain" style={{ background: RESOURCE_META.external.theme }}>
+                    <span className="rescard__emoji">🔗</span>
+                  </span>
+                  <span className="rescard__meta">
+                    <span className="rescard__title">
+                      资源推荐
+                      {st && <StatusChip status={st} />}
+                    </span>
+                    <span className="rescard__desc">
+                      {recoCount != null
+                        ? `AI 已联网聚合 ${recoCount} 条优质外部资源，可打开学习。`
+                        : 'AI 联网聚合的优质外部资源（视频/课程/论文/文档），可直接打开。'}
+                    </span>
+                  </span>
+                </motion.button>
+              )
+            })()}
           </RevealItem>
 
           {/* 阶段测试不再挂在资源中枢——它是有序学习流唯一的「终点 gate」（见 LearningFlow）。
@@ -907,9 +1113,6 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             <span className="aux-chips__label">更多工具</span>
             <button type="button" className="aux-chip" onClick={() => openCard('tutor')}>
               💬 导学对话
-            </button>
-            <button type="button" className="aux-chip" onClick={() => openCard('external')}>
-              🔗 资源推荐
             </button>
             {USE_REAL_API && (
               <button
