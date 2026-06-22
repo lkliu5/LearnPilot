@@ -52,10 +52,27 @@ def _isolated_test_db():
 
 @pytest.fixture(scope="session", autouse=True)
 def _force_mock_provider():
-    """整个测试会话强制 mock provider，并重置 LLM 单例。"""
-    original = settings.llm_provider
+    """整个测试会话强制各 provider 为离线/mock 默认，隔离本地 .env，保证可复现。
+
+    本地 backend/.env 可能注入 LLM_PROVIDER=deepseek、SEARCH_PROVIDER=tavily(+Key) 等真实
+    配置；测试套件必须与环境无关（确定性、零网络、零计费）。故此处把所有会改变测试行为的
+    provider 类配置统一压回离线默认：
+    - llm_provider → mock（并重置 LLM 单例）；
+    - search_provider → none、search_api_key → 空（联网搜索回落种子兜底，web_search 每次
+      调用即读 settings，无需额外重置单例）。
+    deepseek 路径用例自行构造 LLMClient("deepseek") 并 monkeypatch，不受本基线影响。
+    """
+    original = {
+        "llm_provider": settings.llm_provider,
+        "search_provider": settings.search_provider,
+        "search_api_key": settings.search_api_key,
+    }
     settings.llm_provider = "mock"
+    settings.search_provider = "none"
+    settings.search_api_key = ""
     llm_mod._client = None
     yield
-    settings.llm_provider = original
+    settings.llm_provider = original["llm_provider"]
+    settings.search_provider = original["search_provider"]
+    settings.search_api_key = original["search_api_key"]
     llm_mod._client = None
