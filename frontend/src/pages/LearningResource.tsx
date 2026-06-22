@@ -400,7 +400,7 @@ const RESOURCE_META: Record<Tab, { title: string; theme: string }> = {
   diagram: { title: '知识图解', theme: '#fbf2e2' },
   code: { title: '代码实操', theme: '#eceef3' },
   quiz: { title: '分阶测试', theme: 'color-mix(in srgb, var(--success-500) 14%, var(--surface))' },
-  external: { title: '资源推荐', theme: 'color-mix(in srgb, var(--primary) 12%, var(--surface))' },
+  external: { title: '资源推荐', theme: '#e3f3f3' },
   tutor: { title: '导学对话', theme: 'color-mix(in srgb, var(--primary) 12%, var(--surface))' },
 }
 
@@ -736,7 +736,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   }
 
   /* ---------- 资源详情过场：打开 / 关闭 + Esc + 焦点管理 + 滚动锁 ---------- */
-  const ILLUSTRATED = new Set<Tab>(['lecture', 'video', 'mindmap', 'diagram', 'code'])
+  const ILLUSTRATED = new Set<Tab>(['lecture', 'video', 'mindmap', 'diagram', 'code', 'external'])
   const openCard = (id: Tab) => {
     // 选择性生成开启后：未生成完成的资源卡锁定，不可打开（quiz/tutor 不受逐项生成约束）
     if (id !== 'quiz' && id !== 'tutor' && genLocked(id)) return
@@ -1078,9 +1078,13 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
                   whileHover={locked ? undefined : { y: -5 }}
                   whileTap={locked ? undefined : { scale: 0.98 }}
                 >
-                  <span className="rescard__illu rescard__illu--plain" style={{ background: RESOURCE_META.external.theme }}>
-                    <span className="rescard__emoji">🔗</span>
-                  </span>
+                  <motion.span
+                    className="rescard__illu"
+                    layoutId="res-illu-external"
+                    style={{ background: RESOURCE_META.external.theme }}
+                  >
+                    <ResourceIllustration type="external" />
+                  </motion.span>
                   <span className="rescard__meta">
                     <span className="rescard__title">
                       资源推荐

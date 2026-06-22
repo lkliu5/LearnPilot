@@ -1186,16 +1186,6 @@
   border-color: var(--line);
 }
 
-/* 资源推荐卡：无插画，纯底板 + emoji（与 5 张插画卡并列）*/
-.rescard__illu--plain {
-  display: grid;
-  place-items: center;
-}
-.rescard__emoji {
-  font-size: 2.4rem;
-  line-height: 1;
-}
-
 /* ----- 分阶测试：独立绿色主行 ----- */
 /* 资源中枢内的轻量提示：阶段测试已迁回「有序学习」终点 gate，此处仅引导 */
 .browse-hint {

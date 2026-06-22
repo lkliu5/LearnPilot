@@ -7,7 +7,7 @@ import { useId } from 'react'
  * - 每个实例用 useId 派生唯一 filter id，避免卡片缩略图与详情头部同时挂载时
  *   （layoutId 过场期间）出现重复 filter id 导致投影渲染异常。
  */
-export type ResourceIllustrationType = 'lecture' | 'video' | 'mindmap' | 'diagram' | 'code'
+export type ResourceIllustrationType = 'lecture' | 'video' | 'mindmap' | 'diagram' | 'code' | 'external'
 
 export default function ResourceIllustration({ type }: { type: ResourceIllustrationType }) {
   const uid = useId().replace(/:/g, '')
@@ -107,6 +107,36 @@ export default function ResourceIllustration({ type }: { type: ResourceIllustrat
           <circle r="12" fill="#fbf2e2" />
         </g>
         <path d="M196 38 Q197 43 203 44 Q197 46 196 51 Q195 46 189 44 Q195 43 196 38Z" fill="#46b07c" />
+      </svg>
+    )
+  }
+
+  if (type === 'external') {
+    // 资源推荐：地球经纬线 + 三个彩色资源节点聚合到中心，喻「AI 联网聚合全球优质资源」
+    return (
+      <svg className="res-illu" viewBox="0 0 220 170" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <filter id={fid} x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#1f7a7a" floodOpacity="0.16" />
+          </filter>
+        </defs>
+        <rect width="220" height="170" fill="#e3f3f3" />
+        <line x1="150" y1="58" x2="110" y2="88" stroke="#9bd4ce" strokeWidth="2" />
+        <line x1="74" y1="112" x2="110" y2="88" stroke="#9bd4ce" strokeWidth="2" />
+        <line x1="158" y1="104" x2="110" y2="88" stroke="#9bd4ce" strokeWidth="2" />
+        <g filter={`url(#${fid})`}>
+          <circle cx="110" cy="88" r="40" fill="#fff" />
+          <circle cx="110" cy="88" r="40" fill="none" stroke="#5bb8b0" strokeWidth="2.5" />
+          <ellipse cx="110" cy="88" rx="16" ry="40" fill="none" stroke="#7cc9c2" strokeWidth="2" />
+          <line x1="70" y1="88" x2="150" y2="88" stroke="#7cc9c2" strokeWidth="2" />
+          <path d="M74 70 Q110 58 146 70 M74 106 Q110 118 146 106" fill="none" stroke="#7cc9c2" strokeWidth="2" />
+        </g>
+        <g filter={`url(#${fid})`}>
+          <circle cx="150" cy="58" r="11" fill="#46b07c" />
+          <circle cx="74" cy="112" r="9" fill="#f0b94a" />
+          <circle cx="158" cy="104" r="8" fill="#8b7bd6" />
+        </g>
+        <path d="M188 40 Q190 47 197 49 Q190 51 188 58 Q186 51 179 49 Q186 47 188 40Z" fill="#f0b94a" />
       </svg>
     )
   }
