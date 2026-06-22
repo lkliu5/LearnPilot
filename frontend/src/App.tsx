@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './components/Sidebar'
 import ScrollToTop from './components/ScrollToTop'
+import PageErrorBoundary from './components/PageErrorBoundary'
 import Dashboard from './pages/Dashboard'
 import ProfileBuilder from './pages/ProfileBuilder'
 import LearningPath from './pages/LearningPath'
@@ -189,20 +190,22 @@ function App() {
       {/* 页面切换时主滚动容器归零，避免停在上一页中部 */}
       <ScrollToTop dep={currentPage} containerRef={mainRef} />
 
-      {/* Main Content */}
+      {/* Main Content
+          导航靠 currentPage 状态机重挂载页面。此处刻意不用 AnimatePresence「mode=wait」
+          包裹：mode=wait 会把新页挂载阻塞到旧页 exit 动画完成，快速来回切换时退出回调
+          可能丢失 → 新页一直不挂载、内容区白屏，只能整页刷新（issue#2/3 现象）。
+          改为按 key 重挂载的 motion.div：换页即立刻挂载并播放进入动画，无 exit 门控、
+          不会卡死；进入动画保留。外层 PageErrorBoundary 兜底单页渲染异常。 */}
       <main ref={mainRef} className={`app__main ${sidebarCollapsed ? 'app__main--expanded' : ''}`}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentPage}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="app__content"
-          >
-            {renderPage()}
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          key={currentPage}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          className="app__content"
+        >
+          <PageErrorBoundary resetKey={currentPage}>{renderPage()}</PageErrorBoundary>
+        </motion.div>
       </main>
     </div>
   )

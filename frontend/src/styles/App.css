@@ -11,6 +11,50 @@
   overflow: hidden;
 }
 
+/* ========== 页面渲染兜底（PageErrorBoundary） ========== */
+.page-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  min-height: 60vh;
+  padding: 48px 24px;
+}
+.page-error__icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+.page-error__title { font-size: 1.15rem; font-weight: 700; color: var(--gray-900, #0f172a); }
+.page-error__desc { font-size: 0.85rem; color: var(--gray-500, #64748b); max-width: 420px; line-height: 1.6; }
+.page-error__actions { display: flex; gap: 12px; margin-top: 8px; }
+.page-error__btn {
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--gray-200, #e2e8f0);
+  background: #fff;
+  color: var(--gray-700, #334155);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.page-error__btn:hover { background: var(--gray-100, #f1f5f9); }
+.page-error__btn--primary {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary, #2563eb), var(--primary-d, #7c3aed));
+}
+.page-error__btn--primary:hover { filter: brightness(1.05); background: linear-gradient(135deg, var(--primary, #2563eb), var(--primary-d, #7c3aed)); }
+
 /* ========== 全局背景 - 柔和渐变 + 光晕 ========== */
 .app__background {
   position: fixed;

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html{background:#F2F1EA;}
+body{width:720pt;height:405pt;font-family:Arial,Helvetica,sans-serif;
+  background:#F2F1EA;color:#262A23;display:flex;flex-direction:column;padding:24pt 34pt 14pt;}
+.kicker{font-size:11pt;letter-spacing:4pt;color:#C58940;font-weight:bold;}
+.kicker span{color:#5B7F6E;}
+h1{font-size:25pt;font-weight:bold;margin:4pt 0 5pt;}
+.rule{height:3pt;width:54pt;background:#5B7F6E;margin-bottom:12pt;}
+.bd{flex:1;display:flex;flex-direction:column;justify-content:center;}
+.lane{background:#FAF9F4;border:1pt solid #DEDCD0;border-radius:9pt;padding:11pt 14pt;margin-bottom:11pt;display:flex;align-items:center;}
+.who{width:130pt;}
+.who h3{font-size:13pt;font-weight:bold;color:#262A23;}
+.who p{font-size:9.5pt;color:#8A8F82;margin-top:2pt;}
+.path{flex:1;display:flex;align-items:center;flex-wrap:wrap;}
+.step{border-radius:6pt;padding:6pt 11pt;margin:2pt 0;}
+.weak{background:#5B7F6E;}.weak p{color:#fff;}
+.mid{background:#DCE6E0;}.mid p{color:#46624F;}
+.done{background:#EBEAE0;}.done p{color:#9a9f92;}
+.step p{font-size:10.5pt;font-weight:bold;}
+.pnar{color:#C58940;font-size:13pt;font-weight:bold;margin:0 6pt;}
+.note{display:flex;}
+.note .tag{background:#F1EDE2;border-radius:7pt;padding:6pt 12pt;margin-right:10pt;}
+.note .tag p{font-size:10pt;color:#46624F;font-weight:bold;}
+.ft{display:flex;justify-content:space-between;margin-top:8pt;}
+.ft p{font-size:8.5pt;color:#9aa094;}
+</style>
+</head>
+<body>
+  <p class="kicker">核心功能 3 &nbsp;<span>个性化学习路径</span></p>
+  <h1>不同的人，不同的路径</h1>
+  <div class="rule"></div>
+  <div class="bd">
+    <div class="lane">
+      <div class="who"><h3>画像 A · 基础薄弱</h3><p>从头夯实基础</p></div>
+      <div class="path">
+        <div class="step weak"><p>机器学习基础</p></div><span class="pnar">&rarr;</span>
+        <div class="step weak"><p>神经网络</p></div><span class="pnar">&rarr;</span>
+        <div class="step mid"><p>深度学习</p></div><span class="pnar">&rarr;</span>
+        <div class="step mid"><p>CNN</p></div><span class="pnar">&rarr;</span>
+        <div class="step mid"><p>Transformer</p></div>
+      </div>
+    </div>
+    <div class="lane">
+      <div class="who"><h3>画像 B · 已有基础</h3><p>已掌握的自动后置</p></div>
+      <div class="path">
+        <div class="step done"><p>机器学习基础</p></div><span class="pnar">&rarr;</span>
+        <div class="step weak"><p>Transformer</p></div><span class="pnar">&rarr;</span>
+        <div class="step weak"><p>模型微调</p></div><span class="pnar">&rarr;</span>
+        <div class="step mid"><p>CNN 进阶</p></div>
+      </div>
+    </div>
+    <div class="note">
+      <div class="tag"><p>依画像 + 掌握度打分排序</p></div>
+      <div class="tag"><p>薄弱优先 · 已掌握后置</p></div>
+      <div class="tag"><p>每步精准推送对应资源</p></div>
+    </div>
+  </div>
+  <div class="ft"><p>智学中枢 · 多智能体个性化学习平台</p><p>06 / 12</p></div>
+</body>
+</html>

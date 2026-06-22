@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html{background:#F2F1EA;}
+body{width:720pt;height:405pt;font-family:Arial,Helvetica,sans-serif;
+  background:#F2F1EA;color:#262A23;display:flex;flex-direction:column;padding:24pt 34pt 14pt;}
+.kicker{font-size:11pt;letter-spacing:4pt;color:#C58940;font-weight:bold;}
+h1{font-size:25pt;font-weight:bold;margin:4pt 0 5pt;}
+.rule{height:3pt;width:54pt;background:#5B7F6E;margin-bottom:11pt;}
+.bd{flex:1;display:flex;flex-direction:column;}
+.row{display:flex;align-items:center;border-radius:8pt;margin-bottom:8pt;flex:1;
+  background:#FAF9F4;border:1pt solid #DEDCD0;overflow:hidden;}
+.lbl{width:128pt;padding:8pt 12pt;background:#EBEAE0;height:100%;display:flex;flex-direction:column;justify-content:center;}
+.lbl h3{font-size:12.5pt;font-weight:bold;color:#262A23;}
+.lbl p{font-size:9pt;color:#8A8F82;margin-top:2pt;}
+.cnt{flex:1;padding:8pt 14pt;}
+.cnt p{font-size:11pt;color:#4C5247;}
+.agent{background:#5B7F6E;border-color:#46624F;}
+.agent .lbl{background:#46624F;}
+.agent .lbl h3{color:#FFFFFF;}
+.agent .lbl p{color:#CBE3DC;}
+.nodes{display:flex;align-items:center;}
+.node{background:#FAF9F4;border-radius:6pt;padding:6pt 10pt;}
+.node p{font-size:11pt;color:#46624F;font-weight:bold;}
+.nar{color:#E0A458;font-size:15pt;font-weight:bold;margin:0 7pt;}
+.retry{font-size:9pt;color:#FFFFFF;margin-left:14pt;font-style:italic;}
+.ft{display:flex;justify-content:space-between;margin-top:6pt;}
+.ft p{font-size:8.5pt;color:#9aa094;}
+</style>
+</head>
+<body>
+  <p class="kicker">整 体 架 构</p>
+  <h1>全栈自建 · 多智能体框架 LangGraph 居核心</h1>
+  <div class="rule"></div>
+  <div class="bd">
+    <div class="row">
+      <div class="lbl"><h3>前端展现层</h3><p>:3001 / api 代理</p></div>
+      <div class="cnt"><p>React 18 + TypeScript + Vite · Zustand 状态 · Framer Motion / GSAP · ECharts 可视化</p></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><h3>后端服务层</h3><p>FastAPI</p></div>
+      <div class="cnt"><p>统一响应信封 {code, message, data, traceId} · 异步任务 taskId 状态机 · WS / SSE 实时推送</p></div>
+    </div>
+    <div class="row agent">
+      <div class="lbl"><h3>多智能体编排</h3><p>LangGraph ★</p></div>
+      <div class="cnt"><div class="nodes">
+        <div class="node"><p>诊断</p></div><span class="nar">&rarr;</span>
+        <div class="node"><p>检索</p></div><span class="nar">&rarr;</span>
+        <div class="node"><p>生成</p></div><span class="nar">&rarr;</span>
+        <div class="node"><p>审核</p></div><span class="nar">&rarr;</span>
+        <div class="node"><p>决策</p></div>
+        <span class="retry">生成↔审核 真实回环重试 / 降级</span>
+      </div></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><h3>RAG 知识引擎</h3><p>Chroma + bge</p></div>
+      <div class="cnt"><p>Chroma 嵌入式向量库 · bge 本地嵌入模型 · 30 文档 / 153 切片 · 逐句接地校验幻觉</p></div>
+    </div>
+    <div class="row">
+      <div class="lbl"><h3>数据与模型</h3><p>SQLite</p></div>
+      <div class="cnt"><p>SQLite + 内存 TTL 会话 · LLMClient 适配层（mock / deepseek / qwen / anthropic）· 内容安全过滤</p></div>
+    </div>
+  </div>
+  <div class="ft"><p>智学中枢 · 多智能体个性化学习平台</p><p>03 / 12</p></div>
+</body>
+</html>

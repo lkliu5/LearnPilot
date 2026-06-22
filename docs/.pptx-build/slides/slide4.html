@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html{background:#F2F1EA;}
+body{width:720pt;height:405pt;font-family:Arial,Helvetica,sans-serif;
+  background:#F2F1EA;color:#262A23;display:flex;flex-direction:column;padding:24pt 34pt 14pt;}
+.kicker{font-size:11pt;letter-spacing:4pt;color:#C58940;font-weight:bold;}
+.kicker span{color:#5B7F6E;}
+h1{font-size:25pt;font-weight:bold;margin:4pt 0 5pt;}
+.rule{height:3pt;width:54pt;background:#5B7F6E;margin-bottom:12pt;}
+.bd{flex:1;display:flex;}
+.left{width:255pt;display:flex;flex-direction:column;margin-right:16pt;}
+.left ul{list-style:none;}
+.left li{background:#FAF9F4;border:1pt solid #DEDCD0;border-left:5pt solid #5B7F6E;border-radius:8pt;padding:9pt 13pt;margin-bottom:9pt;}
+.left li h3{font-size:13pt;font-weight:bold;margin-bottom:2pt;}
+.left li p{font-size:10.5pt;color:#4C5247;line-height:1.4;}
+.shot{flex:1;border:1.5pt dashed #B9B6A8;background:#EAE8DD;border-radius:8pt;display:flex;align-items:center;justify-content:center;}
+.shot p{font-size:10pt;color:#8A8F82;}
+.grid{flex:1;display:flex;flex-wrap:wrap;align-content:space-between;}
+.dim{width:48.5%;background:#FAF9F4;border:1pt solid #DEDCD0;border-radius:9pt;padding:10pt 12pt;margin-bottom:9pt;position:relative;}
+.dim h3{font-size:13pt;font-weight:bold;color:#46624F;margin-bottom:3pt;}
+.dim p{font-size:9.5pt;color:#4C5247;line-height:1.35;}
+.badge{position:absolute;top:9pt;right:10pt;background:#F6E2C8;border-radius:10pt;padding:2pt 8pt;}
+.badge p{font-size:8pt;color:#A6712B;font-weight:bold;}
+.ft{display:flex;justify-content:space-between;margin-top:8pt;}
+.ft p{font-size:8.5pt;color:#9aa094;}
+</style>
+</head>
+<body>
+  <p class="kicker">核心功能 1 &nbsp;<span>对话式画像</span></p>
+  <h1>摒弃表单，在自然对话中读懂学习者</h1>
+  <div class="rule"></div>
+  <div class="bd">
+    <div class="left">
+      <ul>
+        <li><h3>摒弃填表式画像</h3><p>系统在几轮自然交流中自动构建画像，无需冷冰冰的问卷。</p></li>
+        <li><h3>随学随新</h3><p>画像随学习行为持续更新，越用越懂你。</p></li>
+        <li><h3>低置信防幻觉</h3><p>推断维度标注"低置信"——不确定的，绝不编造。</p></li>
+      </ul>
+      <div class="shot"><p>〔此处放 对话式画像诊断界面 截图〕</p></div>
+    </div>
+    <div class="grid">
+      <div class="dim"><h3>知识基础</h3><p>已掌握的概念与先修水平</p></div>
+      <div class="dim"><h3>认知风格</h3><p>偏好的理解与学习方式</p></div>
+      <div class="dim"><div class="badge"><p>低置信</p></div><h3>易错点</h3><p>推断的薄弱与易混淆点</p></div>
+      <div class="dim"><h3>学习目标</h3><p>想达成的能力与场景</p></div>
+      <div class="dim"><h3>先验经验</h3><p>相关背景与实践积累</p></div>
+      <div class="dim"><h3>学习节奏</h3><p>可投入的时间与进度偏好</p></div>
+    </div>
+  </div>
+  <div class="ft"><p>智学中枢 · 多智能体个性化学习平台</p><p>04 / 12</p></div>
+</body>
+</html>

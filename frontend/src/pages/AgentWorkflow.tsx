@@ -91,8 +91,9 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
   const [targetKp, setTargetKp] = useState(CURRENT_KP_ID)
   const [targetDiff, setTargetDiff] = useState<(typeof DIFFICULTIES)[number]>('初级')
   const [completed, setCompleted] = useState<{ kpId: string; degraded: boolean } | null>(null)
-  /* 工作流完成弹窗：done 事件触发，列出本次产物 + 跳转资源页对应 Tab */
-  const [resultModal, setResultModal] = useState<{ kpId: string } | null>(null)
+  /* 工作流完成弹窗：done 事件触发，列出本次产物 + 跳转资源页对应 Tab。
+     degraded=true 表示三次审核仍未通过、走降级终态：仍弹窗给终态反馈，并标注降级提示。 */
+  const [resultModal, setResultModal] = useState<{ kpId: string; degraded: boolean } | null>(null)
   const [replaying, setReplaying] = useState(false)
   const lastFrameRef = useRef<WorkflowSnapshot | null>(null)
 
@@ -242,7 +243,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
       setPhase('complete')
       setCurrentStep(4)
       setIsRunning(false)
-      setResultModal({ kpId: targetKp })
+      setResultModal({ kpId: targetKp, degraded: false })
     }, 6000)
   }
 
@@ -344,8 +345,10 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
         const critic = lastFrameRef.current?.agents.find((a) => a.id === 'critic')
         const degraded = critic?.status === 'error'
         setCompleted({ kpId: targetKp, degraded })
-        if (degraded) showHint('工作流降级，学习资源保留上一版本')
-        else setResultModal({ kpId: targetKp })
+        // issue#4：无论是否降级都给终态弹窗——降级（三次审核仍未通过）也要弹窗展示
+        // 降级生成的产物并明确标注，避免用户卡在没有任何终态反馈。
+        if (degraded) showHint('内容审核未完全通过，已降级生成（学习资源保留上一版本）')
+        setResultModal({ kpId: targetKp, degraded })
       },
       onFail: (reason) => {
         console.error('[workflow] 实时通道异常：', reason)
@@ -396,6 +399,8 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
       .catch((e) => {
         console.error('[workflow] 回放工作流失败', e)
         setReplaying(false)
+        // error 态兜底：回放失败时给出提示，而非静默停在初始态（issue#2）
+        showHint('回放生成过程失败，可在上方重新启动工作流')
       })
     // 仅挂载时执行一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -772,14 +777,26 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
                 ×
               </button>
               <div className="wf-result__head">
-                <span className="wf-result__badge">✓</span>
+                <span className={`wf-result__badge${resultModal.degraded ? ' wf-result__badge--warn' : ''}`}>
+                  {resultModal.degraded ? '!' : '✓'}
+                </span>
                 <div>
-                  <h3 className="wf-result__title">工作流执行完成</h3>
+                  <h3 className="wf-result__title">
+                    {resultModal.degraded ? '工作流已降级完成' : '工作流执行完成'}
+                  </h3>
                   <p className="wf-result__sub">
-                    已为「{kpById(resultModal.kpId)?.name ?? resultModal.kpId}」生成下列学习产物
+                    {resultModal.degraded
+                      ? `「${kpById(resultModal.kpId)?.name ?? resultModal.kpId}」内容审核三次仍未通过，以下为降级生成产物`
+                      : `已为「${kpById(resultModal.kpId)?.name ?? resultModal.kpId}」生成下列学习产物`}
                   </p>
                 </div>
               </div>
+
+              {resultModal.degraded && (
+                <div className="wf-result__notice" role="alert">
+                  ⚠ 审核未完全通过（已达最大重试次数），系统已降级生成。学习资源仍保留上一稳定版本，建议人工复核后再采用。
+                </div>
+              )}
 
               <div className="wf-result__list">
                 {WORKFLOW_ARTIFACTS.map((a) => (
