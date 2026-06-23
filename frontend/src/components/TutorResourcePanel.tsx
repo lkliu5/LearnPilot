@@ -13,6 +13,7 @@ import {
 import './TutorResourcePanel.css'
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
+const VideoLecture = lazy(() => import('./VideoLecture'))
 
 /**
  * 智能辅导·资源生成清单 + 按需逐项生成（接口文档 8.8 + 8.6 增量）。
@@ -298,21 +299,14 @@ function ResourceResult({ resource: r }: { resource: RemedialResource }) {
       )}
 
       {r.type === 'video' && r.scenes && (
-        <ol className="trp__scenes">
-          {r.scenes.map((sc, i) => (
-            <li key={i} className="trp__scene">
-              <span className="trp__scene-title">{sc.title}</span>
-              <span className="trp__scene-narration">{sc.narration}</span>
-              {sc.points?.length > 0 && (
-                <ul className="trp__scene-points">
-                  {sc.points.map((p, j) => (
-                    <li key={j}>{p}</li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ol>
+        /* 复用主资源生成的 Remotion 播放组件：把已生成的分镜脚本喂进参数化模板渲染 + 同步旁白，
+           与「学习资源页·讲解视频卡」表现一致（不再只渲染脚本文本）。 */
+        <Suspense fallback={<div className="trp__loading">讲解视频渲染中…</div>}>
+          <VideoLecture
+            title={r.title}
+            scenes={r.scenes.map((sc) => ({ title: sc.title, points: sc.points, narration: sc.narration }))}
+          />
+        </Suspense>
       )}
     </div>
   )

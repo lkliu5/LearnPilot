@@ -204,9 +204,4 @@
   word-break: break-word;
 }
 
-.trp__scenes { display: flex; flex-direction: column; gap: 10px; padding-left: 18px; }
-.trp__scene { display: flex; flex-direction: column; gap: 3px; }
-.trp__scene-title { font-size: 0.84rem; font-weight: 700; color: var(--gray-800, #1e293b); }
-.trp__scene-narration { font-size: 0.8rem; color: var(--gray-600, #475569); line-height: 1.5; }
-.trp__scene-points { margin-top: 2px; padding-left: 16px; list-style: disc; }
-.trp__scene-points li { font-size: 0.78rem; color: var(--gray-500, #64748b); line-height: 1.5; }
+/* 视频分镜文本列表样式已移除：导学对话视频改用 Remotion 播放组件（见 VideoLecture）。 */

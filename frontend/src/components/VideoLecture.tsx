@@ -13,6 +13,7 @@ import {
 import { USE_REAL_API } from '../services/api'
 import { getVideo, type VideoNarrationLine } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
+import './VideoLecture.css'
 
 /* 由当前帧定位旁白段落索引 */
 const segIndexAt = (frame: number, script: VideoNarrationLine[]) => {
@@ -21,29 +22,45 @@ const segIndexAt = (frame: number, script: VideoNarrationLine[]) => {
   return idx
 }
 
-export default function VideoLecture() {
+/**
+ * Remotion 讲解视频播放器（分镜脚本 → 参数化模板渲染 + 同步旁白/字幕）。
+ *
+ * 两种用法：
+ * - 非受控（默认，主资源页讲解视频卡）：联调按当前知识点自取 8.3 分镜脚本，mock/失败回落默认；
+ * - 受控（导学对话·按需生成视频）：外部直接传入已生成的 title/scenes，跳过自取，复用同一播放逻辑。
+ */
+export default function VideoLecture({
+  title: propTitle,
+  scenes: propScenes,
+}: { title?: string; scenes?: LectureScene[] } = {}) {
   const playerRef = useRef<PlayerRef>(null)
   const [seg, setSeg] = useState(0)
   const [narration, setNarration] = useState(true)
   const spokenRef = useRef<number>(-1)
 
-  /* B7-b 联调 + 动态分镜：分镜脚本（标题/要点/旁白）改吃 8.3 POST /resource/video，
+  /* 受控：外部已提供分镜脚本（如导学对话按需生成），直接渲染、不再自取。 */
+  const controlled = !!propScenes?.length
+
+  /* B7-b 联调 + 动态分镜：非受控时分镜脚本（标题/要点/旁白）改吃 8.3 POST /resource/video，
      画面与旁白随当前知识点动态生成；mock 模式 / 请求失败保持本地默认脚本（兜底占位），
      朗读与点击 seek 行为不变 */
-  const [scenes, setScenes] = useState<LectureScene[]>(DEFAULT_SCENES)
-  const [title, setTitle] = useState<string>(DEFAULT_TITLE)
+  const [fetchedScenes, setFetchedScenes] = useState<LectureScene[]>(DEFAULT_SCENES)
+  const [fetchedTitle, setFetchedTitle] = useState<string>(DEFAULT_TITLE)
   useEffect(() => {
-    if (!USE_REAL_API) return
+    if (controlled || !USE_REAL_API) return
     // 难度固定「初级」：与讲义默认档一致
     getVideo(getResourceKpId(), '初级')
       .then((d) => {
         if (d.scenes?.length) {
-          setScenes(d.scenes.map((s) => ({ title: s.title, points: s.points, narration: s.narration })))
-          setTitle(d.title || DEFAULT_TITLE)
+          setFetchedScenes(d.scenes.map((s) => ({ title: s.title, points: s.points, narration: s.narration })))
+          setFetchedTitle(d.title || DEFAULT_TITLE)
         }
       })
       .catch((e) => console.error('[video] 加载分镜脚本失败，使用本地默认脚本', e))
-  }, [])
+  }, [controlled])
+
+  const scenes = controlled ? propScenes! : fetchedScenes
+  const title = controlled ? propTitle || DEFAULT_TITLE : fetchedTitle
 
   /* 旁白脚本（侧栏字幕 + TTS）由分镜场景派生：场景 i 起始帧 = i × SCENE_FRAMES */
   const script = useMemo<VideoNarrationLine[]>(
