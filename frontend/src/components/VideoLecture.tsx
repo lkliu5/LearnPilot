@@ -13,6 +13,7 @@ import {
 import { USE_REAL_API } from '../services/api'
 import { getVideo, type VideoNarrationLine } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
+import { ttsSpeak, ttsStop } from '../services/tts'
 import './VideoLecture.css'
 
 /* 由当前帧定位旁白段落索引 */
@@ -71,13 +72,10 @@ export default function VideoLecture({
   scriptRef.current = script
   const durationInFrames = scenes.length * SCENE_FRAMES
 
+  /* 发声引擎：后端 edge-tts 自然语音（§8.9），失败/降级自动回落浏览器语音；
+     时序/字幕/逐句同步逻辑不变——只换"发声引擎"。 */
   const speak = useCallback((text: string) => {
-    if (!('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'zh-CN'
-    u.rate = 1.05
-    window.speechSynthesis.speak(u)
+    void ttsSpeak(text)
   }, [])
 
   useEffect(() => {
@@ -87,7 +85,7 @@ export default function VideoLecture({
       const idx = segIndexAt(e.detail.frame, scriptRef.current)
       setSeg(idx)
     }
-    const onPause = () => window.speechSynthesis?.cancel()
+    const onPause = () => ttsStop()
     p.addEventListener('frameupdate', onFrame)
     p.addEventListener('pause', onPause)
     p.addEventListener('ended', onPause)
@@ -95,7 +93,7 @@ export default function VideoLecture({
       p.removeEventListener('frameupdate', onFrame)
       p.removeEventListener('pause', onPause)
       p.removeEventListener('ended', onPause)
-      window.speechSynthesis?.cancel()
+      ttsStop() // 卸载/切换时停掉当前音频，避免串音
     }
   }, [])
 
@@ -137,7 +135,7 @@ export default function VideoLecture({
           <label className="video-lecture__toggle">
             <input type="checkbox" checked={narration} onChange={(e) => {
               setNarration(e.target.checked)
-              if (!e.target.checked) window.speechSynthesis?.cancel()
+              if (!e.target.checked) ttsStop()
             }} />
             语音朗读
           </label>
@@ -155,7 +153,7 @@ export default function VideoLecture({
           ))}
         </ol>
         <p className="video-lecture__note">
-          视频由 Remotion（React 代码渲染）生成；旁白用浏览器语音合成演示，生产环境可接 TTS 服务并服务端渲染导出 MP4。
+          视频由 Remotion（React 代码渲染）生成；旁白接入后端 edge-tts 自然语音（失败自动回落浏览器语音），生产环境可服务端渲染导出 MP4。
         </p>
       </div>
     </div>
