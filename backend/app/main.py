@@ -30,6 +30,7 @@ from app.api.v1 import (
     quiz,
     resource,
     tasks,
+    tts,
     workflow,
 )
 from app.core.config import settings
@@ -98,3 +99,5 @@ app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(workflow.router, prefix=settings.api_prefix)
 # C2：学习流程模块（费曼 + 康奈尔，接口文档第 18 章；新增 /learning/* 接口 39-44）
 app.include_router(learning.router, prefix=settings.api_prefix)
+# TTS：语音合成（edge-tts 神经语音，接口文档 8.9；新增 /tts/* 接口 45）
+app.include_router(tts.router, prefix=settings.api_prefix)

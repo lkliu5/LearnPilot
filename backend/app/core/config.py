@@ -100,6 +100,21 @@ class Settings(BaseSettings):
     search_timeout_seconds: float = 12.0
     search_max_results: int = 8
 
+    # 语音合成 TTS（讲解视频/导学旁白配音，移植自桌面端 voice.py 的合成逻辑，Web 化）：
+    # - tts_provider：edge（默认，edge-tts 微软神经语音，联网免密钥）| none（禁用 → 前端回落浏览器 TTS）；
+    # - tts_voice / tts_rate / tts_pitch：默认自然中文女声 XiaoyiNeural（语速 -10%、音调 +2Hz）；
+    # - tts_cache_dir：以 md5(text+voice+rate+pitch) 为键缓存 MP3，命中直接返回（目录入 .gitignore）；
+    # - tts_timeout / tts_max_retries：单次合成超时与重试兜底；联网失败优雅降级（返回 2002，不崩）。
+    # 缺省 edge，但无网/合成失败自动降级，Mock/无密钥仍跑通全链路（CLAUDE.md 纪律）。
+    tts_provider: str = "edge"
+    tts_voice: str = "zh-CN-XiaoyiNeural"
+    tts_rate: str = "-10%"
+    tts_pitch: str = "+2Hz"
+    tts_cache_dir: str = "./data/tts_cache"
+    tts_timeout_seconds: float = 20.0
+    tts_max_retries: int = 3
+    tts_max_chars: int = 2000  # 单次合成文本上限（防超长滥用）
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:

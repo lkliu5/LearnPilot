@@ -19,3 +19,5 @@ rank_bm25
 langgraph
 # B5-b DeepSeek 真实生成（OpenAI 兼容协议 SDK）；mock 模式不经过该 SDK、无 Key 可跑
 openai
+# TTS edge-tts：微软神经语音合成（免密钥、联网即用）；tts_provider=none 或离线时优雅降级、不崩
+edge-tts

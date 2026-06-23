@@ -54,6 +54,18 @@ class ExternalAggregateRequest(BaseModel):
     weakPoints: list[str] = Field(default_factory=list)  # 薄弱点，可空（缺省由 Mastery 派生）
 
 
+class TTSSynthesizeRequest(BaseModel):
+    """POST /tts/synthesize 请求体（接口文档 8.9，语音合成）。
+
+    voice/rate/pitch 可空——缺省用配置的自然中文女声（XiaoyiNeural / -10% / +2Hz）。
+    """
+
+    text: str
+    voice: str | None = None
+    rate: str | None = None  # edge-tts 语速，如 "-10%"
+    pitch: str | None = None  # edge-tts 音调，如 "+2Hz"
+
+
 class QuizAnswerItem(BaseModel):
     """单题作答（接口文档 9.1）。answer：single/boolean 为 str，multiple 为 str[]。"""
 
