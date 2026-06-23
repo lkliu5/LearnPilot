@@ -33,12 +33,20 @@ function stopInternal(): void {
   }
 }
 
-/** 浏览器原生 TTS 回落（与原 VideoLecture.speak 同口径：zh-CN、语速 1.05）。 */
-function browserSpeak(text: string): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+/** 浏览器原生 TTS 回落（与原 VideoLecture.speak 同口径：zh-CN、语速 1.05）。
+ *  onEnd 在朗读自然结束 / 出错时回调（驱动“念完再推进”）；无 TTS 能力时立即回调，避免卡死。 */
+function browserSpeak(text: string, onEnd?: () => void): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    onEnd?.()
+    return
+  }
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'zh-CN'
   u.rate = 1.05
+  if (onEnd) {
+    u.onend = () => onEnd()
+    u.onerror = () => onEnd() // cancel/中断也回调；调用方用 seq 守卫过滤被取代的旧段
+  }
   window.speechSynthesis.speak(u)
 }
 
@@ -48,20 +56,35 @@ export function ttsStop(): void {
   stopInternal()
 }
 
+/** {@link ttsSpeak} 选项：onEnd 在本段语音**自然念完**（或回落语音念完）时回调，
+ *  供调用方实现“一段念完再推进下一段”（路线 A 语音驱动）。被 {@link ttsStop} /
+ *  新的 speak 取代的旧段不会触发 onEnd（内部用 seq 守卫过滤）。 */
+export interface TtsSpeakOptions {
+  onEnd?: () => void
+}
+
 /**
  * 朗读一段文本。优先后端 edge-tts 自然语音，失败/降级回落浏览器语音。
- * 会先停掉当前正在播放的内容再开始本段，避免串音。
+ * 会先停掉当前正在播放的内容再开始本段，避免串音；本段念完触发 onEnd。
  */
-export async function ttsSpeak(text: string): Promise<void> {
+export async function ttsSpeak(text: string, opts: TtsSpeakOptions = {}): Promise<void> {
   const content = (text || '').trim()
-  if (!content) return
-
   const mySeq = ++seq
   stopInternal()
 
+  // onEnd 守卫：仅当本段仍是“当前段”（未被新 speak / stop 取代）时才回调，防止误推进。
+  const safeEnd = () => {
+    if (mySeq === seq) opts.onEnd?.()
+  }
+
+  if (!content) {
+    safeEnd() // 空文本：直接视为念完，链路继续推进，避免卡死
+    return
+  }
+
   // 未联调真实后端时直接用浏览器语音，避免无谓的失败请求（与 mock 模式行为一致）。
   if (!USE_REAL_API) {
-    browserSpeak(content)
+    browserSpeak(content, safeEnd)
     return
   }
 
@@ -93,20 +116,26 @@ export async function ttsSpeak(text: string): Promise<void> {
         }
         if (currentAudio === audio) currentAudio = null
       }
-      audio.addEventListener('ended', cleanup)
-      audio.addEventListener('error', cleanup)
+      audio.addEventListener('ended', () => {
+        cleanup()
+        safeEnd() // 自然念完 → 推进下一段
+      })
+      audio.addEventListener('error', () => {
+        cleanup()
+        if (mySeq === seq) browserSpeak(content, safeEnd) // 播放出错 → 回落浏览器语音（仍会 onEnd）
+      })
       try {
         await audio.play()
       } catch {
         cleanup()
-        if (mySeq === seq) browserSpeak(content) // 自动播放被拦 → 回落浏览器语音
+        if (mySeq === seq) browserSpeak(content, safeEnd) // 自动播放被拦 → 回落浏览器语音
       }
       return
     }
 
     // 降级信封（offline=true）或非音频响应 → 回落浏览器语音
-    browserSpeak(content)
+    browserSpeak(content, safeEnd)
   } catch {
-    if (mySeq === seq) browserSpeak(content) // 网络/异常 → 回落，保证有声
+    if (mySeq === seq) browserSpeak(content, safeEnd) // 网络/异常 → 回落，保证有声
   }
 }

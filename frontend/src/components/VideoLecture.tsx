@@ -23,6 +23,9 @@ const segIndexAt = (frame: number, script: VideoNarrationLine[]) => {
   return idx
 }
 
+/* 场景入场动画完成、淡出之前的稳定帧：作为暂停态静帧海报（帧 0 处场景 opacity≈0 会显空白）。 */
+const SETTLE_FRAME = 36
+
 /**
  * Remotion 讲解视频播放器（分镜脚本 → 参数化模板渲染 + 同步旁白/字幕）。
  *
@@ -37,7 +40,14 @@ export default function VideoLecture({
   const playerRef = useRef<PlayerRef>(null)
   const [seg, setSeg] = useState(0)
   const [narration, setNarration] = useState(true)
-  const spokenRef = useRef<number>(-1)
+  const [playing, setPlaying] = useState(false)
+  /* 这些镜像 ref 供播放器事件回调（闭包仅在挂载时绑定一次）读到最新值，避免重绑监听。 */
+  const segRef = useRef(0)
+  const narrationRef = useRef(narration)
+  const playingRef = useRef(false)
+  /* 当前“正在朗读”的段索引（-1=空闲）：防止 play 事件重复触发、把同一段反复重念。
+     仅在暂停/停止时复位为 -1，从而“继续/跳段”可重念，正常推进各段各念一次。 */
+  const speakingSegRef = useRef(-1)
 
   /* 受控：外部已提供分镜脚本（如导学对话按需生成），直接渲染、不再自取。 */
   const controlled = !!propScenes?.length
@@ -70,45 +80,142 @@ export default function VideoLecture({
   )
   const scriptRef = useRef(script)
   scriptRef.current = script
+  const total = script.length
   const durationInFrames = scenes.length * SCENE_FRAMES
+  /* 稳定 inputProps 引用：避免每次 setState 重渲染都生成新对象，触发 Player 重置 / 事件重发。 */
+  const inputProps = useMemo(() => ({ title, scenes }), [title, scenes])
 
-  /* 发声引擎：后端 edge-tts 自然语音（§8.9），失败/降级自动回落浏览器语音；
-     时序/字幕/逐句同步逻辑不变——只换"发声引擎"。 */
-  const speak = useCallback((text: string) => {
-    void ttsSpeak(text)
+  useEffect(() => {
+    narrationRef.current = narration
+  }, [narration])
+
+  /* —— 路线 A：语音驱动场景推进 ——
+     场景不再由 Remotion 固定时间轴翻页，而是「当前段旁白念完 → 才推进下一段」。
+     speakSeg 朗读第 i 段，onEnd（音频/utterance 自然结束）触发 handleNarrationEnd 推进。
+     用 speakSegRef 打破 speakSeg ↔ handleNarrationEnd 的相互引用。 */
+  const speakSegRef = useRef<(i: number) => void>(() => {})
+
+  /* 暂停：唯一“停”入口（用户点暂停 / 末段念完 / 卸载）。重置朗读态并停声。
+     关键：narration 模式下播放推进**不依赖** Remotion 的 play/pause 事件——因为
+     onFrame 里的 seekTo 循环会让 Player 反复发出 pause→play，若据此驱动朗读会形成死循环。 */
+  const doPause = useCallback(() => {
+    playingRef.current = false
+    setPlaying(false)
+    speakingSegRef.current = -1
+    playerRef.current?.pause()
+    ttsStop()
+  }, [])
+
+  const handleNarrationEnd = useCallback(
+    (i: number) => {
+      // 仅当仍在播放、旁白开启、且 i 仍是当前段时推进（防过期回调误推进）
+      if (!playingRef.current || !narrationRef.current) return
+      if (i !== segRef.current) return
+      const last = scriptRef.current.length - 1
+      if (i < last) {
+        const next = i + 1
+        segRef.current = next
+        setSeg(next)
+        playerRef.current?.seekTo(next * SCENE_FRAMES) // 画面切到下一段（持续播放，由 onFrame 夹在段内）
+        speakSegRef.current(next)
+      } else {
+        doPause() // 末段念完 → 停
+      }
+    },
+    [doPause]
+  )
+
+  const speakSeg = useCallback(
+    (i: number) => {
+      const line = scriptRef.current[i]
+      if (!line) return
+      speakingSegRef.current = i
+      void ttsSpeak(line.text, { onEnd: () => handleNarrationEnd(i) })
+    },
+    [handleNarrationEnd]
+  )
+  useEffect(() => {
+    speakSegRef.current = speakSeg
+  }, [speakSeg])
+
+  const doPlay = useCallback(() => {
+    playingRef.current = true
+    setPlaying(true)
+    playerRef.current?.play()
+    // 旁白开启且当前段未在朗读 → 朗读当前段（推进由 onEnd 链式驱动，非 Player 事件）
+    if (narrationRef.current && speakingSegRef.current !== segRef.current) {
+      speakSegRef.current(segRef.current)
+    }
   }, [])
 
   useEffect(() => {
     const p = playerRef.current
     if (!p) return
     const onFrame = (e: { detail: { frame: number } }) => {
-      const idx = segIndexAt(e.detail.frame, scriptRef.current)
-      setSeg(idx)
+      const f = e.detail.frame
+      if (narrationRef.current) {
+        // 语音驱动：把画面夹在「当前段」帧窗内循环，绝不因时间轴提前切段、打断语音。
+        // 用 -1 作上界：末段窗口末帧 = durationInFrames-1，否则末段永不触发循环、
+        // 会跑到真正结尾触发 ended，把最后一段语音（常长于 6s）截断。
+        const start = segRef.current * SCENE_FRAMES
+        if (f >= start + SCENE_FRAMES - 1 || f < start) p.seekTo(start)
+      } else {
+        // 无旁白：回退到时间轴驱动，高亮跟随帧（保留原行为）
+        const idx = segIndexAt(f, scriptRef.current)
+        if (idx !== segRef.current) {
+          segRef.current = idx
+          setSeg(idx)
+        }
+      }
     }
-    const onPause = () => ttsStop()
+    // ended 仅在“无旁白·时间轴跑到底”时收尾；旁白模式靠 onFrame 夹住、永不到底，
+    // 即便触发也忽略（推进交给语音 onEnd），避免末段语音被时间轴结尾截断
+    const onEnded = () => {
+      if (!narrationRef.current) doPause()
+    }
     p.addEventListener('frameupdate', onFrame)
-    p.addEventListener('pause', onPause)
-    p.addEventListener('ended', onPause)
+    p.addEventListener('ended', onEnded)
     return () => {
       p.removeEventListener('frameupdate', onFrame)
-      p.removeEventListener('pause', onPause)
-      p.removeEventListener('ended', onPause)
-      ttsStop() // 卸载/切换时停掉当前音频，避免串音
+      p.removeEventListener('ended', onEnded)
+      ttsStop() // 卸载时停掉当前音频，避免串音
     }
-  }, [])
+  }, [doPause])
 
   /* 当前旁白段（脚本切换瞬间防越界兜底） */
   const curLine = script[seg] ?? script[script.length - 1]
 
-  // 进入新场景时朗读对应旁白（仅播放中 + 旁白开启）
-  useEffect(() => {
+  /* 自定义播放控制（取代 Remotion 原生时间轴：原生进度条无法表达「语音驱动、段时长不等」）。 */
+  const togglePlay = useCallback(() => {
+    if (playingRef.current) doPause()
+    else doPlay()
+  }, [doPause, doPlay])
+
+  /* 点击旁白行：跳到该段并从该段开始朗读（保留原“点击 seek”能力，改为段粒度）。 */
+  const jumpToScene = useCallback((i: number) => {
     const p = playerRef.current
-    if (!narration || !p || !p.isPlaying()) return
-    if (spokenRef.current !== seg) {
-      spokenRef.current = seg
-      speak(curLine.text)
+    if (!p) return
+    segRef.current = i
+    setSeg(i)
+    speakingSegRef.current = -1 // 允许对目标段重念
+    p.seekTo(i * SCENE_FRAMES)
+    if (playingRef.current) {
+      if (narrationRef.current) speakSegRef.current(i)
+    } else {
+      doPlay() // 未播放 → 起播并朗读当前段
     }
-  }, [seg, narration, speak, curLine])
+  }, [doPlay])
+
+  const toggleNarration = useCallback((on: boolean) => {
+    setNarration(on)
+    narrationRef.current = on
+    if (!on) {
+      speakingSegRef.current = -1
+      ttsStop() // 关旁白 → 停声（画面回到时间轴驱动）
+    } else if (playingRef.current) {
+      speakSegRef.current(segRef.current) // 开旁白 → 朗读当前段
+    }
+  }, [])
 
   return (
     <div className="video-lecture">
@@ -116,14 +223,35 @@ export default function VideoLecture({
         <Player
           ref={playerRef}
           component={LectureVideo}
-          inputProps={{ title, scenes }}
+          inputProps={inputProps}
           durationInFrames={durationInFrames}
           fps={VIDEO_FPS}
           compositionWidth={VIDEO_W}
           compositionHeight={VIDEO_H}
-          controls
+          initialFrame={SETTLE_FRAME}
+          clickToPlay={false}
           style={{ width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-glass)' }}
         />
+        {/* 自定义控制条：语音驱动下用「段进度」表达，而非固定时间轴 */}
+        <div className="video-lecture__controls">
+          <button
+            type="button"
+            className="video-lecture__playbtn"
+            onClick={togglePlay}
+            aria-label={playing ? '暂停' : '播放'}
+          >
+            {playing ? '⏸' : '▶'}
+          </button>
+          <div className="video-lecture__progress" aria-hidden>
+            <div
+              className="video-lecture__progress-fill"
+              style={{ width: `${(((playing || seg > 0 ? seg + 1 : 0)) / total) * 100}%` }}
+            />
+          </div>
+          <span className="video-lecture__seg-count">
+            第 {seg + 1} / {total} 段
+          </span>
+        </div>
         {/* 字幕 */}
         <div className="video-lecture__caption">{curLine.text}</div>
       </div>
@@ -133,10 +261,11 @@ export default function VideoLecture({
         <div className="video-lecture__side-head">
           <span>🎙️ AI 旁白脚本</span>
           <label className="video-lecture__toggle">
-            <input type="checkbox" checked={narration} onChange={(e) => {
-              setNarration(e.target.checked)
-              if (!e.target.checked) ttsStop()
-            }} />
+            <input
+              type="checkbox"
+              checked={narration}
+              onChange={(e) => toggleNarration(e.target.checked)}
+            />
             语音朗读
           </label>
         </div>
@@ -145,7 +274,7 @@ export default function VideoLecture({
             <li
               key={i}
               className={`video-lecture__line ${i === seg ? 'video-lecture__line--active' : ''}`}
-              onClick={() => playerRef.current?.seekTo(n.from)}
+              onClick={() => jumpToScene(i)}
             >
               <span className="video-lecture__ts">{String(Math.floor(n.from / VIDEO_FPS)).padStart(2, '0')}s</span>
               {n.text}

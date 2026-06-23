@@ -10,6 +10,54 @@
 
 .video-lecture__player { position: relative; }
 
+/* 自定义控制条（语音驱动：段进度，而非固定时间轴） */
+.video-lecture__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 0 var(--space-sm);
+}
+
+.video-lecture__playbtn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary-500);
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+.video-lecture__playbtn:hover { transform: scale(1.08); background: var(--primary-600, #1d4ed8); }
+
+.video-lecture__progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gray-200);
+  overflow: hidden;
+}
+.video-lecture__progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--primary-400, #60a5fa), var(--primary-500));
+  transition: width var(--transition-base, 0.3s) ease;
+}
+
+.video-lecture__seg-count {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-600);
+}
+
 .video-lecture__caption {
   margin-top: 10px;
   text-align: center;
