@@ -133,7 +133,7 @@ export default function SocraticTutor() {
       {/* 智能辅导触发：卡住时一键识别问题点并给出针对性资源生成清单（8.8） */}
       <div className="socratic-help">
         <button className="socratic-help__btn" onClick={askForHelp} disabled={suggesting}>
-          {suggesting ? '正在识别问题点…' : '🆘 我没懂，帮我生成针对性资源'}
+          {suggesting ? '正在识别问题点…' : '💡 让 AI 答疑 · 生成针对性资源'}
         </button>
         {suggestion && <span className="socratic-help__hint">已根据你的问题识别盲区 ↓</span>}
       </div>

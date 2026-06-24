@@ -6,6 +6,7 @@ import SourceTrace, { type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import LearningFlow from '../components/LearningFlow'
+import AskTutorDock from '../components/AskTutorDock'
 import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
@@ -1231,6 +1232,10 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* AI 答疑 · 常驻辅导入口（核心痛点「自学卡住没人答疑」升格）：
+          学习界面右缘常驻，随手发起辅导 → 识别问题 → 针对性资源清单 → 勾选生成（复用既有链路/接口）。*/}
+      <AskTutorDock kpId={kpId} kpName={kpName} />
     </div>
   )
 }
