@@ -6,7 +6,7 @@
  *   suggestions）；出错时 `event: error` `data: {"code":2001,...}`，前端保留已渲染
  *   片段并回退本地引导链。EventSource 不支持 POST，故用 fetch + ReadableStream 手工解析。
  */
-import { ApiError, getToken } from './api'
+import { ApiError, getToken, USE_REAL_API } from './api'
 
 export interface TutorDone {
   sessionId: string
@@ -94,4 +94,71 @@ export async function tutorChatStream(opts: TutorStreamOptions): Promise<TutorDo
 
   if (!done) throw new ApiError(2001, '流式响应未正常结束')
   return done
+}
+
+/* ───────────── 即时辅导·流式回答（B-1，复用上面的 SSE 能力 + mock 兜底） ───────────── */
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** mock / 兜底回答：围绕用户问题与知识点确定性合成一段「先思路后清单」的辅导话术。 */
+function mockInstantAnswer(message: string, kpName: string): string {
+  const q = (message || '').trim().replace(/\s+/g, ' ')
+  const focus = q ? (q.length > 36 ? `${q.slice(0, 36)}…` : q) : `${kpName}的核心思路`
+  return (
+    `我们一起看「${kpName}」这块。你提到「${focus}」——别急，这是个很常见的卡点。\n\n` +
+    `先抓住三件事：\n` +
+    `① 它要解决的核心问题是什么；\n` +
+    `② 输入经过哪几步变换得到输出；\n` +
+    `③ 它和相邻概念是怎么衔接的。\n\n` +
+    `顺着这个思路，我可以为你生成更直观的图解 / 例题 / 短视频 / 讲义片段。下面这份针对性清单挑你需要的生成即可 👇`
+  )
+}
+
+export interface InstantReplyOptions {
+  kpId: string
+  message: string
+  kpName?: string
+  /** 逐字增量回调（联调走真实 SSE delta，mock 走本地逐字） */
+  onDelta: (delta: string) => void
+}
+
+/**
+ * 即时辅导回答（逐字流式）。
+ * - 联调：复用 8.7 苏格拉底 `tutorChatStream` 真实 SSE；中途失败但已出字则保留片段不重复兜底。
+ * - mock / 无后端：本地逐字吐出确定性话术，体感与流式一致。
+ * `control.cancelled` 置 true 可随时中止（关闭抽屉 / 发起新问题时）。
+ */
+export async function streamInstantReply(
+  opts: InstantReplyOptions,
+  control: { cancelled: boolean } = { cancelled: false }
+): Promise<void> {
+  const emit = (d: string) => {
+    if (!control.cancelled) opts.onDelta(d)
+  }
+
+  if (USE_REAL_API) {
+    let started = false
+    try {
+      await tutorChatStream({
+        kpId: opts.kpId,
+        message: opts.message,
+        onDelta: (d) => {
+          started = true
+          emit(d)
+        },
+      })
+      return
+    } catch (e) {
+      console.error('[instant-tutor] SSE 失败，回退本地流式', e)
+      if (started) return // 已渲染片段，保留，不再叠加兜底文本
+    }
+  }
+
+  // mock / 兜底：逐字吐出
+  const text = mockInstantAnswer(opts.message, opts.kpName ?? '当前知识点')
+  for (const ch of text) {
+    if (control.cancelled) return
+    emit(ch)
+    await sleep(15)
+  }
 }

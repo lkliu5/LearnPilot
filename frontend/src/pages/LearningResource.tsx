@@ -7,6 +7,9 @@ import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import LearningFlow from '../components/LearningFlow'
 import AskTutorDock from '../components/AskTutorDock'
+import SelectionAskBubble from '../components/SelectionAskBubble'
+import StuckNudge from '../components/StuckNudge'
+import { reportStuck } from '../services/stuckSignal'
 import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
@@ -528,6 +531,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const [regenRunning, setRegenRunning] = useState(false)
   const [regenPhase, setRegenPhase] = useState('诊断')
   const regenSocketRef = useRef<{ close: () => void } | null>(null)
+  /* B-3 卡住信号：讲义选中即问的监听容器 + 同一内容反复浏览的计数 */
+  const lectureRef = useRef<HTMLDivElement>(null)
+  const openCountsRef = useRef<Record<string, number>>({})
 
   /* 联调：把一份讲义回包写入三个缓存映射（markdown / sources / workflowId） */
   const applyLecture = (lv: string, d: LectureData) => {
@@ -641,11 +647,14 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       setQuizGrade(null) // 重做：清空上次综合判分
       return
     }
+    // B-3 卡住信号：错题较多即视为强卡顿信号（达阈值触发主动关怀，限频见 StuckNudge）
+    if (wrong.length >= 3) reportStuck(kpId, 2)
     if (USE_REAL_API) {
       // 提交作答给后端判分（客观题 + 简答 AI 评分）；≥60 后端联动置 passed
       submitQuiz(kpId, answers ?? {})
         .then((r) => {
           setQuizGrade({ score: r.score, passed: r.passed, shortAnswers: r.shortAnswers })
+          if (!r.passed) reportStuck(kpId, 2)
           loadMastery()
         })
         .catch((e) => console.error('[resource] 提交测验失败', e))
@@ -654,6 +663,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       const grade = gradeQuizLocally(questions, answers ?? {})
       setQuizGrade(grade)
       if (grade.passed) markPassed(kpId)
+      else reportStuck(kpId, 2)
     }
   }
 
@@ -744,6 +754,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     // 进入「分阶测试」沿用既有检验前置：未掌握时置 pending-check（passed 不回退）
     if (id === 'quiz' && kpStatus === 'learning') goCheck(kpId)
     setOpenId(id)
+    // B-3 卡住信号：同一讲解类内容反复打开（第 3 次）→ 视为「反复看同一点」的卡顿
+    const n = (openCountsRef.current[id] = (openCountsRef.current[id] ?? 0) + 1)
+    if (n >= 3 && (id === 'lecture' || id === 'diagram' || id === 'video')) reportStuck(kpId, 2)
   }
   const closeCard = () => setOpenId(null)
 
@@ -808,7 +821,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             {/* RAG 溯源（针对讲义内容，归位到讲义详情底部工具条上方）*/}
             <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
 
-            <div className="lecture-body">
+            <div className="lecture-body" ref={lectureRef}>
+              {/* B-2：在讲义正文里选中一段文字，就近浮出「就这段问 AI」→ 就该句发起即时辅导 */}
+              <SelectionAskBubble containerRef={lectureRef} />
               {activeLecture ? (
                 <MarkdownRenderer content={activeLecture} />
               ) : (
@@ -1233,9 +1248,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
       </AnimatePresence>
 
-      {/* AI 答疑 · 常驻辅导入口（核心痛点「自学卡住没人答疑」升格）：
-          学习界面右缘常驻，随手发起辅导 → 识别问题 → 针对性资源清单 → 勾选生成（复用既有链路/接口）。*/}
+      {/* 即时辅导 · 常驻辅导入口（核心痛点「自学卡住没人答疑」升格）：
+          学习界面右缘常驻，随手发起辅导 → 逐字流式回答 → 识别问题 → 针对性资源清单 → 勾选生成（复用既有链路/接口）。*/}
       <AskTutorDock kpId={kpId} kpName={kpName} />
+
+      {/* B-3 主动察觉卡顿：行为出现卡住信号时，AI 主动弹轻量关怀小卡（同一知识点/会话限频，关闭后不再弹）。 */}
+      <StuckNudge kpId={kpId} kpName={kpName} />
     </div>
   )
 }
