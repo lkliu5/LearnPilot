@@ -107,33 +107,6 @@
 .pcm__item-pct { font-size: 0.76rem; font-weight: 700; color: var(--gray-600, #475569); text-align: right; font-variant-numeric: tabular-nums; }
 .pcm__empty { font-size: 0.78rem; color: var(--gray-400, #94a3b8); }
 
-/* 岗位匹配（C-fix 批2）：目标岗位 + 匹配度 + 能力缺口 */
-.pcm__card--job { display: flex; flex-direction: column; gap: 10px; }
-.pcm__job-match {
-  flex-shrink: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  padding: 3px 11px;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--primary-500, #6366f1), var(--purple-500, #a855f7));
-  font-variant-numeric: tabular-nums;
-}
-.pcm__gaps { display: flex; flex-direction: column; gap: 9px; }
-.pcm__gaps-label { font-size: 0.78rem; font-weight: 700; color: var(--gray-600, #475569); }
-.pcm__card--job .pcm__meter { position: relative; }
-/* 岗位需求水平刻度线（用户水平条之上叠加一条目标线，直观看缺口） */
-.pcm__meter-target {
-  position: absolute;
-  top: -2px;
-  width: 2px;
-  height: 11px;
-  background: var(--gray-500, #64748b);
-  border-radius: 1px;
-  transform: translateX(-1px);
-}
-.pcm__job-note { font-size: 0.72rem; color: var(--gray-400, #94a3b8); line-height: 1.5; }
-
 .pcm__foot {
   margin-top: 22px;
   display: flex;

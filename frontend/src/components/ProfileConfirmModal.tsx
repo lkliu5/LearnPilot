@@ -3,7 +3,6 @@ import RadarChart from './charts/RadarChart'
 import StudentPortraitPanel from './StudentPortraitPanel'
 import { synthesizeOverview } from '../services/dashboard'
 import type { PortraitDimension } from '../services/profileDialogue'
-import type { JobMatchResult } from '../services/jobMatch'
 import './ProfileConfirmModal.css'
 
 /**
@@ -16,13 +15,11 @@ interface Props {
   open: boolean
   dims: Record<string, PortraitDimension>
   updatedAt?: string
-  /** 岗位匹配（C-fix 批2）：对话采集到目标岗位时算出，展示目标岗位 + 匹配度 + 能力缺口 */
-  jobMatch?: JobMatchResult | null
   onConfirm: () => void
   onClose: () => void
 }
 
-export default function ProfileConfirmModal({ open, dims, updatedAt, jobMatch, onConfirm, onClose }: Props) {
+export default function ProfileConfirmModal({ open, dims, updatedAt, onConfirm, onClose }: Props) {
   const list = Object.values(dims)
   const overview = synthesizeOverview(list)
 
@@ -117,34 +114,6 @@ export default function ProfileConfirmModal({ open, dims, updatedAt, jobMatch, o
                     </div>
                   </div>
                 </div>
-
-                {/* 岗位匹配（C-fix 批2）：目标岗位 + 匹配度 + 能力缺口（现有静态岗位库对标） */}
-                {jobMatch && (
-                  <div className="pcm__card pcm__card--job">
-                    <div className="pcm__card-head">
-                      <h4>岗位匹配 · {jobMatch.jobName}</h4>
-                      <span className="pcm__job-match">匹配度 {jobMatch.matchPct}%</span>
-                    </div>
-                    {jobMatch.gaps.length ? (
-                      <div className="pcm__gaps">
-                        <span className="pcm__gaps-label">主要能力缺口</span>
-                        {jobMatch.gaps.slice(0, 3).map((g) => (
-                          <div className="pcm__item" key={g.dimension}>
-                            <span className="pcm__item-name">{g.dimension}</span>
-                            <div className="pcm__meter">
-                              <span className="pcm__meter-fill pcm__meter-fill--weak" style={{ width: `${Math.min(100, g.level)}%` }} />
-                              <span className="pcm__meter-target" style={{ left: `${Math.min(100, g.demand)}%` }} />
-                            </div>
-                            <span className="pcm__item-pct">{g.level}/{g.demand}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="pcm__empty">各项能力均已达到该岗位要求 🎉</p>
-                    )}
-                    <p className="pcm__job-note">基于现有岗位库静态对标（你的能力 vs 岗位要求），未联网采集。</p>
-                  </div>
-                )}
               </div>
             </div>
 

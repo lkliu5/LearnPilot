@@ -198,7 +198,6 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
         open={showConfirm}
         dims={dims}
         updatedAt={portraitTs}
-        jobMatch={jobMatch}
         onConfirm={handleConfirm}
         onClose={() => setShowConfirm(false)}
       />

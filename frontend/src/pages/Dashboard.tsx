@@ -110,12 +110,14 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   /* 同级对比同属队列统计：仅联调由后端给出，Mock 下无真实样本则不展示该行 */
   const betterThanPct = USE_REAL_API && overview ? overview.comparison.betterThanPct : null
 
-  /* 岗位对标轻量摘要：完整对标在「画像诊断」页，首页只回显结果 + 跳转入口 */
+  /* 岗位对标已降权为「可选轻量模块」：不再占学情概览主信息位，仅在概览末尾折叠回显 + 入口，
+     完整对标在「画像诊断」页。数据源照旧（journey / overview.targetSummary），不改口径。 */
   const journeyTargetJobName = useJourney((s) => s.targetJobName)
   const journeyMatchPct = useJourney((s) => s.matchPct)
-  const hasDiagnosed = USE_REAL_API && overview ? overview.targetSummary.hasDiagnosed : journeyHasDiagnosed
+  const targetHasDiagnosed = USE_REAL_API && overview ? overview.targetSummary.hasDiagnosed : journeyHasDiagnosed
   const targetJobName = USE_REAL_API && overview ? overview.targetSummary.targetJobName : journeyTargetJobName
   const matchPct = USE_REAL_API && overview ? overview.targetSummary.matchPct : journeyMatchPct
+  const [jobAsideOpen, setJobAsideOpen] = useState(false)
 
   /* 未诊断：学情概览不展示任何数据，仅留引导态（问题 4）——避免新用户首登即见假数据 */
   if (!diagnosed) {
@@ -164,28 +166,6 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
       <motion.div variants={itemVariants}>
         <GuideCard onNavigate={onNavigate} />
       </motion.div>
-
-      {/* 岗位对标轻量摘要：完整对标在画像诊断页，点击跳转 */}
-      <motion.button
-        type="button"
-        className="dashboard__target-summary"
-        variants={itemVariants}
-        onClick={() => onNavigate?.('profile')}
-      >
-        <span className="dashboard__target-summary-icon">🎯</span>
-        {hasDiagnosed && targetJobName ? (
-          <span className="dashboard__target-summary-text">
-            目标岗位：<strong>{targetJobName}</strong>
-            <span className="dashboard__target-summary-sep">·</span>
-            对标进度 <strong>{matchPct ?? 0}%</strong>
-          </span>
-        ) : (
-          <span className="dashboard__target-summary-text">
-            尚未进行岗位对标 · <strong>开始画像诊断</strong>，看你与目标岗位的能力差距
-          </span>
-        )}
-        <span className="dashboard__target-summary-cta">查看完整对标 →</span>
-      </motion.button>
 
       {/* 学习评估面板（接口文档 12.2，评估 Agent）：多维评估 + 方法建议 + 动态调整 */}
       <motion.div variants={itemVariants}>
@@ -636,6 +616,48 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
             </div>
           </motion.div>
         </div>
+
+        {/* 岗位对标（可选轻量模块）：已从学情概览主信息位降权——折叠在概览末尾，默认收起，
+            不占主视觉、不参与「真实画像→掌握度→学习评估」主叙事；完整对标仍在「画像诊断」页。 */}
+        <motion.div className="dashboard__job-aside" variants={itemVariants}>
+          <button
+            type="button"
+            className="dashboard__job-aside-head"
+            aria-expanded={jobAsideOpen}
+            onClick={() => setJobAsideOpen((v) => !v)}
+          >
+            <span className="dashboard__job-aside-icon">🎯</span>
+            <span className="dashboard__job-aside-title">岗位对标</span>
+            <span className="dashboard__job-aside-tag">可选</span>
+            {targetHasDiagnosed && targetJobName && (
+              <span className="dashboard__job-aside-summary">
+                {targetJobName} · {matchPct ?? 0}%
+              </span>
+            )}
+            <span className={`dashboard__job-aside-chevron${jobAsideOpen ? ' is-open' : ''}`} aria-hidden="true">⌄</span>
+          </button>
+          {jobAsideOpen && (
+            <div className="dashboard__job-aside-body">
+              {targetHasDiagnosed && targetJobName ? (
+                <p className="dashboard__job-aside-text">
+                  目标岗位 <strong>{targetJobName}</strong>，当前对标进度 <strong>{matchPct ?? 0}%</strong>。
+                  岗位对标为可选参考，不影响学情概览与学习路径。
+                </p>
+              ) : (
+                <p className="dashboard__job-aside-text">
+                  还没有做岗位对标。它是可选项——想了解自己与某个目标岗位的能力差距时再用。
+                </p>
+              )}
+              <button
+                type="button"
+                className="dashboard__job-aside-cta"
+                onClick={() => onNavigate?.('profile')}
+              >
+                前往岗位对标 →
+              </button>
+            </div>
+          )}
+        </motion.div>
     </motion.div>
   )
 }

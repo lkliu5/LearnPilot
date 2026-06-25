@@ -1003,39 +1003,73 @@
   }
 }
 
-/* ========== 岗位对标轻量摘要条 ========== */
-.dashboard__target-summary {
+/* ========== 岗位对标（可选轻量模块）：降权后折叠在概览末尾，默认收起、不占主视觉 ========== */
+.dashboard__job-aside {
+  margin-top: var(--space-md);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+.dashboard__job-aside-head {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: 8px;
   width: 100%;
-  padding: 14px var(--space-lg);
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.06), rgba(124, 58, 237, 0.04));
-  border: 1px solid var(--primary-200);
-  border-radius: var(--radius-lg);
+  padding: 10px var(--space-md);
+  background: transparent;
+  border: none;
   cursor: pointer;
   text-align: left;
-  transition: all var(--transition-fast);
+  color: var(--gray-500);
+  transition: background var(--transition-fast);
 }
-.dashboard__target-summary:hover {
-  border-color: var(--primary-400);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.12);
-  transform: translateY(-1px);
+.dashboard__job-aside-head:hover { background: var(--gray-50, #f8fafc); }
+.dashboard__job-aside-icon { font-size: 0.95rem; opacity: 0.8; flex-shrink: 0; }
+.dashboard__job-aside-title { font-size: 0.82rem; font-weight: 600; color: var(--gray-600); }
+.dashboard__job-aside-tag {
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--gray-500);
+  background: var(--gray-100, #f1f5f9);
 }
-.dashboard__target-summary-icon { font-size: 1.1rem; flex-shrink: 0; }
-.dashboard__target-summary-text {
+.dashboard__job-aside-summary {
   flex: 1;
-  font-size: 0.86rem;
-  color: var(--gray-600);
+  font-size: 0.78rem;
+  color: var(--gray-400);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.dashboard__target-summary-text strong { color: var(--primary-700); font-weight: 700; }
-.dashboard__target-summary-sep { margin: 0 8px; color: var(--gray-300); }
-.dashboard__target-summary-cta {
-  flex-shrink: 0;
+.dashboard__job-aside-chevron {
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: var(--gray-400);
+  transition: transform var(--transition-fast);
+}
+.dashboard__job-aside-chevron.is-open { transform: rotate(180deg); }
+.dashboard__job-aside-body {
+  padding: 0 var(--space-md) 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.dashboard__job-aside-text { font-size: 0.82rem; color: var(--gray-500); line-height: 1.6; }
+.dashboard__job-aside-text strong { color: var(--gray-700); font-weight: 700; }
+.dashboard__job-aside-cta {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--primary-600);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
+.dashboard__job-aside-cta:hover { color: var(--primary-700); }
 
 /* ============ 未诊断引导态（问题 4）：学情概览不展示任何数据，仅引导先诊断 ============ */
 .dashboard--empty {
