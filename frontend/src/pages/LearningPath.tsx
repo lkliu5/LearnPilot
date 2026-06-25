@@ -1,65 +1,63 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import LearningPathCard from '../components/LearningPathCard'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem, revealItem } from '../components/Reveal'
 import type { PageType } from '../App'
-import { lessons } from '../data/learningPath'
+import { getLearningPath, type Lesson, type LearningPathData } from '../services/learning'
 import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
-import { kpByLessonSeq } from '../data/knowledgePoints'
+import { usePortrait } from '../store/portrait'
 import { setResourceNav } from '../services/resourceNav'
 import './LearningPath.css'
 
-const milestones = [
-  { id: 1, title: '机器学习入门', completed: true, date: '2026-05-15' },
-  { id: 2, title: '神经网络实践', completed: true, date: '2026-05-20' },
-  { id: 3, title: '深度学习进阶', completed: false, date: '预计 2026-06-10' }
-]
+const RECOMMEND_TAB: Record<string, string> = {
+  lecture: 'lecture', mindmap: 'mindmap', diagram: 'diagram',
+  video: 'video', quiz: 'quiz', external: 'external',
+}
 
 export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const [viewMode, setViewMode] = useState<'timeline' | 'cards'>('timeline')
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const generatePath = useJourney((s) => s.generatePath)
   const masteryStatus = useMastery((s) => s.status)
+  const portraitTs = usePortrait((s) => s.updatedAt)
 
-  /* 课程状态由掌握度派生：通过测试→已完成；学习中/待检验→进行中；否则用种子 */
-  const pathData = lessons.map((l) => {
-    const kp = kpByLessonSeq(l.sequence)
-    const ms = kp ? masteryStatus[kp.id] : undefined
-    if (ms === 'passed') return { ...l, status: 'completed' as const, progress: 100 }
-    if (ms === 'learning' || ms === 'pending-check')
-      return { ...l, status: 'in_progress' as const, progress: l.progress >= 100 ? 55 : l.progress }
-    return l
-  })
+  /* C2：路径真由后端 planner 按画像规划（节点/顺序/每步推荐资源因画像而变）。
+     画像变（portraitTs）或掌握度变（masteryStatus）→ 重新拉取 → 路径相应重算，不写死。 */
+  const [data, setData] = useState<LearningPathData | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    getLearningPath()
+      .then((d) => { if (!cancelled) setData(d) })
+      .catch((e) => console.error('[learning-path] 拉取路径失败', e))
+    return () => { cancelled = true }
+  }, [portraitTs, masteryStatus])
 
-  /* 弹窗按钮 → 资源页：经 resourceNav 通道携带该课程对应 kpId（Lesson.sequence ↔ lessonSeq 映射）。
-     「开始学习」进有序学习流（费曼+康奈尔，从当前未完成步接着学）；
-     「查看资源」进 8-tab 资源中枢自由浏览，落「资源推荐」Tab，各司其职 */
+  const pathData: Lesson[] = data?.lessons ?? []
+  const milestones = data?.milestones ?? []
+  const narrative = data?.summary.narrative ?? ''
+
+  const recommendedOf = (l?: Lesson) => l?.resources?.find((r) => r.recommended)
+
+  /* 弹窗按钮 → 资源页：携带该课程 kpId（后端直给）；「查看资源」默认落该步按偏好推荐的资源 Tab。 */
   const openResource = (topic: string, mode: 'flow' | 'browse', entryTab?: string) => {
     const lesson = pathData.find((p) => p.topic === topic)
-    const kp = lesson ? kpByLessonSeq(lesson.sequence) : undefined
-    setResourceNav(kp?.id ?? '', mode, entryTab)
+    const rec = recommendedOf(lesson)
+    const tab = entryTab ?? (rec ? RECOMMEND_TAB[rec.kind] : undefined)
+    setResourceNav(lesson?.kpId ?? '', mode, tab)
     onNavigate?.('learning-resource')
   }
 
-  /* 当前应学节点：按 sequence 顺序取第一个「未通过测试」的知识点（全部通过则取最后一节）。
-     「去学习资源」据此跳转，不再写死第一节——学完一节标已掌握后自动跟进度推进（issue#4）。*/
-  const currentKp = (() => {
-    const ordered = [...lessons].sort((a, b) => a.sequence - b.sequence)
-    for (const l of ordered) {
-      const kp = kpByLessonSeq(l.sequence)
-      if (kp && masteryStatus[kp.id] !== 'passed') return kp
-    }
-    const last = ordered[ordered.length - 1]
-    return last ? kpByLessonSeq(last.sequence) : undefined
-  })()
+  /* 当前应学节点 = 路径中第一个未完成的节点（已按个性化顺序排好，取其 kpId）。 */
+  const currentNode = pathData.find((l) => l.status !== 'completed') ?? pathData[pathData.length - 1]
+  const currentKpId = currentNode?.kpId
 
   const completedCount = pathData.filter(p => p.status === 'completed').length
   const inProgressCount = pathData.filter(p => p.status === 'in_progress').length
-  const overallProgress = Math.round(
-    pathData.reduce((sum, p) => sum + p.progress, 0) / pathData.length
-  )
+  const overallProgress = pathData.length
+    ? Math.round(pathData.reduce((sum, p) => sum + p.progress, 0) / pathData.length)
+    : 0
 
   return (
     <div className="learning-path-page">
@@ -74,6 +72,14 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
           { label: '总进度', value: `${overallProgress}%` },
         ]}
       />
+
+      {/* C2：为你这样规划的理由（个性化可感知、可解释） */}
+      {narrative && (
+        <motion.div className="path-rationale" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <span className="path-rationale__icon">✦</span>
+          <span className="path-rationale__text">{narrative}</span>
+        </motion.div>
+      )}
 
       {/* View Toggle */}
       <div className="view-toggle">
@@ -149,7 +155,17 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                           {item.difficulty}
                         </span>
                       </div>
-                      <p className="timeline-item__desc">{item.description}</p>
+                      {item.reason && (
+                        <p className="timeline-item__reason">
+                          <span className="timeline-item__reason-icon">✦</span>{item.reason}
+                        </p>
+                      )}
+                      {recommendedOf(item) && (
+                        <span className="timeline-item__recommend" title={recommendedOf(item)!.recommendReason}>
+                          为你推荐：{recommendedOf(item)!.title}
+                        </span>
+                      )}
+                      {item.description && <p className="timeline-item__desc">{item.description}</p>}
                       {item.status === 'in_progress' && (
                         <div className="timeline-item__progress">
                           <div className="progress-bar">
@@ -235,7 +251,7 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
         <div className="flow-next__text">
           <span className="flow-next__step">下一步 · ③ 学习资源</span>
           <span className="flow-next__desc">
-            {currentKp ? `进入「${currentKp.name}」获取 AI 讲义与练习` : '进入当前进度节点获取 AI 讲义与练习'}
+            {currentNode ? `进入「${currentNode.topic}」获取 AI 讲义与练习` : '进入当前进度节点获取 AI 讲义与练习'}
           </span>
         </div>
         <button
@@ -243,7 +259,8 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
           type="button"
           onClick={() => {
             generatePath()
-            setResourceNav(currentKp?.id ?? '')
+            const rec = recommendedOf(currentNode)
+            setResourceNav(currentKpId ?? '', 'browse', rec ? RECOMMEND_TAB[rec.kind] : undefined)
             onNavigate?.('learning-resource')
           }}
         >
@@ -275,7 +292,22 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                 </svg>
               </button>
               <h2>{selectedTopic}</h2>
-              <p>{pathData.find(p => p.topic === selectedTopic)?.description}</p>
+              {(() => {
+                const l = pathData.find((p) => p.topic === selectedTopic)
+                const rec = recommendedOf(l)
+                return (
+                  <>
+                    {l?.reason && <p className="topic-modal__reason">✦ {l.reason}</p>}
+                    {l?.description && <p>{l.description}</p>}
+                    {rec && (
+                      <p className="topic-modal__recommend">
+                        为你默认推荐：<strong>{rec.title}</strong>
+                        {rec.recommendReason && <span className="topic-modal__recommend-why">{rec.recommendReason}</span>}
+                      </p>
+                    )}
+                  </>
+                )
+              })()}
               <div className="topic-modal__actions">
                 <button
                   className="topic-modal__btn topic-modal__btn--primary"

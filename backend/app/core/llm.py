@@ -2284,7 +2284,11 @@ class LLMClient:
 
     # ---- 学习路径规划（接口文档 6.2，真实规划 Agent 的叙述层） ----------------
     def plan_path(
-        self, *, profile: dict[str, Any], steps: list[dict[str, Any]]
+        self,
+        *,
+        profile: dict[str, Any],
+        steps: list[dict[str, Any]],
+        deterministic: bool = False,
     ) -> dict[str, Any]:
         """为已排序的路径步骤生成「为什么这样排」的理由 + 整体摘要。
 
@@ -2293,13 +2297,15 @@ class LLMClient:
         - mock：按信号确定性模板（无随机、无网络，不同画像/掌握度 → 不同理由）；
         - deepseek：真实生成 + 契约清洗（reason 按 kpId 回填，缺失回落模板），
           解析失败/上游异常 → 回落 mock，保证演示稳定（不向路由抛 2001）。
+        - deterministic=True：**强制走确定性模板、零网络**（供 GET /learning-path 实时
+          重算用——画像变即重算、不阻塞页面、不计费）。
 
         入参 steps[i]：{kpId, topic, order, status, signals:{weak,mastered,
         foundational,jobBoost}}；profile：{foundationLevel, goal, pace, jobName}。
         返回 {reasons: {kpId: reason}, summary: str}。
         """
         self._ensure_supported()
-        if self.is_mock:
+        if deterministic or self.is_mock:
             return self._mock_plan_path(profile, steps)
         try:
             return self._deepseek_plan_path(profile, steps)
@@ -2316,6 +2322,11 @@ class LLMClient:
         reasons: dict[str, str] = {}
         weak_count = 0
         mastered_count = 0
+
+        def _ability(sig: dict[str, Any]) -> str:
+            s = sig.get("abilityScore")
+            return f"（微测能力分 {int(s)}）" if isinstance(s, (int, float)) and not isinstance(s, bool) else ""
+
         for step in steps:
             sig = step.get("signals") or {}
             topic = step.get("topic") or step.get("kpId")
@@ -2325,31 +2336,43 @@ class LLMClient:
                 reasons[step["kpId"]] = (
                     f"你已掌握「{topic}」（测验通过），后置到第 {order} 步用于巩固复习，可快速跳过。"
                 )
+            elif sig.get("proficient"):
+                # 微测能力分达标但未正式通过测验 → 后置略读（靠测：用实测分判定"已会"）
+                mastered_count += 1
+                reasons[step["kpId"]] = (
+                    f"微测显示你对「{topic}」已基本达标{_ability(sig)}，后置到第 {order} 步快速复习、可略读。"
+                )
             elif sig.get("jobBoost") and sig.get("weak"):
                 weak_count += 1
                 lead = f"目标岗位「{job_name}」" if job_name else "你的目标岗位"
                 reasons[step["kpId"]] = (
-                    f"{lead}对「{topic}」要求高且你尚薄弱，按先修顺序排在第 {order} 步并列为重点强化项。"
+                    f"{lead}对「{topic}」要求高且你尚薄弱{_ability(sig)}，按先修顺序排在第 {order} 步并列为重点强化项。"
                 )
             elif sig.get("weak") and sig.get("foundational"):
                 weak_count += 1
                 reasons[step["kpId"]] = (
-                    f"「{topic}」是后续内容的基础且你尚未掌握，优先安排在第 {order} 步打牢根基。"
+                    f"「{topic}」是后续内容的基础且你尚未掌握{_ability(sig)}，优先安排在第 {order} 步打牢根基。"
                 )
             elif sig.get("weak"):
                 weak_count += 1
                 reasons[step["kpId"]] = (
-                    f"「{topic}」是你的薄弱点，按先修顺序安排在第 {order} 步集中攻克。"
+                    f"「{topic}」是你的薄弱点{_ability(sig)}，按先修顺序安排在第 {order} 步集中攻克。"
                 )
             else:
                 reasons[step["kpId"]] = (
                     f"按知识先修依赖，「{topic}」承接前序内容，安排在第 {order} 步进阶。"
                 )
         level = profile.get("foundationLevel") or "中等"
+        style = (profile.get("style") or "").strip()
+        pace_type = (profile.get("paceType") or "").strip()
+        how = ""
+        if style or pace_type:
+            tag = "·".join(t for t in (style, pace_type) if t)
+            how = f"；并按你的学习偏好（{tag}）为每步默认推荐最适合的资源形式"
         summary = (
-            f"本路径依据你的画像（基础{level}）与知识掌握度规划：将 {weak_count} 个薄弱/未掌握点"
-            f"按先修顺序前置，{mastered_count} 个已掌握点后置复习，共 {len(steps)} 步，"
-            "每步配套讲义/思维导图/视频/题库资源。"
+            f"本路径依据你的画像（基础{level}）与各知识点实测能力规划：将 {weak_count} 个薄弱/未掌握点"
+            f"按先修顺序前置，{mastered_count} 个已达标点后置复习，共 {len(steps)} 步{how}，"
+            "每步配套讲义/思维导图/图解/视频/题库资源。"
         )
         return {"reasons": reasons, "summary": summary}
 

@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.agents.planner_agent import plan_path
+from app.agents.planner_agent import plan_path, portrait_fingerprint
 from app.core.database import SessionLocal, get_db
 from app.core.envelope import success
 from app.core.security import get_current_user
@@ -40,11 +40,27 @@ def _seed_lessons(db: Session) -> list[dict[str, Any]]:
     return [{f: getattr(ls, f) for f in _LESSON_FIELDS} for ls in lessons]
 
 
-def _resolve_lessons(db: Session, journey: Journey | None) -> list[dict[str, Any]]:
-    """优先返回该用户个性化路径（Journey.path_plan）；未生成 → 全局种子路径。"""
-    if journey is not None and journey.path_plan:
-        return list(journey.path_plan)
-    return _seed_lessons(db)
+def _resolve_lessons(
+    db: Session, user_id: str, journey: Journey | None
+) -> tuple[list[dict[str, Any]], str]:
+    """返回该用户当前应展示的路径 + 规划叙述（C2：画像变即重算，不缓存写死）。
+
+    优先级：① 缓存路径且画像/掌握度指纹未变 → 命中缓存（保留 generate 的丰富理由）；
+    ② 已诊断但无缓存 / 指纹已变（画像更新/重做诊断）→ **实时重算**确定性个性化路径
+    （narrate=False，零网络、不阻塞），并刷新缓存与指纹；③ 未诊断 → 全局种子路径。
+    """
+    if journey is None or not journey.has_diagnosed:
+        return _seed_lessons(db), ""
+    current_fp = portrait_fingerprint(db, user_id)
+    if journey.path_plan and journey.path_fingerprint == current_fp:
+        return list(journey.path_plan), journey.path_narrative or ""  # 命中缓存
+    # 画像已变 / 首次 → 实时重算并回填缓存（不改 has_generated_path，正式生成仍走 POST）
+    plan = plan_path(db, user_id=user_id, narrate=False)
+    journey.path_plan = plan["lessons"]
+    journey.path_fingerprint = current_fp
+    journey.path_narrative = plan.get("summary", "")
+    db.commit()
+    return plan["lessons"], journey.path_narrative
 
 
 def _build_milestones(journey: Journey | None, lessons: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -69,8 +85,11 @@ def _build_milestones(journey: Journey | None, lessons: list[dict[str, Any]]) ->
     ]
 
 
-def _build_summary(lessons: list[dict[str, Any]]) -> dict[str, Any]:
-    """汇总进度（接口文档 6.1 summary）。overallProgress = sum(progress)/课程数。"""
+def _build_summary(lessons: list[dict[str, Any]], narrative: str = "") -> dict[str, Any]:
+    """汇总进度（接口文档 6.1 summary）。overallProgress = sum(progress)/课程数。
+
+    C2 additive：narrative=整体规划叙述（"为你这样规划的理由"，驱动前端路径头部横幅）。
+    """
     completed = sum(1 for ls in lessons if ls["status"] == "completed")
     in_progress = sum(1 for ls in lessons if ls["status"] == "in_progress")
     total = len(lessons)
@@ -79,6 +98,7 @@ def _build_summary(lessons: list[dict[str, Any]]) -> dict[str, Any]:
         "completedCount": completed,
         "inProgressCount": in_progress,
         "overallProgress": overall,
+        "narrative": narrative,
     }
 
 
@@ -89,12 +109,12 @@ async def get_learning_path(
 ):
     """获取个性化学习路径（接口文档 6.1）。已生成则返回个性化路径，否则种子路径。"""
     journey = db.get(Journey, user.id)
-    lessons = _resolve_lessons(db, journey)
+    lessons, narrative = _resolve_lessons(db, user.id, journey)
     return success(
         {
             "lessons": lessons,
             "milestones": _build_milestones(journey, lessons),
-            "summary": _build_summary(lessons),
+            "summary": _build_summary(lessons, narrative),
         }
     )
 
@@ -125,6 +145,8 @@ async def generate_learning_path(
                 db.add(journey)
             journey.has_generated_path = True
             journey.path_plan = plan["lessons"]
+            journey.path_fingerprint = portrait_fingerprint(db, user_id)  # 缓存指纹（画像变即失效）
+            journey.path_narrative = plan.get("summary", "")
             db.commit()
             # 任务产物严格对齐接口文档 15.2「{lessons}」（规划摘要不入 result，
             # 每步 reason 已承载「为什么这样排」；摘要内部计算用于日志/可观测）。

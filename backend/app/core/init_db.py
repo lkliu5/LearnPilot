@@ -507,9 +507,13 @@ def _migrate_path_plan() -> None:
     if "journeys" not in inspector.get_table_names():
         return
     columns = {c["name"] for c in inspector.get_columns("journeys")}
-    if "path_plan" not in columns:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if "path_plan" not in columns:
             conn.execute(text("ALTER TABLE journeys ADD COLUMN path_plan JSON"))
+        if "path_fingerprint" not in columns:  # C2：路径缓存指纹（画像变即失效重算）
+            conn.execute(text("ALTER TABLE journeys ADD COLUMN path_fingerprint VARCHAR(32)"))
+        if "path_narrative" not in columns:  # C2：整体规划叙述缓存（GET 回 summary.narrative）
+            conn.execute(text("ALTER TABLE journeys ADD COLUMN path_narrative TEXT"))
 
 
 def _migrate_mastery_score() -> None:

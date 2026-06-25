@@ -207,3 +207,102 @@ def test_resources_openable(client, two_profiles):
         # 思维导图（8.4）：真实 Markdown
         mind = client.get(f"{API}/resource/mindmap/{kp}", headers=headers)
         assert mind.status_code == 200 and mind.json()["data"]["markdown"]
+
+
+# ---- C2：per-KP 能力分驱动顺序 + 偏好驱动资源形式 ------------------------------
+
+_USER_C2 = "u_test_plan_c2"
+
+
+def test_per_kp_ability_orders_and_preference_drives_resources():
+    """C2 验证：① per-KP 能力分决定顺序（达标后置、薄弱优先）；② 偏好决定每步推荐资源形式。"""
+    db = SessionLocal()
+    try:
+        if db.get(User, _USER_C2) is None:
+            db.add(User(id=_USER_C2, username=_USER_C2, display_name=_USER_C2, password_hash="x"))
+            db.commit()
+        # 画像：基础好 + 图像型(visual) + 快速概览(overview)；微测能力分：基础强、进阶弱
+        portrait_service.replace_portrait(db, _USER_C2, [
+            {"key": "knowledge_base", "label": "知识基础", "value": "扎实", "score": 78, "source": "diagnostic"},
+            {"key": "cognitive_style", "label": "认知风格", "value": "图像型", "optionKey": "visual", "source": "dialogue"},
+            {"key": "learning_pace", "label": "学习节奏", "value": "快速概览型", "optionKey": "overview", "source": "dialogue"},
+        ])
+        for kp, sc in {"ml": 85, "nn": 82, "dl": 78, "cnn": 40, "transformer": 30, "finetune": 25}.items():
+            mastery_service.set_baseline(db, _USER_C2, kp, score=sc, confidence=0.45)
+        jp = db.get(Journey, _USER_C2) or Journey(user_id=_USER_C2)
+        jp.has_diagnosed = True
+        db.add(jp)
+        db.commit()
+
+        plan = plan_path(db, user_id=_USER_C2)
+        order = [l["kpId"] for l in plan["lessons"]]
+        # ① 能力达标(≥70：ml/nn/dl)后置、薄弱(cnn/transformer/finetune)优先 → 进阶弱点排在基础强点之前
+        assert order.index("cnn") < order.index("ml"), "薄弱进阶点应排在已达标基础点之前（靠测）"
+        assert order.index("transformer") < order.index("nn")
+        # ② 每步默认推荐资源形式因偏好而变：图像型 → 首推「知识图解」diagram
+        for l in plan["lessons"]:
+            rec = next((r for r in l["resources"] if r.get("recommended")), None)
+            assert rec is not None and rec["kind"] == "diagram", "图像型应默认推图解"
+            assert rec.get("recommendReason")
+        # 不同偏好 → 不同推荐形式（改成文字型 → 首推讲义）
+        portrait_service.replace_portrait(db, _USER_C2, [
+            {"key": "knowledge_base", "label": "知识基础", "value": "扎实", "score": 78, "source": "diagnostic"},
+            {"key": "cognitive_style", "label": "认知风格", "value": "文字型", "optionKey": "textual", "source": "dialogue"},
+        ])
+        plan2 = plan_path(db, user_id=_USER_C2)
+        rec2 = next(r for r in plan2["lessons"][0]["resources"] if r.get("recommended"))
+        assert rec2["kind"] == "lecture", "文字型应默认推详细讲义"
+    finally:
+        db.query(Mastery).filter(Mastery.user_id == _USER_C2).delete()
+        for row in (db.get(StudentPortrait, _USER_C2), db.get(Journey, _USER_C2), db.get(User, _USER_C2)):
+            if row is not None:
+                db.delete(row)
+        db.commit()
+        db.close()
+
+
+def test_get_path_recomputes_when_portrait_changes(client):
+    """C2 验证：画像变 → GET /learning-path 路径相应重算（缓存指纹失效，不写死）。"""
+    import uuid
+
+    username = f"plan_{uuid.uuid4().hex[:8]}"
+    reg = client.post(f"{API}/auth/register", json={"username": username, "password": "123456"})
+    headers = {"Authorization": f"Bearer {reg.json()['data']['token']}"}
+    uid = reg.json()["data"]["user"]["userId"]
+
+    db = SessionLocal()
+    try:
+        # 画像 A：零基础（全弱）+ 已诊断
+        portrait_service.replace_portrait(db, uid, [
+            {"key": "knowledge_base", "label": "知识基础", "value": "薄弱", "score": 20, "source": "diagnostic"},
+        ])
+        for kp, sc in {"ml": 22, "nn": 20, "dl": 18, "cnn": 16, "transformer": 14, "finetune": 12}.items():
+            mastery_service.set_baseline(db, uid, kp, score=sc, confidence=0.45)
+        j = db.get(Journey, uid) or Journey(user_id=uid)
+        j.has_diagnosed = True
+        db.add(j)
+        db.commit()
+
+        order_a = [l["topic"] for l in client.get(f"{API}/learning-path", headers=headers).json()["data"]["lessons"]]
+        diff_a = client.get(f"{API}/learning-path", headers=headers).json()["data"]["lessons"][0]["difficulty"]
+
+        # 画像 B：重做诊断改为「基础好 + 基础强/进阶弱」→ 顺序应改变（不再写死）
+        portrait_service.replace_portrait(db, uid, [
+            {"key": "knowledge_base", "label": "知识基础", "value": "扎实", "score": 82, "source": "diagnostic"},
+        ])
+        for kp, sc in {"ml": 88, "nn": 85, "dl": 80, "cnn": 38, "transformer": 30, "finetune": 25}.items():
+            mastery_service.set_baseline(db, uid, kp, score=sc, confidence=0.45)
+        db.commit()
+
+        lessons_b = client.get(f"{API}/learning-path", headers=headers).json()["data"]["lessons"]
+        order_b = [l["topic"] for l in lessons_b]
+        assert order_a != order_b, "画像变 → 路径顺序应相应改变（不缓存写死）"
+        # B：基础强点(机器学习基础)后置到薄弱进阶点(CNN/Transformer)之后
+        assert order_b.index("CNN架构") < order_b.index("机器学习基础")
+    finally:
+        db.query(Mastery).filter(Mastery.user_id == uid).delete()
+        for row in (db.get(StudentPortrait, uid), db.get(Journey, uid), db.get(User, uid)):
+            if row is not None:
+                db.delete(row)
+        db.commit()
+        db.close()

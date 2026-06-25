@@ -107,6 +107,11 @@ class Journey(Base):
     # reason/resources（additive 字段，见接口文档 6.3 增量）。NULL = 尚未生成 → GET
     # 回落全局种子路径（向后兼容）。首次生成后落库，GET 命中缓存（同一画像不重复规划）。
     path_plan: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # C2：缓存路径对应的画像/掌握度指纹（planner.portrait_fingerprint）。GET 时若当前
+    # 指纹与此不符 → 画像已变 → 实时重算个性化路径（不缓存写死）。NULL = 未缓存。
+    path_fingerprint: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # C2：整体规划叙述（"为你这样规划的理由"），随 path_plan 一并缓存，GET 回 summary.narrative。
+    path_narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ResourceCache(Base):

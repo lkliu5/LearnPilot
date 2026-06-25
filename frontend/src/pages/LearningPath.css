@@ -513,3 +513,41 @@
   background: var(--gray-50);
   border-color: var(--gray-300);
 }
+
+/* C2：个性化规划理由 + 每步推荐资源（可感知、可解释） */
+.path-rationale {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 0 var(--space-lg);
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--primary-200);
+  background: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.5));
+  font-size: 0.86rem; line-height: 1.6; color: var(--gray-700);
+}
+.path-rationale__icon { color: var(--primary-500); font-weight: 700; flex-shrink: 0; }
+.timeline-item__reason {
+  margin: 4px 0 6px; padding: 6px 10px;
+  border-left: 2px solid var(--primary-300);
+  background: var(--primary-50);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.8rem; line-height: 1.55; color: var(--gray-700);
+}
+.timeline-item__reason-icon { color: var(--primary-500); margin-right: 4px; }
+.timeline-item__recommend {
+  display: inline-block; margin-bottom: 6px;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--purple-50); color: var(--purple-700);
+  font-size: 0.72rem; font-weight: 600;
+  border: 1px solid var(--purple-200);
+}
+.topic-modal__reason {
+  padding: 8px 12px; margin-bottom: 8px;
+  border-radius: 8px; background: var(--primary-50);
+  font-size: 0.85rem; line-height: 1.6; color: var(--gray-700);
+}
+.topic-modal__recommend {
+  margin-top: 10px; padding: 8px 12px;
+  border-radius: 8px; background: var(--purple-50);
+  font-size: 0.82rem; color: var(--purple-700);
+}
+.topic-modal__recommend-why { display: block; margin-top: 2px; font-size: 0.74rem; color: var(--gray-500); }

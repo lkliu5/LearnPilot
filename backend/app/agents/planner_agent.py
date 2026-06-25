@@ -29,6 +29,10 @@ from app.models.entities import JobSnapshot, Journey, KnowledgePoint, Lesson
 from app.services import mastery as mastery_service
 from app.services import student_portrait as portrait_service
 
+# 微测/quiz 能力分达「达标」阈值：未正式通过测验但能力分 ≥ 此值 → 视为已达标、后置略读
+# （与「能力靠测」一致：用实测分而非仅 passed 状态判定"学什么/什么顺序"）。
+_PROFICIENT_SCORE: int = 70
+
 # 掌握状态 → 路径步骤展示状态/进度（接口文档 2.3 status/progress；2.2 掌握枚举）
 _STATUS_TO_STEP: dict[str, tuple[str, int]] = {
     mastery_service.STATUS_PASSED: ("completed", 100),
@@ -62,6 +66,30 @@ _RESOURCE_SPECS: list[tuple[str, str, str, bool]] = [
 # 资源页讲义/视频难度档（入门|初级|高级）；路径难度档更细（含中级/精通）需映射回 8.2 档
 _LECTURE_DIFF_FALLBACK = "初级"
 
+# ── 偏好画像 → 每个节点「默认推荐的资源形式」（C2：偏好决定"每一步怎么学"） ──
+# 认知风格首选形式（图像型→图解、文字型→详细讲义、案例型→外部实战/案例）
+_STYLE_PRIMARY: dict[str, str] = {
+    "visual": "diagram",
+    "textual": "lecture",
+    "example": "external",
+}
+# 学习节奏次选形式（快速概览型→先思维导图鸟瞰、稳步细钻型→详细讲义逐点钻）
+_PACE_PRIMARY: dict[str, str] = {
+    "overview": "mindmap",
+    "deepdive": "lecture",
+}
+# 资源形式中文名（用于推荐理由）
+_KIND_LABEL: dict[str, str] = {
+    "lecture": "自适应讲义",
+    "mindmap": "思维导图",
+    "diagram": "知识图解",
+    "video": "讲解视频",
+    "quiz": "巩固测验",
+    "external": "精选外部资源",
+}
+_STYLE_LABEL: dict[str, str] = {"visual": "图像型", "textual": "文字型", "example": "案例型"}
+_PACE_LABEL: dict[str, str] = {"overview": "快速概览型", "deepdive": "稳步细钻型"}
+
 
 def _foundation_score(dims: list[dict[str, Any]]) -> int | None:
     """从画像维度取 knowledge_base 基础分（0-100）；缺失返回 None（中性）。"""
@@ -77,6 +105,14 @@ def _dim_value(dims: list[dict[str, Any]], key: str) -> str:
     for d in dims:
         if d.get("key") == key:
             return str(d.get("value") or "")
+    return ""
+
+
+def _dim_option(dims: list[dict[str, Any]], key: str) -> str:
+    """取偏好维的类型码 optionKey（如 cognitive_style→visual）；缺失返回 ""。"""
+    for d in dims:
+        if d.get("key") == key:
+            return str(d.get("optionKey") or "")
     return ""
 
 
@@ -131,11 +167,51 @@ def _job_demand(db: Session, job_id: str | None, job_name: str | None) -> dict[s
     return {k: int(v) for k, v in radar.items() if isinstance(v, (int, float))}
 
 
-def _build_resources(kp_id: str, topic: str, path_difficulty: str) -> list[dict[str, Any]]:
-    """每步推送的资源清单：指向该 kpId 真实存在的生成资源端点（能点开）。"""
+def _preferred_kind_order(style: str, pace: str) -> list[str]:
+    """据偏好画像排「资源形式优先级」：认知风格首选 + 学习节奏次选 + 其余默认序，去重。"""
+    order: list[str] = []
+    primary = _STYLE_PRIMARY.get(style)
+    if primary:
+        order.append(primary)
+    secondary = _PACE_PRIMARY.get(pace)
+    if secondary and secondary not in order:
+        order.append(secondary)
+    for kind, _, _, _ in _RESOURCE_SPECS:  # 其余形式按默认序补齐
+        if kind not in order:
+            order.append(kind)
+    return order
+
+
+def _recommend_reason(kind: str, style: str, pace: str) -> str:
+    """生成"为你默认推荐这种形式"的可解释理由（扣住认知风格/学习节奏）。"""
+    label = _KIND_LABEL.get(kind, kind)
+    if style in _STYLE_LABEL and _STYLE_PRIMARY.get(style) == kind:
+        return f"你是{_STYLE_LABEL[style]}学习者，优先推「{label}」建立直观理解。"
+    if pace in _PACE_LABEL and _PACE_PRIMARY.get(pace) == kind:
+        tip = "先鸟瞰全局再补细节" if pace == "overview" else "逐点稳稳钻透"
+        return f"你偏{_PACE_LABEL[pace]}，优先用「{label}」{tip}。"
+    return f"默认从「{label}」入手。"
+
+
+def _build_resources(
+    kp_id: str, topic: str, path_difficulty: str, style: str = "", pace: str = ""
+) -> list[dict[str, Any]]:
+    """每步推送的资源清单：指向该 kpId 真实存在的生成资源端点（能点开）。
+
+    C2：资源**顺序按偏好画像重排**（认知风格 + 学习节奏），首项标 `recommended=true`
+    并附 `recommendReason`——同一知识点，图像型默认推图解、文字/细钻型推详细讲义、
+    概览型先推思维导图，使"每一步怎么学"因人而异。无偏好 → 默认序、不标推荐。
+    """
     lecture_diff = _lecture_difficulty(path_difficulty)
+    specs_by_kind = {kind: spec for spec in _RESOURCE_SPECS for kind in (spec[0],)}
+    kind_order = _preferred_kind_order(style, pace) if (style or pace) else [s[0] for s in _RESOURCE_SPECS]
+    has_pref = bool(style or pace)
     resources: list[dict[str, Any]] = []
-    for kind, title_tpl, endpoint, with_diff in _RESOURCE_SPECS:
+    for idx, kind in enumerate(kind_order):
+        spec = specs_by_kind.get(kind)
+        if spec is None:
+            continue
+        _, title_tpl, endpoint, with_diff = spec
         item: dict[str, Any] = {
             "kind": kind,
             "title": title_tpl.format(topic=topic),
@@ -144,25 +220,37 @@ def _build_resources(kp_id: str, topic: str, path_difficulty: str) -> list[dict[
         }
         if with_diff:
             item["difficulty"] = lecture_diff
+        if has_pref and idx == 0:  # 首项 = 按偏好默认推荐的形式
+            item["recommended"] = True
+            item["recommendReason"] = _recommend_reason(kind, style, pace)
         resources.append(item)
     return resources
 
 
 def plan_path(
-    db: Session, *, user_id: str, target_job_id: str | None = None
+    db: Session, *, user_id: str, target_job_id: str | None = None, narrate: bool = True
 ) -> dict[str, Any]:
     """生成该用户的个性化学习路径（接口文档 6.2，真实规划）。
+
+    Args:
+        narrate: True=理由经 LLMClient（mock 模板 / deepseek 真实，POST generate 用）；
+            False=强制确定性模板、零网络（GET 实时重算用——画像变即重算、不阻塞、不计费）。
 
     Returns:
         {lessons, summary}：
         - lessons：Lesson[]（接口文档 2.3 六字段）+ additive kpId/reason/resources，
-          sequence 1..N 为**真实学习顺序**（按薄弱优先/先修依赖/岗位需求重排）；
+          sequence 1..N 为**真实学习顺序**（按 per-KP 能力薄弱优先/先修依赖/岗位需求重排）；
         - summary：整体规划说明（驱动前端路径头部叙述）。
     """
     # ---- 1. 真实输入源（全部复用既有服务，不重建） ----
     dims = list(portrait_service.get_portrait(db, user_id).get("dimensions") or [])
     foundation = _foundation_score(dims)
+    # C2：偏好画像 → 决定"每一步怎么学"（认知风格/学习节奏的类型码）
+    style = _dim_option(dims, "cognitive_style")
+    pace = _dim_option(dims, "learning_pace")
     status_map = mastery_service.get_status_map(db, user_id)
+    # C2：per-KP 能力分（微测/quiz 写入 Mastery）→ 决定"学什么、什么顺序"
+    score_map = mastery_service.get_score_map(db, user_id)
     journey = db.get(Journey, user_id)
     job_name = journey.target_job_name if journey else None
     demand = _job_demand(db, target_job_id, job_name)
@@ -171,32 +259,37 @@ def plan_path(
     # 基础难度/描述取自全局种子课程（按 lesson_seq == Lesson.sequence 对应）
     lessons_by_seq = {ls.sequence: ls for ls in db.query(Lesson).all()}
 
-    # ---- 2. 优先级打分（lower = 越早学；科学排程） ----
+    # ---- 2. 优先级打分（lower = 越早学；科学排程，靠测的 per-KP 能力分驱动） ----
     scored: list[dict[str, Any]] = []
     for kp in kps:
-        status = status_map.get(kp.id)  # None = 未开始（薄弱）
+        status = status_map.get(kp.id)  # None = 未开始
         mastered = status == mastery_service.STATUS_PASSED
-        weak = not mastered  # 未通过即薄弱/待强化
+        kp_score = (score_map.get(kp.id) or {}).get("score")  # int | None（None=未测）
+        tested = mastered or kp_score is not None
+        # 「达标」= 已通过测验 或 微测/quiz 能力分 ≥ 阈值（靠测，不只看 status）
+        proficient = mastered or (kp_score is not None and kp_score >= _PROFICIENT_SCORE)
+        weak = not proficient  # 未达标 = 薄弱/待强化
         foundational = kp.lesson_seq <= 2  # ml/nn 为后续基础
         ability = _KP_TO_ABILITY.get(kp.id, "")
         job_boost = bool(weak and demand.get(ability, 0) >= 80)
 
         score = float(kp.lesson_seq)  # 先修骨架（保证依赖顺序）
-        if mastered:
-            score += 100.0  # 已掌握 → 大幅后置（路径末段复习）
-        elif status == mastery_service.STATUS_PENDING_CHECK:
-            score += 0.3
-        elif status == mastery_service.STATUS_LEARNING:
-            score += 0.1
-        # 画像基础联动：基础扎实可略读基础课（后移），零基础先固基础（前移）
-        if foundational and not mastered:
-            if foundation is not None and foundation >= 75:
-                score += 0.5
-            elif foundation is not None and foundation < 40:
-                score -= 0.5
-        # 目标岗位高需求 → 满足先修后小幅前置（不足以越过先修骨架的整数差）
-        if ability and demand:
-            score -= min(0.8, demand.get(ability, 0) / 100.0 * 0.8)
+        if proficient:
+            # 已掌握/微测已达标 → 大幅后置（路径末段复习/略读，"跳过已会的"）
+            score += 100.0
+        else:
+            # 真薄弱：**能力分越低越前**（未测=0=最薄弱，优先补）；fractional 不破坏先修整数骨架
+            eff = kp_score if kp_score is not None else 0
+            score += eff / 100.0 * 0.8
+            # 画像基础联动：强基础者基础课略后、零基础先固基础
+            if foundational and foundation is not None:
+                if foundation >= 75:
+                    score += 0.4
+                elif foundation < 40:
+                    score -= 0.4
+            # 目标岗位高需求 → 满足先修后小幅前置
+            if ability and demand:
+                score -= min(0.8, demand.get(ability, 0) / 100.0 * 0.8)
 
         scored.append(
             {
@@ -206,8 +299,11 @@ def plan_path(
                 "signals": {
                     "weak": weak,
                     "mastered": mastered,
+                    "proficient": proficient and not mastered,  # 微测达标但未正式通过
                     "foundational": foundational,
                     "jobBoost": job_boost,
+                    "abilityScore": kp_score,
+                    "tested": tested,
                 },
             }
         )
@@ -236,7 +332,8 @@ def plan_path(
             # ---- additive（接口文档 6.3 增量，向后兼容） ----
             "kpId": kp.id,
             "reason": "",  # 由 LLMClient.plan_path 回填
-            "resources": _build_resources(kp.id, kp.name, difficulty),
+            # 资源形式按偏好画像（认知风格/学习节奏）重排，首项为默认推荐（C2）
+            "resources": _build_resources(kp.id, kp.name, difficulty, style, pace),
         }
         lessons.append(lesson)
         steps_ctx.append(
@@ -255,10 +352,42 @@ def plan_path(
         "goal": _dim_value(dims, "learning_goal"),
         "pace": _dim_value(dims, "learning_pace"),
         "jobName": job_name or "",
+        # C2 偏好画像（驱动摘要里"怎么学"的叙述）
+        "style": _STYLE_LABEL.get(style, ""),
+        "paceType": _PACE_LABEL.get(pace, ""),
     }
-    annotated = get_llm().plan_path(profile=profile, steps=steps_ctx)
+    annotated = get_llm().plan_path(profile=profile, steps=steps_ctx, deterministic=not narrate)
     reasons = annotated.get("reasons") or {}
     for lesson in lessons:
         lesson["reason"] = reasons.get(lesson["kpId"], "")
 
     return {"lessons": lessons, "summary": annotated.get("summary", "")}
+
+
+def portrait_fingerprint(db: Session, user_id: str) -> str:
+    """画像/掌握度指纹：用于判定缓存路径是否过期（画像变 → 指纹变 → 重算）。
+
+    覆盖一切影响排程/资源的输入：画像维度（含能力分/偏好 optionKey）、per-KP 能力分、
+    掌握状态、目标岗位。任一变化 → 指纹变化 → GET 实时重算个性化路径（不缓存写死）。
+    """
+    import hashlib
+    import json
+
+    dims = sorted(
+        (
+            (d.get("key"), d.get("score"), d.get("optionKey"), d.get("value"))
+            for d in (portrait_service.get_portrait(db, user_id).get("dimensions") or [])
+        ),
+        key=lambda t: str(t[0]),
+    )
+    score_map = mastery_service.get_score_map(db, user_id)
+    status_map = mastery_service.get_status_map(db, user_id)
+    journey = db.get(Journey, user_id)
+    payload = {
+        "dims": dims,
+        "scores": sorted((k, v.get("score")) for k, v in score_map.items()),
+        "status": sorted(status_map.items()),
+        "job": journey.target_job_name if journey else None,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
