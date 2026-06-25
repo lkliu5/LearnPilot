@@ -192,42 +192,43 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
           input={input}
           onInput={setInput}
           onSend={send}
-          placeholder={interaction ? '点选上方选项，或直接输入…' : '用自己的话说说你的情况…'}
+          placeholder={interaction ? '点选下方选项，或直接输入…' : '用自己的话说说你的情况…'}
           sending={sending}
+          /* 微测/偏好作答卡常驻「对话区 ↔ 输入框」之间：回答（上方气泡）与待答题目分区不重叠 */
+          belowChat={
+            <AnimatePresence>
+              {interaction && (
+                <motion.div
+                  className={`pd-itx pd-itx--${interaction.type}`}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                >
+                  <div className="pd-itx__head">
+                    <span className="pd-itx__tag">
+                      {interaction.type === 'quiz' ? '诊断微测 · 行为反推能力' : '偏好选择 · 只归类型不打分'}
+                    </span>
+                    {interaction.meta?.kpName && <span className="pd-itx__kp">{interaction.meta.kpName}</span>}
+                  </div>
+                  <div className="pd-itx__prompt">{interaction.prompt}</div>
+                  <div className="pd-itx__opts">
+                    {interaction.options.map((o) => (
+                      <button
+                        key={o.value}
+                        className="pd-itx__opt"
+                        disabled={sending}
+                        onClick={() => pickOption(o)}
+                      >
+                        <span className="pd-itx__opt-label">{o.label}</span>
+                        {o.hint && <span className="pd-itx__opt-hint">{o.hint}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          }
         />
-
-        {/* 引导式交互卡片：微测题（选项=判断）/ 偏好选择题（选项=类型），点选即作答 */}
-        <AnimatePresence>
-          {interaction && (
-            <motion.div
-              className={`pd-itx pd-itx--${interaction.type}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-            >
-              <div className="pd-itx__head">
-                <span className="pd-itx__tag">
-                  {interaction.type === 'quiz' ? '诊断微测 · 行为反推能力' : '偏好选择 · 只归类型不打分'}
-                </span>
-                {interaction.meta?.kpName && <span className="pd-itx__kp">{interaction.meta.kpName}</span>}
-              </div>
-              <div className="pd-itx__prompt">{interaction.prompt}</div>
-              <div className="pd-itx__opts">
-                {interaction.options.map((o) => (
-                  <button
-                    key={o.value}
-                    className="pd-itx__opt"
-                    disabled={sending}
-                    onClick={() => pickOption(o)}
-                  >
-                    <span className="pd-itx__opt-label">{o.label}</span>
-                    {o.hint && <span className="pd-itx__opt-hint">{o.hint}</span>}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <aside className="pd__aside">

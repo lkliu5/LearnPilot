@@ -1,0 +1,202 @@
+/* ============================================
+   诊断起点三选一（DiagnosisEntry）+ 一段话自述（SelfReportProfile）
+   玻璃卡 / 蓝紫渐变，与全站一致
+   ============================================ */
+.de {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.de__lead-text {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+.de__lead-text strong { color: var(--gray-800); }
+
+.de__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.de-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--gray-200);
+  background: var(--bg-card);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: var(--shadow-glass);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+.de-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0.85;
+}
+.de-card--high::before { background: linear-gradient(90deg, transparent, var(--success-500), transparent); }
+.de-card--mid::before { background: linear-gradient(90deg, transparent, var(--primary-500), var(--purple-500), transparent); }
+.de-card--low::before { background: linear-gradient(90deg, transparent, var(--warning-500), transparent); }
+.de-card--high:hover { border-color: var(--success-300); }
+.de-card--mid:hover { border-color: var(--primary-300); }
+.de-card--low:hover { border-color: var(--warning-300); }
+
+.de-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.de-card__icon { font-size: 1.8rem; }
+.de-card__prov {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.de-card__prov-dot { width: 6px; height: 6px; border-radius: 50%; }
+.de-card__prov--high { background: var(--success-50); color: var(--success-700); }
+.de-card__prov--high .de-card__prov-dot { background: var(--success-500); box-shadow: 0 0 6px var(--success-400); }
+.de-card__prov--mid { background: var(--primary-50); color: var(--primary-700); }
+.de-card__prov--mid .de-card__prov-dot { background: var(--primary-500); }
+.de-card__prov--low { background: var(--warning-50); color: var(--warning-700); }
+.de-card__prov--low .de-card__prov-dot { background: var(--warning-500); }
+
+.de-card__title { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); }
+.de-card__desc { font-size: 0.82rem; line-height: 1.6; color: var(--gray-600); }
+.de-card__bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 0 4px;
+  padding: 0;
+}
+.de-card__bullets li {
+  font-size: 0.76rem;
+  color: var(--gray-500);
+  padding-left: 16px;
+  position: relative;
+}
+.de-card__bullets li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--primary-500);
+  font-weight: 700;
+}
+.de-card__cta {
+  margin-top: auto;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--primary-600);
+}
+.de-card--high .de-card__cta { color: var(--success-600); }
+.de-card--low .de-card__cta { color: var(--warning-600); }
+
+.de__secondary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.de__secondary-hint { font-size: 0.8rem; color: var(--gray-500); }
+.de__secondary-link {
+  background: none;
+  border: none;
+  color: var(--primary-600);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.de__secondary-link:hover { text-decoration: underline; }
+
+@media (max-width: 920px) {
+  .de__cards { grid-template-columns: 1fr; }
+}
+
+/* ========== 一段话自述（SelfReportProfile） ========== */
+.sr {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+.sr__main { display: flex; flex-direction: column; gap: var(--space-md); }
+.sr__title { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); }
+.sr__desc { font-size: 0.84rem; line-height: 1.6; color: var(--gray-600); }
+.sr__textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  background: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--gray-800);
+  resize: vertical;
+}
+.sr__textarea:focus {
+  outline: none;
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.sr__examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.sr__example {
+  font-size: 0.74rem;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--gray-300);
+  background: var(--gray-50);
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sr__example:hover { border-color: var(--primary-400); color: var(--primary-700); }
+.sr__actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sr__back {
+  background: none;
+  border: none;
+  color: var(--gray-500);
+  font-size: 0.84rem;
+  cursor: pointer;
+  padding: 0;
+}
+.sr__back:hover { color: var(--gray-700); }
+.sr__parse {
+  padding: 11px 22px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+.sr__parse:hover:not(:disabled) { transform: translateY(-1px); }
+.sr__parse:disabled { background: var(--gray-200); color: var(--gray-400); cursor: not-allowed; }
+.sr__parsing { display: inline-flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--primary-600); }
+.sr__hint { font-size: 0.74rem; color: var(--gray-400); line-height: 1.6; }
+
+@media (max-width: 920px) {
+  .sr { grid-template-columns: 1fr; }
+}

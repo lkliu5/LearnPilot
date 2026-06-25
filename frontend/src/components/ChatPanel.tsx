@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './ChatPanel.css'
 
@@ -31,6 +31,8 @@ interface ChatPanelProps {
   sending?: boolean
   /** 会话锁定（如诊断已完成）：输入 / chips / 发送全部禁用 */
   locked?: boolean
+  /** 对话区与输入区之间的常驻插槽（如画像诊断的微测/偏好作答卡，始终可见、不被遮挡） */
+  belowChat?: ReactNode
   className?: string
 }
 
@@ -49,6 +51,7 @@ export default function ChatPanel({
   sendLabel = '发送',
   sending = false,
   locked = false,
+  belowChat,
   className = '',
 }: ChatPanelProps) {
   const chatRef = useRef<HTMLDivElement>(null)
@@ -95,6 +98,8 @@ export default function ChatPanel({
           </div>
         )}
       </div>
+
+      {belowChat && <div className="socratic__slot">{belowChat}</div>}
 
       <div className="socratic__quick">
         {chips.map((q) => (

@@ -66,6 +66,14 @@
   30% { opacity: 1; transform: translateY(-3px); }
 }
 
+/* 对话区与输入区之间的常驻插槽：自身不挤压，超高时内部滚动（作答卡始终完整可见） */
+.socratic__slot {
+  flex: 0 0 auto;
+  max-height: 45%;
+  overflow-y: auto;
+  margin-top: var(--space-sm);
+}
+
 .socratic__quick {
   display: flex;
   gap: 8px;

@@ -34,7 +34,10 @@ export interface PortraitDimension {
   optionKey?: string
   /** 置信度 0-1；inferred 维度须偏低（≤0.6） */
   confidence: number
-  source: 'dialogue' | 'manual' | 'inferred' | 'diagnostic'
+  /** 画像维来源（决定来源徽章 + 整体置信度）：
+   *  - diagnostic 诊断微测实测（高）· dialogue 对话采集 · manual 手填 · inferred 推断（低）
+   *  - self_report 一段话自述解析（中，自陈非实测）· default 跳过问答的零基础默认（未测） */
+  source: 'dialogue' | 'manual' | 'inferred' | 'diagnostic' | 'self_report' | 'default'
   updatedAt?: string
 }
 
@@ -107,6 +110,105 @@ export const CANONICAL_DIMS: { key: string; label: string; kind: DimKind }[] = [
   { key: 'learning_goal', label: '学习目标', kind: 'subjective' },
   { key: 'prior_experience', label: '先验经验', kind: 'subjective' },
 ]
+
+/* ============ 三入口统一画像产物（能力 + 偏好 + 主观，同一套 CANONICAL_DIMS） ============ */
+
+/** 画像整体来源/置信度档位（任务 3）：三入口产出同一套结构，仅来源与置信度不同。 */
+export type ProvenanceTier = 'measured' | 'self_report' | 'default' | 'manual'
+export interface PortraitProvenance {
+  tier: ProvenanceTier
+  /** 徽章主文案，如「实测 · 高置信」 */
+  label: string
+  /** 副说明，便于答辩讲「如实标注可信度」 */
+  hint: string
+  /** 置信度配色档：high/mid/low（复用 sp-conf 配色） */
+  tone: 'high' | 'mid' | 'low'
+  /** 各维平均置信度（0-100） */
+  confidencePct: number
+}
+
+/**
+ * 由画像维度的 source/confidence **派生**整体来源与置信度（复用既有字段，不另造一套）：
+ * 含 diagnostic（诊断微测实测）→ 实测·高；否则含 self_report → 自述·中；
+ * 否则含 default → 未测·默认零基础；否则 manual/其它 → 自填·中。
+ */
+export function portraitProvenance(dims: PortraitDimension[]): PortraitProvenance {
+  const sources = new Set(dims.map((d) => d.source))
+  const avg = dims.length
+    ? Math.round((dims.reduce((s, d) => s + (d.confidence ?? 0), 0) / dims.length) * 100)
+    : 0
+  if (sources.has('diagnostic'))
+    return { tier: 'measured', label: '实测 · 高置信', hint: '能力由诊断微测按答题行为反推，非自陈', tone: 'high', confidencePct: avg }
+  if (sources.has('self_report'))
+    return { tier: 'self_report', label: '自述 · 中置信', hint: '据你的一段话描述解析推断，非实测，建议后续做题校准', tone: 'mid', confidencePct: avg }
+  if (sources.has('default'))
+    return { tier: 'default', label: '未测 · 默认零基础', hint: '已跳过测评，按零基础默认建立，路径将从头学起', tone: 'low', confidencePct: avg }
+  if (sources.has('dialogue'))
+    return { tier: 'measured', label: '对话采集 · 中置信', hint: '由对话采集主观信息，能力维待微测后升级为实测·高置信', tone: 'mid', confidencePct: avg }
+  return { tier: 'manual', label: '自填 · 中置信', hint: '据你手动填写的信息建立', tone: 'mid', confidencePct: avg }
+}
+
+/** 一段话自述解析的输入（与 4.1 /profile/parse 回包结构对齐，仅取所需字段）。 */
+export interface SelfReportInput {
+  education?: string
+  major?: string
+  goal?: string
+  skills: { name: string; level: number }[]
+}
+
+/**
+ * 入口②「一段话描述」：把 /profile/parse 的解析结果映射为同一套 CANONICAL_DIMS 画像。
+ * 能力(knowledge_base)由自述技能估分（source=self_report，中置信）；主观维同源；
+ * 偏好维一段话通常未涉及 → 标 inferred 低置信（待对话/学习中校准），保持六维结构齐整。
+ */
+export function selfReportPortrait(p: SelfReportInput): PortraitDimension[] {
+  const ts = now()
+  const skills = p.skills.length ? p.skills : [{ name: '综合', level: 50 }]
+  const avg = Math.round(skills.reduce((s, k) => s + k.level, 0) / skills.length)
+  const weakest = skills.reduce((min, k) => (k.level < min.level ? k : min), skills[0])
+  const verdict = avg >= 80 ? '扎实' : avg >= 50 ? '一般' : '薄弱'
+  const label = (key: string) => CANONICAL_DIMS.find((d) => d.key === key)?.label ?? key
+  return [
+    { key: 'knowledge_base', label: label('knowledge_base'), kind: 'ability', value: verdict, score: avg,
+      basis: `据你的自述描述解析估计（非实测）：${skills.map((k) => `${k.name}≈${k.level}`).join('、')}。`,
+      confidence: 0.55, source: 'self_report', updatedAt: ts },
+    { key: 'error_preference', label: label('error_preference'), kind: 'preference',
+      value: `${weakest.name}偏薄弱（自述）`, confidence: 0.45, source: 'self_report', updatedAt: ts },
+    { key: 'cognitive_style', label: label('cognitive_style'), kind: 'preference',
+      value: '待对话/学习中校准', confidence: 0.4, source: 'inferred', updatedAt: ts },
+    { key: 'learning_pace', label: label('learning_pace'), kind: 'preference',
+      value: '待对话/学习中校准', confidence: 0.4, source: 'inferred', updatedAt: ts },
+    { key: 'learning_goal', label: label('learning_goal'), kind: 'subjective',
+      value: p.goal || '提升能力', confidence: 0.6, source: 'self_report', updatedAt: ts },
+    { key: 'prior_experience', label: label('prior_experience'), kind: 'subjective',
+      value: [p.education, p.major].filter(Boolean).join(' · ') || '自述背景', confidence: 0.55, source: 'self_report', updatedAt: ts },
+  ]
+}
+
+/**
+ * 入口③「跳过 → 零基础」：产出零基础默认画像（同一套 CANONICAL_DIMS）。
+ * 能力未测（无 score，标未测）、各偏好取默认、主观零基础起步；全部 source=default 低置信。
+ * 不写任何 Mastery passed → 学习路径全节点未开始、绝不出现「已完成」。
+ */
+export function zeroBasePortrait(): PortraitDimension[] {
+  const ts = now()
+  const label = (key: string) => CANONICAL_DIMS.find((d) => d.key === key)?.label ?? key
+  return [
+    { key: 'knowledge_base', label: label('knowledge_base'), kind: 'ability',
+      value: '零基础 · 各知识点未掌握', basis: '未做诊断微测，按零基础默认起步（未测）。',
+      confidence: 0.3, source: 'default', updatedAt: ts },
+    { key: 'cognitive_style', label: label('cognitive_style'), kind: 'preference',
+      value: '默认（待学习中校准）', confidence: 0.3, source: 'default', updatedAt: ts },
+    { key: 'learning_pace', label: label('learning_pace'), kind: 'preference',
+      value: '默认（待学习中校准）', confidence: 0.3, source: 'default', updatedAt: ts },
+    { key: 'error_preference', label: label('error_preference'), kind: 'preference',
+      value: '默认（待学习中校准）', confidence: 0.3, source: 'default', updatedAt: ts },
+    { key: 'learning_goal', label: label('learning_goal'), kind: 'subjective',
+      value: '零基础系统入门', confidence: 0.3, source: 'default', updatedAt: ts },
+    { key: 'prior_experience', label: label('prior_experience'), kind: 'subjective',
+      value: '暂无（零基础起步）', confidence: 0.3, source: 'default', updatedAt: ts },
+  ]
+}
 
 /* ============ 对外统一入口（按总开关切真实 / mock） ============ */
 

@@ -6,11 +6,13 @@ import RadarChart from '../components/charts/RadarChart'
 import JobMarketPanel from '../components/JobMarketPanel'
 import { revealItem } from '../components/Reveal'
 import ProfileDialogue from '../components/ProfileDialogue'
+import DiagnosisEntry from '../components/DiagnosisEntry'
+import SelfReportProfile from '../components/SelfReportProfile'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
 import { usePortrait } from '../store/portrait'
 import type { JobMarket } from '../services/jobMarket'
-import { CANONICAL_DIMS, saveStudentPortrait, type PortraitDimension } from '../services/profileDialogue'
+import { CANONICAL_DIMS, saveStudentPortrait, zeroBasePortrait, type PortraitDimension } from '../services/profileDialogue'
 import { generateNarrative, type Narrative, type SourceRef } from '../services/profileNarrative'
 import { USE_REAL_API } from '../services/api'
 import { generateNarrativeApi, parseProfile } from '../services/profile'
@@ -132,8 +134,9 @@ const STEP_LABELS = ['信息采集', '确认画像', '岗位对标']
 export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const completeDiagnosis = useJourney((s) => s.completeDiagnosis)
   const setPortrait = usePortrait((s) => s.setPortrait)
-  /* 主路径=对话式诊断（功能 1：摒弃繁琐表单）；form=次要入口（传统表单 + 材料上传，保留不删） */
-  const [view, setView] = useState<'dialogue' | 'form'>('dialogue')
+  /* 诊断起点三选一（任务 2）：choose=入口选择 · dialogue=做题式诊断 · selfreport=一段话自述
+     · form=传统表单/材料上传（次要入口，保留不删）。三入口产出同一套画像、仅来源置信度不同。 */
+  const [mode, setMode] = useState<'choose' | 'dialogue' | 'selfreport' | 'form'>('choose')
   const [step, setStep] = useState<Step>('collect')
 
   /* Step1 采集状态（raw 为真实 File，仅联调上传用，不参与 UI 渲染）*/
@@ -279,52 +282,75 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
     narrative?.sources.find((s) => s.id === activeSource)?.label ??
     materials.find((m) => m.id === activeSource)?.label
 
-  const finish = (jobInfo?: { targetJobName: string; matchPct: number }) => {
-    // 表单入口：把多模态输入映射为「与对话诊断同一套 canonical 维度」的权威画像（不再另造
-    // 一套知识点雷达），写入 store（学情概览据此合成）；联调时覆盖写后端 StudentPortrait，
-    // 使三条路径产出同一份、同维度的权威画像，重做即覆盖、不分叉。
-    if (draft) {
-      const snapshot = toCanonicalPortrait(draft)
-      setPortrait(snapshot)
-      if (USE_REAL_API) {
-        saveStudentPortrait(snapshot).catch((e) => console.error('[profile] 画像覆盖写入失败', e))
-      }
+  /* 画像覆盖写：写入 store（学情概览据此合成）；联调时覆盖写后端 StudentPortrait。
+     三入口共用——保证产出同一份、同维度的权威画像，重做即覆盖、不分叉。 */
+  const writePortrait = (snapshot: PortraitDimension[]) => {
+    setPortrait(snapshot)
+    if (USE_REAL_API) {
+      saveStudentPortrait(snapshot).catch((e) => console.error('[profile] 画像覆盖写入失败', e))
     }
+  }
+
+  const finish = (jobInfo?: { targetJobName: string; matchPct: number }) => {
+    // 表单入口：把多模态输入映射为「与对话诊断同一套 canonical 维度」的权威画像（不再另造一套雷达）。
+    // 对话入口画像已由 ProfileDialogue 自行落库，此处 draft 为空、不重复写。
+    if (draft) writePortrait(toCanonicalPortrait(draft))
     // 对话路径：用对话算出的岗位匹配（jobInfo）；表单路径：用 Step3 岗位对标结果
     completeDiagnosis(jobInfo ?? (targetJob ? { targetJobName: targetJob.name, matchPct } : undefined))
     onNavigate?.('learning-path')
   }
 
-  return (
-    <div className={`profile-builder ${view === 'dialogue' ? 'profile-builder--wide' : ''}`}>
-      <PageHeader
-        title="学习者画像诊断"
-        highlight="画像"
-        subtitle={
-          view === 'dialogue'
-            ? '摒弃繁琐表单——用自然语言对话自动抽取特征，右侧动态画像随聊随长'
-            : '多模态采集你的能力信息，结构化确认后与目标岗位实时对标，生成针对性学习路径'
-        }
-      />
+  /* 入口②/③ 直接拿到「同一套画像结构」的成品维度 → 覆盖写并完成诊断（不带岗位匹配）。
+     零基础画像不写任何 Mastery passed → 学习路径全节点未开始、绝不出现「已完成」。 */
+  const finishWithPortrait = (dims: PortraitDimension[]) => {
+    writePortrait(dims)
+    completeDiagnosis()
+    onNavigate?.('learning-path')
+  }
 
-      {/* ============ 主路径：对话式诊断 ============ */}
-      {view === 'dialogue' && (
+  const SUBTITLE: Record<typeof mode, string> = {
+    choose: '三种入口任你选——做题式 / 一段话描述 / 直接跳过，产出同一套画像，如实标注来源与可信度',
+    dialogue: '摒弃繁琐表单——用自然语言对话自动抽取特征，右侧动态画像随聊随长',
+    selfreport: '用一段话描述你的水平与目标，AI 自动解析成「能力 + 偏好」画像（自述 · 中置信）',
+    form: '多模态采集你的能力信息，结构化确认后与目标岗位实时对标，生成针对性学习路径',
+  }
+
+  return (
+    <div className={`profile-builder ${mode !== 'form' ? 'profile-builder--wide' : ''}`}>
+      <PageHeader title="学习者画像诊断" highlight="画像" subtitle={SUBTITLE[mode]} />
+
+      {/* ============ 诊断起点：三选一 ============ */}
+      {mode === 'choose' && (
+        <DiagnosisEntry
+          onDialogue={() => setMode('dialogue')}
+          onSelfReport={() => setMode('selfreport')}
+          onSkip={() => finishWithPortrait(zeroBasePortrait())}
+          onForm={() => setMode('form')}
+        />
+      )}
+
+      {/* ============ 入口①：做题式（对话 + 微测 + 偏好），实测·高置信 ============ */}
+      {mode === 'dialogue' && (
         <>
           <ProfileDialogue onFinish={finish} />
           <div className="pb-secondary">
-            <span className="pb-secondary__hint">更习惯填表，或想补充材料？</span>
-            <button className="pb-secondary__link" onClick={() => setView('form')}>
-              快速填写 / 补充画像（传统表单 · 简历 / 图片上传）→
+            <button className="pb-secondary__link" onClick={() => setMode('choose')}>
+              ← 换一种诊断方式（一段话描述 / 直接跳过）
             </button>
           </div>
         </>
       )}
 
+      {/* ============ 入口②：一段话自述（复用 /profile/parse），自述·中置信 ============ */}
+      {mode === 'selfreport' && (
+        <SelfReportProfile onFinish={finishWithPortrait} onBack={() => setMode('choose')} />
+      )}
+
       {/* ============ 次要入口：传统表单 + 材料上传（保留原 3 步流程） ============ */}
-      {view === 'form' && (
+      {mode === 'form' && (
       <>
-      <button className="pb-backto-dialogue" onClick={() => setView('dialogue')}>
-        ← 返回对话诊断
+      <button className="pb-backto-dialogue" onClick={() => setMode('choose')}>
+        ← 返回诊断入口
       </button>
 
       {/* 三步进度条 */}

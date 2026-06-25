@@ -5,16 +5,16 @@
 
 .pd {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: var(--space-lg);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: var(--space-xl);
   align-items: stretch;
-  /* 双栏各自内部滚动、整页不再被右侧画像撑高：把网格高度限定在视口内
-     （offset≈页头 + 主区上下内边距 + 底部「快速填写」入口，实测约 294px）*/
-  height: calc(100vh - 300px);
-  min-height: 480px;
+  /* 双栏各自内部滚动、整页不再被右侧画像撑高：把网格高度限定在视口内并给足高度，
+     避免对话区拥挤（offset≈页头 + 主区上下内边距 + 底部入口）*/
+  height: calc(100vh - 230px);
+  min-height: 620px;
 }
 
-/* 左：对话卡（复用玻璃卡 + 顶部光晕；收紧内边距以容纳对话面板） */
+/* 左：对话卡（复用玻璃卡 + 顶部光晕；充足内边距给对话呼吸感） */
 .pd__chat.profile-builder__card {
   padding: var(--space-lg) var(--space-xl);
   display: flex;
@@ -23,10 +23,11 @@
   overflow: hidden;
 }
 
-/* 对话面板填满左栏高度（覆盖 ChatPanel 默认 560px 固定高）：
-   内部 .socratic__chat 自滚动、输入框作为末个 flex 项常驻底部 */
+/* 对话面板填满左栏高度（覆盖 ChatPanel 默认 560px 固定高）：用 flex 占满而非 height:100%，
+   使「微测/偏好作答卡」插槽与输入框都能稳占底部、对话区自适应收缩内滚，作答卡绝不被裁切。 */
 .pd .socratic {
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
   min-height: 0;
 }
 
@@ -48,7 +49,9 @@
     overflow: visible;
   }
   .pd .socratic {
-    height: 560px;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 520px;
   }
   .pd__aside {
     height: auto;
@@ -127,6 +130,10 @@
   font-size: 0.66rem;
   color: var(--gray-500);
   margin-top: 4px;
+}
+
+.sp-panel__prov {
+  margin-bottom: var(--space-md);
 }
 
 .sp-panel__progress {
@@ -326,7 +333,6 @@
 
 /* ── 引导式交互卡片（C2 三段式：微测题 / 偏好选择题，点选即作答） ── */
 .pd-itx {
-  margin-top: var(--space-md);
   padding: var(--space-md);
   border-radius: var(--radius-lg);
   border: 1px solid var(--gray-200);
@@ -431,3 +437,38 @@
 .sp-subj__value--ghost { color: var(--gray-400); font-style: italic; }
 
 .sp-srctag--diagnostic { background: var(--primary-100); color: var(--primary-700); }
+.sp-srctag--self_report {
+  background: var(--purple-50);
+  color: var(--purple-700);
+  border: 1px solid var(--purple-200);
+}
+.sp-srctag--default {
+  background: var(--gray-100);
+  color: var(--gray-500);
+  border: 1px dashed var(--gray-300);
+}
+
+/* ========== 画像来源/置信度徽章（任务 3：实测·高 / 自述·中 / 未测·默认零基础） ========== */
+.prov-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--gray-200);
+  background: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+.prov-badge__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.prov-badge__label { font-size: 0.76rem; font-weight: 700; }
+.prov-badge__pct { font-family: var(--font-mono, monospace); font-size: 0.72rem; opacity: 0.85; }
+.prov-badge--high { border-color: var(--success-200); background: var(--success-50); }
+.prov-badge--high .prov-badge__dot { background: var(--success-500); box-shadow: 0 0 6px var(--success-400); }
+.prov-badge--high .prov-badge__label { color: var(--success-700); }
+.prov-badge--mid { border-color: var(--primary-200); background: var(--primary-50); }
+.prov-badge--mid .prov-badge__dot { background: var(--primary-500); }
+.prov-badge--mid .prov-badge__label { color: var(--primary-700); }
+.prov-badge--low { border-color: var(--warning-200); background: var(--warning-50); }
+.prov-badge--low .prov-badge__dot { background: var(--warning-500); }
+.prov-badge--low .prov-badge__label { color: var(--warning-700); }
+.prov-badge__hint { font-size: 0.72rem; color: var(--gray-500); font-weight: 400; }

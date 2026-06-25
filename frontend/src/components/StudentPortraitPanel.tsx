@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { CANONICAL_DIMS, type PortraitDimension } from '../services/profileDialogue'
+import ProvenanceBadge from './ProvenanceBadge'
 
 /**
  * 对话式诊断页右侧「动态学习画像」面板（接口 38，17.2；C2 三分类呈现）。
@@ -23,6 +24,8 @@ const SOURCE_META: Record<PortraitDimension['source'], { label: string; cls: str
   inferred: { label: '推断', cls: 'inferred' },
   manual: { label: '手动填写', cls: 'manual' },
   diagnostic: { label: '微测实测', cls: 'diagnostic' },
+  self_report: { label: '自述解析', cls: 'self_report' },
+  default: { label: '默认零基础', cls: 'default' },
 }
 
 // 偏好类型码 → 图标（仅呈现，类型本身无高低之分）
@@ -72,6 +75,13 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
           <span className="sp-panel__count-label">维度已采集</span>
         </div>
       </div>
+
+      {/* 画像来源/置信度（任务 3）：让用户清楚这份画像有多可信 */}
+      {filled > 0 && (
+        <div className="sp-panel__prov">
+          <ProvenanceBadge dims={Object.values(dims)} showHint />
+        </div>
+      )}
 
       <div className="sp-panel__progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
         <motion.span

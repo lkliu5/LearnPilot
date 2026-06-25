@@ -45,6 +45,10 @@
   font-weight: 700;
 }
 
+.dashboard__prov {
+  margin-top: 10px;
+}
+
 .dashboard__score-meta {
   display: flex;
   align-items: center;

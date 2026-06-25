@@ -7,6 +7,8 @@ import CountUp from '../components/CountUp'
 import BlurText from '@/components/BlurText/BlurText'
 import GuideCard from '../components/GuideCard'
 import LearningEvalPanel from '../components/LearningEvalPanel'
+import ProvenanceBadge from '../components/ProvenanceBadge'
+import '../components/ProfileDialogue.css'
 import { useScrollReveal } from '../hooks/useScrollReveal'
 import { useMastery } from '../store/mastery'
 import { useJourney } from '../store/journey'
@@ -180,6 +182,12 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
           <p className="dashboard__subtitle">
             您的AI学习旅程已开启，当前处于 <strong>{profileData.overall_level}</strong> 水平
           </p>
+          {/* 画像来源/置信度（任务 3）：让用户清楚这份画像有多可信（实测/自述/未测默认） */}
+          {portraitDims.length > 0 && (
+            <div className="dashboard__prov">
+              <ProvenanceBadge dims={portraitDims} showHint />
+            </div>
+          )}
           {betterThanPct !== null && (
             <div className="dashboard__score-meta">
               <span className="dashboard__score-comparison">超过了 {betterThanPct}% 的同级学习者</span>

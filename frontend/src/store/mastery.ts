@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { CURRENT_KP_ID } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { checkKp, getMastery, passKp } from '../services/mastery'
 
@@ -25,8 +24,10 @@ interface MasteryState {
   reset: () => void
 }
 
-/** 初始：当前知识点处于"学习中"，其余按各自种子数据 */
-const initial = (): Record<string, KPStatus> => ({ [CURRENT_KP_ID]: 'learning' })
+/** 初始：空——掌握/学习状态只由真实学习行为（生成讲义→learning、通过测试→passed）写入，
+ *  不预置任何 in_progress/completed。保证零基础新用户「路径全节点未开始」（与问题1修复一致）。
+ *  资源页对「当前知识点」无状态时回落 'learning'（见 LearningResource `?? 'learning'`），故不依赖此种子。 */
+const initial = (): Record<string, KPStatus> => ({})
 
 export const useMastery = create<MasteryState>()(
   persist(
