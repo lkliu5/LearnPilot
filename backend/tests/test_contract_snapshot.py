@@ -598,19 +598,24 @@ def test_29_dashboard_overview(client, learner):
     data = _data(client.get(f"{API}/dashboard/overview", headers=learner))
     _exact(data, {"overall_level", "overall_score", "knowledge_graph_coverage",
                   "learned_resources", "strong_topics", "weak_topics",
-                  "radar", "comparison", "targetSummary"})
+                  "radar", "preferences", "comparison", "targetSummary"})
     assert isinstance(data["overall_score"], (int, float))
     assert 0 <= data["knowledge_graph_coverage"] <= 1
     for topic in data["strong_topics"] + data["weak_topics"]:
         _exact(topic, {"name", "mastery"})
     _exact(data["radar"], {"dimensions", "values"})
-    # 雷达由该用户真实 StudentPortrait 异质维度派生（C1-c 真实化）——轴数与取值随画像而定，
-    # 不再恒等于固定 6 知识点维；此处只校验结构：维度名 / 轴值成对且类型自洽。
+    # C2：雷达只含能力维（知识点掌握度），由微测/quiz 写入 Mastery 的能力分驱动——
+    # 轴值类型自洽；偏好维改类型标签、不上 0-100 轴。
     assert isinstance(data["radar"]["dimensions"], list)
     assert isinstance(data["radar"]["values"], list)
     assert len(data["radar"]["dimensions"]) == len(data["radar"]["values"])
     assert all(isinstance(name, str) for name in data["radar"]["dimensions"])
     assert all(isinstance(v, (int, float)) for v in data["radar"]["values"])
+    # preferences：偏好类型标签（无分数、不上轴）
+    assert isinstance(data["preferences"], list)
+    for pref in data["preferences"]:
+        _exact(pref, {"key", "label", "value", "optionKey"})
+        assert "score" not in pref
     _exact(data["comparison"], {"betterThanPct"})
     _exact(data["targetSummary"], {"hasDiagnosed", "targetJobName", "matchPct"})
 

@@ -77,9 +77,12 @@ async def diagnosis_complete(
 
 
 @router.get("/profile/ability-portrait")
-async def ability_portrait(user: User = Depends(get_current_user)):
-    """能力雷达数据（接口文档 4.4）。"""
-    data = profile_service.ability_portrait(user)
+async def ability_portrait(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """能力雷达数据（接口文档 4.4，C2 由微测/quiz 写入的 Mastery 能力分驱动）。"""
+    data = profile_service.ability_portrait(db, user)
     return success(data)
 
 
@@ -102,6 +105,7 @@ async def dialogue(
             user_id=user.id,
             session_id=body.sessionId,
             message=body.message,
+            answer=body.answer,
             context=body.context,
         )
         return StreamingResponse(
@@ -115,6 +119,7 @@ async def dialogue(
             user_id=user.id,
             session_id=body.sessionId,
             message=body.message,
+            answer=body.answer,
             context=body.context,
         )
     except LLMGenerationError as exc:

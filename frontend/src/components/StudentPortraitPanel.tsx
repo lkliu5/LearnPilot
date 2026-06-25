@@ -2,16 +2,16 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { CANONICAL_DIMS, type PortraitDimension } from '../services/profileDialogue'
 
 /**
- * 对话式诊断页右侧「动态学习画像」面板（接口 38，17.2 异质 ≥6 维）。
- * 独立于 Dashboard 的固定 6 知识点掌握度雷达（4.4 /profile/ability-portrait）——
- * 二者数据结构、维度集、用途均不同，并行展示，互不替换。
+ * 对话式诊断页右侧「动态学习画像」面板（接口 38，17.2；C2 三分类呈现）。
  *
- * 异质呈现：可量化维度（带 score）走进度条 + mono 数字；定性维度显示自然语言 value；
- * 每张卡片带 confidence + source 徽章（dialogue/inferred/manual）体现可溯源与防幻觉。
- * 维度随对话从无到有，用 Framer Motion 渐入。
+ * C2 关键修复——**能力打分、偏好归类型、主观描述，分区呈现、不再混进同一 0-100 轴**：
+ *   - 能力维（ability）：进度条 + 分数 + 「依据 basis」（行为微测反推，可解释、防臆造）；
+ *   - 偏好维（preference）：类型标签 + 图标（🖼 图像型 · 稳步细钻 · 易概念混淆），**无分数**；
+ *   - 主观维（subjective）：自然语言描述（学习目标 / 先验经验），不强行打分。
+ *
+ * 与 Dashboard 的 4.4 知识点能力雷达并行——二者用途不同（此处为诊断过程的实时画像）。
  */
 interface Props {
-  /** 已采集维度，按 key 索引（对话 event:portrait 增量合并后的结果） */
   dims: Record<string, PortraitDimension>
   updatedAt?: string
   complete: boolean
@@ -22,6 +22,14 @@ const SOURCE_META: Record<PortraitDimension['source'], { label: string; cls: str
   dialogue: { label: '对话采集', cls: 'dialogue' },
   inferred: { label: '推断', cls: 'inferred' },
   manual: { label: '手动填写', cls: 'manual' },
+  diagnostic: { label: '微测实测', cls: 'diagnostic' },
+}
+
+// 偏好类型码 → 图标（仅呈现，类型本身无高低之分）
+const PREF_ICON: Record<string, string> = {
+  visual: '🖼', textual: '📖', example: '🧩',
+  overview: '⚡', deepdive: '🧗',
+  concept: '🌀', calculation: '🔢', coding: '💻',
 }
 
 function confLevel(c: number): 'high' | 'mid' | 'low' {
@@ -37,11 +45,15 @@ function fmtTime(iso?: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const ABILITY = CANONICAL_DIMS.filter((c) => c.kind === 'ability')
+const PREFERENCE = CANONICAL_DIMS.filter((c) => c.kind === 'preference')
+const SUBJECTIVE = CANONICAL_DIMS.filter((c) => c.kind === 'subjective')
+
 export default function StudentPortraitPanel({ dims, updatedAt, complete, onFinish }: Props) {
-  const acquired = CANONICAL_DIMS.filter((d) => dims[d.key])
-  const filled = acquired.length
+  const filled = CANONICAL_DIMS.filter((d) => dims[d.key]).length
   const total = CANONICAL_DIMS.length
   const pct = Math.round((filled / total) * 100)
+  const has = (keys: { key: string }[]) => keys.some((c) => dims[c.key])
 
   return (
     <div className="sp-panel">
@@ -50,7 +62,7 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
           <div className="sp-panel__title">
             <span className="sp-panel__spark">✦</span> 动态学习画像
           </div>
-          <div className="sp-panel__sub">随对话实时构建 · 异质 {total} 维 · 防幻觉可溯源</div>
+          <div className="sp-panel__sub">能力靠测 · 偏好归类型 · 主观靠对话</div>
         </div>
         <div className="sp-panel__count">
           <span className="sp-panel__count-num">
@@ -61,7 +73,6 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
         </div>
       </div>
 
-      {/* 整体采集进度 */}
       <div className="sp-panel__progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
         <motion.span
           className="sp-panel__progress-fill"
@@ -71,43 +82,31 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
         />
       </div>
 
-      {/* 维度卡片：异质呈现，从无到有渐入 */}
-      <div className="sp-cards">
-        {CANONICAL_DIMS.map((c) => {
+      {/* ① 能力画像：打分 + 依据（行为微测反推，可解释） */}
+      <section className="sp-sec">
+        <div className="sp-sec__title sp-sec__title--ability">能力画像 · 测出来的</div>
+        {ABILITY.map((c) => {
           const dim = dims[c.key]
           return (
             <AnimatePresence mode="wait" key={c.key}>
               {dim ? (
-                <motion.div
-                  key="filled"
-                  className="sp-card"
-                  initial={{ opacity: 0, y: 12, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <div className="sp-card__top">
-                    <span className="sp-card__label">{dim.label}</span>
-                    <span className={`sp-srctag sp-srctag--${SOURCE_META[dim.source].cls}`}>
-                      {SOURCE_META[dim.source].label}
-                    </span>
+                <motion.div key="f" className="sp-ability" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className="sp-ability__top">
+                    <span className="sp-ability__label">{dim.label}</span>
+                    <span className={`sp-srctag sp-srctag--${SOURCE_META[dim.source].cls}`}>{SOURCE_META[dim.source].label}</span>
                   </div>
-
-                  {/* 可量化维度：进度条 + mono 数字；定性维度：自然语言取值 */}
                   {typeof dim.score === 'number' ? (
-                    <div className="sp-card__score">
-                      <div className="sp-card__bar">
-                        <motion.span
-                          className="sp-card__bar-fill"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${dim.score}%` }}
-                          transition={{ duration: 0.6, ease: 'easeOut' }}
-                        />
+                    <div className="sp-ability__score">
+                      <div className="sp-ability__bar">
+                        <motion.span className="sp-ability__bar-fill" initial={{ width: 0 }} animate={{ width: `${dim.score}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
                       </div>
-                      <span className="sp-card__score-num">{dim.score}</span>
+                      <span className="sp-ability__num">{dim.score}</span>
                     </div>
-                  ) : null}
-                  <div className="sp-card__value">{dim.value}</div>
-
+                  ) : (
+                    <div className="sp-ability__untested">未测 · 低置信（诊断微测未作答，不臆造分数）</div>
+                  )}
+                  <div className="sp-ability__verdict">{dim.value}</div>
+                  {dim.basis && <div className="sp-ability__basis">依据：{dim.basis}</div>}
                   <div className="sp-card__foot">
                     <span className={`sp-conf sp-conf--${confLevel(dim.confidence)}`}>
                       <span className="sp-conf__dot" />
@@ -117,32 +116,59 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
                   </div>
                 </motion.div>
               ) : (
-                <motion.div key="ghost" className="sp-card sp-card--ghost" initial={false}>
-                  <div className="sp-card__top">
-                    <span className="sp-card__label">{c.label}</span>
-                    <span className="sp-card__pending">待采集</span>
-                  </div>
-                  <div className="sp-card__ghostline" />
-                  <div className="sp-card__ghostline sp-card__ghostline--short" />
+                <motion.div key="g" className="sp-ability sp-ability--ghost" initial={false}>
+                  <span className="sp-ability__label">{c.label}</span>
+                  <span className="sp-card__pending">待微测</span>
                 </motion.div>
               )}
             </AnimatePresence>
           )
         })}
-      </div>
+      </section>
 
-      {/* 完成衔接（17.1 diagnosisComplete）：沿用既有完成流程，导向学习路径 */}
+      {/* ② 偏好画像：类型标签（无分数、不上 0-100 轴） */}
+      <section className="sp-sec">
+        <div className="sp-sec__title sp-sec__title--pref">偏好画像 · 归类型不打分</div>
+        <div className="sp-pref">
+          {PREFERENCE.map((c) => {
+            const dim = dims[c.key]
+            return dim ? (
+              <motion.span key={c.key} className="sp-pref__tag" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+                <span className="sp-pref__icon">{(dim.optionKey && PREF_ICON[dim.optionKey]) || '◆'}</span>
+                <span className="sp-pref__type">{dim.value}</span>
+                <span className="sp-pref__dim">{dim.label}</span>
+              </motion.span>
+            ) : (
+              <span key={c.key} className="sp-pref__tag sp-pref__tag--ghost">
+                <span className="sp-pref__icon">◇</span>
+                <span className="sp-pref__type">待选择</span>
+                <span className="sp-pref__dim">{c.label}</span>
+              </span>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ③ 主观信息：对话采集的描述（不打分） */}
+      <section className="sp-sec">
+        <div className="sp-sec__title sp-sec__title--subj">主观信息 · 对话采集</div>
+        {SUBJECTIVE.map((c) => {
+          const dim = dims[c.key]
+          return (
+            <div className="sp-subj" key={c.key}>
+              <span className="sp-subj__label">{dim?.label ?? c.label}</span>
+              <span className={`sp-subj__value ${dim ? '' : 'sp-subj__value--ghost'}`}>{dim ? dim.value : '待对话采集'}</span>
+            </div>
+          )
+        })}
+      </section>
+
       <AnimatePresence>
         {complete && (
-          <motion.div
-            className="sp-done"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div className="sp-done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <div className="sp-done__text">
               <strong>诊断完成</strong>
-              <span>画像维度已足够，可据此生成针对性学习路径</span>
+              <span>能力已测出、偏好已归类，可据此生成针对性学习路径</span>
             </div>
             <button className="sp-done__btn" onClick={onFinish}>
               生成针对性学习路径 →
@@ -152,9 +178,9 @@ export default function StudentPortraitPanel({ dims, updatedAt, complete, onFini
       </AnimatePresence>
 
       <p className="sp-panel__note">
-        画像严格基于对话内容抽取，无法明确判断的维度不臆测；推断维度（
-        <span className="sp-srctag sp-srctag--inferred sp-srctag--inline">推断</span>）置信度偏低，
-        可在学习 / 测验中「随学随新」。{updatedAt && ` 更新于 ${fmtTime(updatedAt)}`}
+        能力画像由「诊断微测」按答题行为反推、带依据，不靠自陈；偏好画像只归类型、不打分，
+        不混进 0-100 能力轴；空作答标「未测/低置信」，绝不臆造。
+        {has(PREFERENCE) && updatedAt ? ` 更新于 ${fmtTime(updatedAt)}` : ''}
       </p>
     </div>
   )

@@ -405,8 +405,8 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
         {/* Radar Chart */}
         <motion.div className="dashboard__card dashboard__card--chart" variants={itemVariants}>
           <div className="card-header">
-            <h3>知识掌握雷达图</h3>
-            <span className="card-badge">实时更新</span>
+            <h3>能力掌握雷达图</h3>
+            <span className="card-badge">微测实测</span>
           </div>
           <div className="card-content">
             <RadarChart data={radarData} />
@@ -459,6 +459,23 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
                     ))}
                   </div>
                 </div>
+                {/* C2 偏好画像：类型标签（无分数、不上雷达轴） */}
+                {profileData.preferences?.length > 0 && (
+                  <div className="ability-analysis__section">
+                    <span className="ability-analysis__label ability-analysis__label--pref">
+                      <span className="ability-analysis__dot ability-analysis__dot--pref" />
+                      学习偏好 · 归类型不打分
+                    </span>
+                    <div className="ability-pref-tags">
+                      {profileData.preferences.map((p) => (
+                        <span key={p.key} className="ability-pref-tag">
+                          <span className="ability-pref-tag__type">{p.value}</span>
+                          <span className="ability-pref-tag__dim">{p.label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 行动建议：撑满卡片下方，给出下一步 + 主色 CTA */}

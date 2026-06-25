@@ -400,8 +400,10 @@ def clean_portrait(db):
 
 
 def test_dashboard_empty_for_new_undiagnosed_user(client, clean_mastery, clean_portrait):
-    """验收 1：无画像、无 Mastery 的新用户 → 雷达/优势/盲区为空、综合分 0、
-    覆盖率/已学资源为 0（结构不变，绝不臆造）。"""
+    """验收 1（C2）：无画像、无 Mastery 的新用户 → 能力雷达 6 轴全 0（未测，不臆造）、
+    优势/盲区为空（未测 ≠ 盲区）、综合分 0、覆盖率/已学资源为 0、偏好为空。"""
+    from app.core.llm import ABILITY_DIMENSIONS
+
     headers = _login(client, "learner_001", "123456")
     data = client.get(
         "/api/v1/dashboard/overview", headers=headers
@@ -409,53 +411,62 @@ def test_dashboard_empty_for_new_undiagnosed_user(client, clean_mastery, clean_p
     for key in (
         "overall_level", "overall_score", "knowledge_graph_coverage",
         "learned_resources", "strong_topics", "weak_topics", "radar",
-        "comparison", "targetSummary",
+        "preferences", "comparison", "targetSummary",
     ):
         assert key in data, f"缺字段 {key}"
-    assert data["radar"] == {"dimensions": [], "values": []}
-    assert data["strong_topics"] == [] and data["weak_topics"] == []
+    # C2：能力雷达固定 6 知识点轴；未测 → 全 0（honest，不臆造）
+    assert data["radar"] == {"dimensions": list(ABILITY_DIMENSIONS), "values": [0] * 6}
+    assert data["strong_topics"] == [] and data["weak_topics"] == []  # 未测不计强弱
+    assert data["preferences"] == []
     assert data["overall_score"] == 0.0 and data["overall_level"] == "初学"
     assert data["knowledge_graph_coverage"] == 0.0
     assert data["learned_resources"] == 0
     assert data["comparison"]["betterThanPct"] == 0
 
 
-def test_dashboard_derived_from_portrait_and_mastery(
+def test_dashboard_derived_from_ability_and_preferences(
     client, db, clean_mastery, clean_portrait
 ):
-    """验收 2/3：overview 雷达/优势/盲区/综合分来自真实 StudentPortrait（与前端
-    synthesizeOverview 逐位一致），覆盖率/已学资源来自真实 Mastery；通过知识点
-    联动覆盖率/已学资源，但**不改变**画像派生的雷达/强弱项/综合分（两者解耦）。"""
+    """验收 2/3（C2）：overview 能力雷达/优势/盲区/综合分来自真实 Mastery 能力分（靠测）；
+    偏好以类型标签呈现、不上轴；覆盖率/已学资源来自真实 Mastery 通过状态。"""
+    from app.core.llm import ABILITY_DIMENSIONS
+    from app.services import mastery as mastery_service
+
     user = clean_portrait
+    # 偏好/主观画像（不打分、不上能力轴）
     portrait_service.apply_updates(db, user.id, _PORTRAIT_DIMS)
+    # 能力分：实测写入 Mastery（ml 强、nn 弱，其余未测）
+    mastery_service.set_baseline(db, user.id, "ml", score=80, confidence=0.45)
+    mastery_service.set_baseline(db, user.id, "nn", score=30, confidence=0.45)
     headers = _login(client, "learner_001", "123456")
 
     before = client.get(
         "/api/v1/dashboard/overview", headers=headers
     ).json()["data"]
 
-    # 雷达：按前端 CANONICAL 次序，可量化取 score、其余取 confidence×100
+    # 能力雷达：固定 6 知识点轴；ml→80、nn→30、其余未测→0
     assert before["radar"] == {
-        "dimensions": ["知识基础", "认知风格", "易错点偏好", "学习目标", "先验经验", "学习节奏"],
-        "values": [80, 50, 50, 90, 60, 60],
+        "dimensions": list(ABILITY_DIMENSIONS),
+        "values": [80, 30, 0, 0, 0, 0],
     }
-    # 优势：非 inferred 降序前 3
+    # 优势 = 已测降序前 3（只 ml/nn 已测）
     assert before["strong_topics"] == [
-        {"name": "学习目标", "mastery": 90},
-        {"name": "知识基础", "mastery": 80},
-        {"name": "先验经验", "mastery": 60},
+        {"name": "机器学习基础", "mastery": 80},
+        {"name": "神经网络", "mastery": 30},
     ]
-    # 盲区：inferred 或 <60，升序前 3（认知风格 50 / 易错点偏好 50-inferred）
-    assert before["weak_topics"] == [
-        {"name": "认知风格", "mastery": 50},
-        {"name": "易错点偏好", "mastery": 50},
-    ]
-    # 综合分 = (80+50+50+90+60+60)/6 = 65.0 → 中级
-    assert before["overall_score"] == 65.0 and before["overall_level"] == "中级"
+    # 盲区 = 已测且 <60（nn）；未测知识点不计入盲区
+    assert before["weak_topics"] == [{"name": "神经网络", "mastery": 30}]
+    # 综合分 = (80+30+0+0+0+0)/6 = 18.3
+    assert before["overall_score"] == 18.3
+    # 偏好画像：类型标签、无分数、不在雷达轴上
+    pref_keys = {p["key"] for p in before["preferences"]}
+    assert pref_keys == {"cognitive_style", "learning_pace", "error_preference"}
+    for p in before["preferences"]:
+        assert "score" not in p and p["value"]
+    assert not (set(before["radar"]["dimensions"]) & {"认知风格", "学习节奏", "易错点偏好"})
     # 覆盖率 / 已学资源：尚无通过的核心知识点 → 0
     assert before["knowledge_graph_coverage"] == 0.0
     assert before["learned_resources"] == 0
-    # targetSummary 与 7.4 Journey 严格一致
     journey = client.get("/api/v1/journey", headers=headers).json()["data"]
     assert before["targetSummary"] == {
         "hasDiagnosed": journey["hasDiagnosed"],
@@ -463,15 +474,13 @@ def test_dashboard_derived_from_portrait_and_mastery(
         "matchPct": journey["matchPct"],
     }
 
-    # 通过一个核心知识点 → 覆盖率 / 已学资源联动增长，画像派生项不变（解耦）
+    # 通过一个核心知识点 → 覆盖率 / 已学资源联动增长（能力分由实测驱动，与状态解耦）
     client.post("/api/v1/mastery/nn/pass", headers=headers)
     after = client.get(
         "/api/v1/dashboard/overview", headers=headers
     ).json()["data"]
     assert after["learned_resources"] == 1
     assert after["knowledge_graph_coverage"] == round(1 / 6, 2)  # 0.17
-    # 雷达 / 强弱项 / 综合分来自画像，不随 Mastery 变化
+    # 能力雷达来自 Mastery 能力分；/pass 仅改状态不改分 → 雷达不变
     assert after["radar"] == before["radar"]
-    assert after["strong_topics"] == before["strong_topics"]
-    assert after["weak_topics"] == before["weak_topics"]
     assert after["overall_score"] == before["overall_score"]

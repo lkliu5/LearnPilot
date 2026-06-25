@@ -18,9 +18,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.llm import ABILITY_DIMENSIONS, _MOCK_BASELINE, get_llm
-from app.models.entities import Journey, User
+from app.core.llm import ABILITY_DIMENSIONS, get_llm
+from app.models.entities import Journey, KnowledgePoint, User
 from app.schemas.profile import DiagnosisCompleteRequest, NarrativeRequest
+from app.services import mastery as mastery_service
 
 # 图片扩展名（mock 阶段不做真实 OCR，仅登记材料 + 标注 source=ocr）
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
@@ -147,7 +148,36 @@ def complete_diagnosis(
     return {"hasDiagnosed": True}
 
 
-def ability_portrait(user: User) -> dict[str, Any]:
-    """能力雷达 6 维（接口文档 4.4）。最近 parse 优先，否则基线默认。"""
-    values = _portrait_by_user.get(user.id, list(_MOCK_BASELINE))
-    return {"dimensions": list(ABILITY_DIMENSIONS), "values": values}
+def _axis_value(entry: dict[str, Any] | None) -> int:
+    """知识点能力分 → 雷达轴值（C2：靠测，不臆造）。
+
+    优先用 Mastery 实测分（诊断微测/真实 quiz 写入）；无分时按状态保守回落：
+    passed→80（已通过测验，可信高分）、learning/pending-check→50、未测→0（不臆造）。
+    """
+    if entry is None:
+        return 0  # 未测
+    score = entry.get("score")
+    if isinstance(score, int):
+        return max(0, min(100, score))
+    status = entry.get("status")
+    if status == mastery_service.STATUS_PASSED:
+        return 80
+    if status in (mastery_service.STATUS_LEARNING, mastery_service.STATUS_PENDING_CHECK):
+        return 50
+    return 0
+
+
+def ability_portrait(db: Session, user: User) -> dict[str, Any]:
+    """能力雷达 6 维（接口文档 4.4，C2 真实化）。
+
+    由**诊断微测 / 真实 quiz 写入 Mastery 的能力分**驱动（按知识点 lesson_seq 升序
+    定位 6 轴），不再读简历自陈或写死基线——能力靠测、口径与掌握度统一。未测知识点
+    轴值回落 0（不臆造高分）。
+    """
+    score_map = mastery_service.get_score_map(db, user.id)
+    kps = sorted(db.query(KnowledgePoint).all(), key=lambda k: k.lesson_seq)
+    values = [_axis_value(score_map.get(kp.id)) for kp in kps]
+    # 防御：知识点数与固定 6 维不齐时对齐到 6 维（补 0 / 截断），保证契约稳定
+    if len(values) < len(ABILITY_DIMENSIONS):
+        values += [0] * (len(ABILITY_DIMENSIONS) - len(values))
+    return {"dimensions": list(ABILITY_DIMENSIONS), "values": values[: len(ABILITY_DIMENSIONS)]}

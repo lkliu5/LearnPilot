@@ -18,7 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.llm import PORTRAIT_DIMENSIONS
+from app.core.llm import PORTRAIT_DIMENSIONS, _sanitize_portrait_updates
 from app.models.entities import StudentPortrait
 
 logger = logging.getLogger(__name__)
@@ -81,11 +81,10 @@ def replace_portrait(
     """
     row = _get_or_create(db, user_id)
     stamp = _now_iso()
+    # 经统一契约清洗（C2）：附 kind/label、剥离偏好/主观维上的非法 score、归一 source，
+    # 使三条路径（对话/简历/手动）产出**同一套三分类结构**的权威画像。
     cleaned: list[dict[str, Any]] = []
-    for dim in dimensions:
-        key = dim.get("key")
-        if not key:
-            continue
+    for dim in _sanitize_portrait_updates(dimensions):
         merged = dict(dim)
         merged["updatedAt"] = stamp
         cleaned.append(merged)
@@ -94,7 +93,34 @@ def replace_portrait(
     row.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
+    _seed_ability_baseline(db, user_id, cleaned)
     return _serialize(row)
+
+
+def _seed_ability_baseline(
+    db: Session, user_id: str, cleaned: list[dict[str, Any]]
+) -> None:
+    """简历/手动路径：把能力维 knowledge_base 自陈分作低置信基线写入 Mastery（source=manual）。
+
+    使「能力来源唯一 = Mastery」（C2 口径统一）——无微测数据的简历/手动路径，其自陈能力
+    分透明地以 source=manual 落 Mastery，驱动 4.4 能力雷达 / 学情概览能力维；对话诊断
+    重做时由 diagnostic 基线、真实 quiz 由 quiz 高置信覆盖同一行（重做即覆盖、不分叉）。
+    单一 knowledge_base 概览分按知识点均匀铺基线（缺更细粒度数据时的保守基线）。
+    """
+    from app.models.entities import KnowledgePoint  # 局部导入避免模块级环依赖
+    from app.services import mastery as mastery_service
+
+    kb = next(
+        (d for d in cleaned if d["key"] == "knowledge_base" and isinstance(d.get("score"), int)),
+        None,
+    )
+    if kb is None:
+        return
+    confidence = min(float(kb.get("confidence") or 0.5), 0.5)  # 自陈基线封顶低置信
+    for kp in db.query(KnowledgePoint).all():
+        mastery_service.set_baseline(
+            db, user_id, kp.id, score=kb["score"], confidence=confidence, source="manual"
+        )
 
 
 def apply_updates(

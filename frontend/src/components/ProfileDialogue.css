@@ -323,3 +323,111 @@
   line-height: 1.7;
   color: var(--gray-500);
 }
+
+/* ── 引导式交互卡片（C2 三段式：微测题 / 偏好选择题，点选即作答） ── */
+.pd-itx {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), var(--gray-50));
+}
+.pd-itx--quiz { border-color: var(--primary-200); }
+.pd-itx--preference { border-color: var(--purple-200); }
+.pd-itx__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.pd-itx__tag {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--primary-700);
+  background: var(--primary-50);
+}
+.pd-itx--preference .pd-itx__tag { color: var(--purple-700); background: var(--purple-50); }
+.pd-itx__kp { font-size: 0.7rem; color: var(--gray-500); }
+.pd-itx__prompt {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--gray-800);
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+.pd-itx__opts { display: flex; flex-direction: column; gap: 8px; }
+.pd-itx__opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.pd-itx__opt:hover:not(:disabled) {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+  transform: translateY(-1px);
+}
+.pd-itx__opt:disabled { opacity: 0.55; cursor: default; }
+.pd-itx__opt-label { font-size: 0.86rem; font-weight: 600; color: var(--gray-800); }
+.pd-itx__opt-hint { font-size: 0.72rem; color: var(--gray-500); }
+
+/* ── C2 三分类画像面板（能力打分 / 偏好类型标签 / 主观描述） ── */
+.sp-sec { margin-top: var(--space-lg); }
+.sp-sec__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--gray-300);
+  color: var(--gray-600);
+}
+.sp-sec__title--ability { border-left-color: var(--primary-500); color: var(--primary-700); }
+.sp-sec__title--pref { border-left-color: var(--purple-500); color: var(--purple-700); }
+.sp-sec__title--subj { border-left-color: var(--gray-400); }
+
+.sp-ability {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--primary-100);
+  background: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.5));
+  margin-bottom: 8px;
+}
+.sp-ability--ghost {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--gray-50); border-color: var(--gray-200);
+}
+.sp-ability__top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.sp-ability__label { font-size: 0.82rem; font-weight: 600; color: var(--gray-800); }
+.sp-ability__score { display: flex; align-items: center; gap: 8px; }
+.sp-ability__bar { flex: 1; height: 7px; border-radius: 999px; background: var(--gray-200); overflow: hidden; }
+.sp-ability__bar-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary-400), var(--purple-500)); }
+.sp-ability__num { font-family: var(--font-mono, monospace); font-size: 0.95rem; font-weight: 700; color: var(--primary-700); min-width: 28px; text-align: right; }
+.sp-ability__untested { font-size: 0.74rem; color: var(--gray-500); font-style: italic; }
+.sp-ability__verdict { margin-top: 6px; font-size: 0.82rem; color: var(--gray-700); }
+.sp-ability__basis { margin-top: 4px; font-size: 0.7rem; line-height: 1.6; color: var(--gray-500); }
+
+.sp-pref { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-pref__tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--purple-200);
+  background: var(--purple-50);
+}
+.sp-pref__tag--ghost { border-color: var(--gray-200); background: var(--gray-50); }
+.sp-pref__icon { font-size: 0.95rem; }
+.sp-pref__type { font-size: 0.82rem; font-weight: 700; color: var(--purple-700); }
+.sp-pref__tag--ghost .sp-pref__type { color: var(--gray-500); }
+.sp-pref__dim { font-size: 0.66rem; color: var(--gray-500); }
+
+.sp-subj { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; }
+.sp-subj__label { font-size: 0.74rem; color: var(--gray-500); min-width: 64px; }
+.sp-subj__value { font-size: 0.84rem; color: var(--gray-800); }
+.sp-subj__value--ghost { color: var(--gray-400); font-style: italic; }
+
+.sp-srctag--diagnostic { background: var(--primary-100); color: var(--primary-700); }

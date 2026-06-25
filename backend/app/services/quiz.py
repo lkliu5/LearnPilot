@@ -137,6 +137,10 @@ def submit(
         score = 0
     passed = score >= PASS_SCORE
 
+    # C2 能力口径统一：真实 quiz 分写入 Mastery 能力分（高置信 source=quiz），覆盖
+    # 诊断微测低置信基线同一行——4.4 能力雷达随真实测验精修（不与诊断基线打架）。
+    mastery_service.set_score(db, user_id, kp_id, score=score, confidence=0.85)
+
     mastery_updated: dict[str, Any] | None = None
     if passed:
         status = mastery_service.mark_pass(db, user_id, kp_id)

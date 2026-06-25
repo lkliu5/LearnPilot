@@ -597,6 +597,20 @@
   box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.45);
 }
 
+/* C2：偏好画像类型标签（无分数、不上雷达轴） */
+.ability-analysis__dot--pref {
+  background: var(--purple-500);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+}
+.ability-pref-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ability-pref-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--purple-200); background: var(--purple-50);
+}
+.ability-pref-tag__type { font-size: 0.8rem; font-weight: 700; color: var(--purple-700); }
+.ability-pref-tag__dim { font-size: 0.64rem; color: var(--gray-500); }
+
 .ability-analysis__tag-group {
   display: flex;
   flex-wrap: wrap;

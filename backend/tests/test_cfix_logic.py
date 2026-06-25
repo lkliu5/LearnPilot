@@ -142,10 +142,15 @@ def test_put_student_portrait_overwrites_and_drives_overview(client):
     kb = next(d for d in got["dimensions"] if d["key"] == "knowledge_base")
     assert kb["score"] == 60
 
-    # 学情概览雷达由该权威画像派生（同一套 canonical 维度标签）
+    # C2：能力雷达 = 知识点能力分（手动路径 knowledge_base 自陈分以 source=manual 落
+    # Mastery 基线、均匀铺到各知识点轴，口径统一）；偏好维改类型标签、不上轴。
     ov = client.get("/api/v1/dashboard/overview", headers=headers).json()["data"]
-    assert "知识基础" in ov["radar"]["dimensions"]
-    assert "认知风格" in ov["radar"]["dimensions"]
+    from app.core.llm import ABILITY_DIMENSIONS
+    assert ov["radar"]["dimensions"] == list(ABILITY_DIMENSIONS)
+    assert ov["radar"]["values"] == [60] * 6  # knowledge_base=60 自陈基线铺满能力轴
+    assert "知识基础" not in ov["radar"]["dimensions"]  # 偏好/能力概览维不再混进能力轴
+    # 认知风格改为偏好类型标签呈现（不在雷达轴）
+    assert "cognitive_style" in {p["key"] for p in ov["preferences"]}
 
     # 重做诊断 = 覆盖更新（再次 PUT，整份覆盖、不与旧维度合并）
     redo = {

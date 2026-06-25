@@ -72,6 +72,73 @@ def mark_pass(db: Session, user_id: str, kp_id: str) -> str:
     return set_status(db, user_id, kp_id, STATUS_PASSED)
 
 
+def _get_row(db: Session, user_id: str, kp_id: str) -> Mastery | None:
+    return (
+        db.query(Mastery)
+        .filter(Mastery.user_id == user_id, Mastery.kp_id == kp_id)
+        .one_or_none()
+    )
+
+
+def set_baseline(
+    db: Session,
+    user_id: str,
+    kp_id: str,
+    *,
+    score: int,
+    confidence: float,
+    source: str = "diagnostic",
+) -> None:
+    """写低置信能力基线（C2 口径统一）。source=diagnostic（诊断微测）/manual（简历/手动自陈）。
+
+    仅写分数/置信/来源，**不置 passed**（不虚增知识图谱覆盖率）；新行落 learning，
+    已有状态（含 passed）不回退——真实 quiz 已通过的能力不被基线覆盖。
+    """
+    row = _get_row(db, user_id, kp_id)
+    if row is None:
+        row = Mastery(user_id=user_id, kp_id=kp_id, status=STATUS_LEARNING)
+        db.add(row)
+    row.score = max(0, min(100, int(score)))
+    row.confidence = max(0.0, min(1.0, float(confidence)))
+    row.score_source = source
+    db.commit()
+
+
+def set_score(
+    db: Session, user_id: str, kp_id: str, *, score: int, confidence: float = 0.85
+) -> None:
+    """真实 quiz 写高置信能力分（C2 口径统一，source=quiz），覆盖诊断基线同一行。
+
+    仅更新能力分，不动 status（status 由 9.1 判分 ≥60 另行 mark_pass）。行不存在则建
+    （理论上 quiz 前已有学习行；防御性建行 learning）。
+    """
+    row = _get_row(db, user_id, kp_id)
+    if row is None:
+        row = Mastery(user_id=user_id, kp_id=kp_id, status=STATUS_LEARNING)
+        db.add(row)
+    row.score = max(0, min(100, int(score)))
+    row.confidence = max(0.0, min(1.0, float(confidence)))
+    row.score_source = "quiz"
+    db.commit()
+
+
+def get_score_map(db: Session, user_id: str) -> dict[str, dict]:
+    """各知识点能力分全集：{kpId: {score, confidence, source, status}}（None=未测）。
+
+    4.4 能力雷达 / 学情概览能力维据此渲染；未出现的知识点视为未测（不臆造）。
+    """
+    rows = db.query(Mastery).filter(Mastery.user_id == user_id).all()
+    return {
+        r.kp_id: {
+            "score": r.score,
+            "confidence": r.confidence,
+            "source": r.score_source,
+            "status": r.status,
+        }
+        for r in rows
+    }
+
+
 def derive_current_step(
     db: Session, journey: Journey | None, status_map: dict[str, str]
 ) -> str:

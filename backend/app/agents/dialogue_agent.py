@@ -1,173 +1,233 @@
-"""对话式学情诊断 Agent（接口文档 17.1，C1-b）。
+"""对话式学情诊断 Agent（接口文档 17.1；C2 三段式重构）。
 
-职责（赛题功能 1）：通过自然语言多轮对话自动抽取学生特征，逐步构建 ≥6 维
-异质学生动态画像（StudentPortrait，17.2）。与第 8 章苏格拉底辅导（8.7/15.4）
-一脉相承——抽取经 LLMClient（mock/deepseek 双模式），**追问编排策略在 Agent
-侧确定性实现**（开放提问 → 逐维定位 → 收敛），不依赖 LLM 以免追问跑题。
+职责（赛题功能 1）：通过引导式对话 + 行为微测自动构建异质学生动态画像
+（StudentPortrait，17.2）。**不再纯自陈**——把诊断拆成三段，各用各的测法：
 
-防幻觉（17.1）：维度抽取的契约清洗（key 白名单、source 枚举、inferred 低
-confidence、无信号不编造）在 LLMClient.extract_portrait 内完成，本 Agent 只
-负责「问什么」与「何时收尾」。
+  ① 对话开场（subjective）：自然语言采集「学习目标 / 先验经验」等主观信息；
+  ② 诊断微测（ability，核心）：有选择性地抛出由浅入深的客观题（复用 quiz 题库，
+     见 services.diagnostic_microtest），用「答对/答错」行为反推真实能力，学生说
+     「我懂」就出题验证——能力靠测不靠说；
+  ③ 偏好选择（preference）：几道「你更喜欢哪种」二/三选一，从选择归类认知风格 /
+     学习节奏 / 易错倾向，**只归类型、不打分、不上 0-100 轴**。
+
+本 Agent 提供各段的「问什么 / 如何归类 / 何时推进」纯逻辑；会话状态与 DB（微测取题/
+判分/写基线）由 services.profile_dialogue 编排（它持有会话与 SQLAlchemy 会话）。
+
+防幻觉（17.1）：维度抽取的契约清洗在 LLMClient/_sanitize_portrait_updates 内完成；
+能力维只由微测产出（带依据 basis），主观维不强行打分，偏好维严禁打分。
 """
 from __future__ import annotations
 
 from typing import Any
 
-from app.core.llm import PORTRAIT_DIMENSIONS, get_llm
+from app.core.llm import (
+    PREFERENCE_DIM_KEYS,
+    PREFERENCE_QUESTIONS,
+    SUBJECTIVE_DIM_KEYS,
+    _PORTRAIT_LABELS,
+    _PREFERENCE_LABELS,
+    get_llm,
+)
 
 AGENT_ID = "dialogue"
 AGENT_NAME = "对话式学情诊断Agent"
 
-# 探查顺序 = PORTRAIT_DIMENSIONS 顺序；每维一句开放/针对性追问 + 快捷回复建议。
-_QUESTIONS: dict[str, str] = {
-    "knowledge_base": "先了解一下你的基础——相关课程你学过哪些，掌握到什么程度？",
-    "prior_experience": "你做过哪些相关的项目或实践？可以聊聊具体做了什么。",
-    "learning_goal": "这次学习你最想达成的目标是什么？",
-    "cognitive_style": "你更习惯先动手实践、还是先把原理和推导弄清楚？",
-    "learning_pace": "你计划投入的学习节奏是怎样的，时间紧不紧？",
-    "error_preference": "回想以往学习，你最容易卡在哪类问题上——概念、计算推导、还是代码实现？",
+# 诊断三段（+ 收尾）
+STAGE_OPENING = "opening"
+STAGE_MICROTEST = "microtest"
+STAGE_PREFERENCE = "preference"
+STAGE_DONE = "done"
+
+# 偏好段探查顺序（= 偏好维顺序）
+PREFERENCE_ORDER: list[str] = list(PREFERENCE_DIM_KEYS)
+
+# ── 开场段（subjective）──────────────────────────────────────────────────────
+# 主观维探查顺序：先先验经验、再学习目标（首轮用户自述背景多落经验，二轮问目标）。
+_OPENING_PROBE: list[str] = ["prior_experience", "learning_goal"]
+_OPENING_QUESTION: dict[str, str] = {
+    "prior_experience": "先随便聊聊——相关的课程、项目或实践你接触过哪些？",
+    "learning_goal": "明白了。那这次学习你最想达成的目标是什么？",
 }
-_SUGGESTIONS: dict[str, list[str]] = {
-    # 首项原为「系统学过…」，前缀「系统」易被误读成系统角色 → 改为「完整学过…」避免气泡归属歧义
-    "knowledge_base": ["完整学过，基础扎实", "学过一些，理解一般", "基本零基础"],
-    "prior_experience": ["做过相关项目", "只在课程里练过", "还没有实践"],
-    "learning_goal": ["转岗/求职", "考试/认证", "兴趣自学"],
-    "cognitive_style": ["喜欢先动手实践", "喜欢先弄懂原理", "两者都要"],
-    "learning_pace": ["时间充裕，稳扎稳打", "节奏适中", "时间紧，想快速突破"],
-    "error_preference": ["概念容易混淆", "计算/推导易错", "代码实现卡壳"],
+_OPENING_CHIPS: dict[str, list[str]] = {
+    "prior_experience": ["做过相关项目", "只在课程里学过", "基本没接触"],
+    "learning_goal": ["转岗 / 求职", "考试 / 认证", "项目需要", "兴趣自学"],
 }
-
-# 同一维度需「再次追问」时的替代问法（按已问次数轮换）。模糊回答致某维多轮抽取失败、
-# 探查顺序耗尽后须回头重问该维度（驱动 ≥6 维收敛）——此时换措辞，**严禁原样重发同一句
-# 问题**（issue#2 / 17.1：模糊回答 → 低置信推断 或 转向/换措辞追问，不机械复读）。
-_REPHRASE: dict[str, list[str]] = {
-    "knowledge_base": [
-        "换个方式问——如果现在给你一道相关的入门题，你大概能独立做出来吗？",
-        "那你对这块的整体感觉是「基本能跟上」「会一点」还是「比较吃力」？",
-    ],
-    "prior_experience": [
-        "哪怕是课程作业、教程里的小练习也算——有动手做过相关的东西吗？",
-        "那有没有看过相关项目的代码，或者跟着教程把例子跑通过？",
-    ],
-    "learning_goal": [
-        "简单说，学完之后你最希望自己能做到什么？",
-        "你更看重「能上手做项目」「应付考试」还是「打牢基础」？",
-    ],
-    "cognitive_style": [
-        "举个例子：拿到新知识，你会先翻原理，还是先找个例子跑起来？",
-        "看教程时你更愿意逐行推导，还是先整体跑通、再回头抠细节？",
-    ],
-    "learning_pace": [
-        "大概每周能挤出多少时间来学？时间够用吗？",
-        "你是想稳扎稳打慢慢来，还是赶时间、想快点突破？",
-    ],
-    "error_preference": [
-        "回想做错的题，更多是「看错/想岔了」，还是「步骤/实现出问题」？",
-        "哪一类最让你头疼——记不住概念、推导算错，还是代码写不对？",
-    ],
-}
-
-
-def _question_for(focus: str, ask_count: int) -> str:
-    """按该维度「已被追问次数」选问法：首问用主问法，重问轮换替代问法（不原样重发）。
-
-    ask_count = 调用方 asked_keys 中该 focus 的出现次数（每追问一次累加一次）。
-    """
-    if ask_count <= 0:
-        return _QUESTIONS[focus]
-    variants = _REPHRASE.get(focus) or [_QUESTIONS[focus]]
-    return variants[(ask_count - 1) % len(variants)]
-
-_PROBE_ORDER: list[str] = [k for k, _ in PORTRAIT_DIMENSIONS]
-# 收敛阈值：采集到 ≥6 维（赛题「≥6 维异质画像」口径，与前端「满 6 维」门控一致）。
-# 维度计数含 inferred 推断维度（error_preference 多为 inferred）——既满足 ≥6 维，
-# 又借「探查顺序耗尽（focus 为 None）」兜底，避免某维难采集时诊断永不收敛（17.1）。
-_COMPLETE_THRESHOLD: int = len(_PROBE_ORDER)
-
+_MICROTEST_INTRO = (
+    "好的，主观情况我了解了。下面做几道小题快速「测」一下你的真实基础——"
+    "凭直觉选就行，答得准我才能把能力画像测准，而不是只听你说。"
+)
+_PREFERENCE_INTRO = "速测完成 ✦，能力画像已据作答测出。最后了解一下你的学习偏好（只归类型、不打分）——"
 _CLOSING_REPLY = (
-    "画像维度已基本采集完整，我已据此生成你的动态学习画像，"
-    "接下来就可以进入个性化学习路径了。"
+    "都记下了 🎉 能力靠测、偏好归类型、主观靠对话，你的动态学习画像已经构建完整，"
+    "接下来就可以据此生成个性化学习路径了。"
 )
 
 
-def _next_focus(filled: set[str], asked: set[str]) -> str | None:
-    """选下一个要追问的维度。
+def opening_first_question() -> str:
+    return _OPENING_QUESTION["prior_experience"]
 
-    优先按探查顺序取「既未采集、又未问过」的维度（推进对话、不重复追问）；若所有
-    维度都已问过但仍有缺口，回头重问首个「未采集」维度——保证向 ≥6 维收敛，不因某
-    维已问过即放弃采集（真实模式下 LLM 偶把某维归到别处，需再问一次才补齐）；全部
-    维度均已采集 → None（此时调用方已按 ≥阈值判定收尾）。
+
+# ── 开场段：抽取主观维（仅 subjective，能力/偏好不在此自陈）────────────────────
+
+def extract_subjective(
+    *,
+    message: str,
+    context: dict[str, Any] | None,
+    first_turn: bool,
+    target_key: str,
+) -> list[dict[str, Any]]:
+    """开场段抽取主观维度增量（只取 learning_goal / prior_experience）。
+
+    经 LLMClient.extract_portrait 抽取后**仅保留主观维**——能力维严禁在此自陈打分，
+    偏好维改由选择题归类。若本轮目标主观维未抽到，则从原话兜底合成（保证该维有值、
+    诊断可推进到 6 维）；原话无实质内容时给低置信占位（不臆造）。
     """
-    for key in _PROBE_ORDER:
-        if key not in filled and key not in asked:
-            return key
-    for key in _PROBE_ORDER:  # 均已问过仍有缺口 → 重问首个未采集维度，驱动 ≥6 维收敛
-        if key not in filled:
+    raw = get_llm().extract_portrait(
+        message=message, context=context if first_turn else None, first_turn=first_turn
+    )
+    subjective = [d for d in raw if d["key"] in SUBJECTIVE_DIM_KEYS]
+    # 能力维若被自陈带出 → 丢弃 score、降级为不打分主观备注（能力只认微测）
+    have = {d["key"] for d in subjective}
+    if target_key not in have:
+        subjective.append(_synthesize_subjective(target_key, message))
+    return subjective
+
+
+def _synthesize_subjective(key: str, message: str) -> dict[str, Any]:
+    text = (message or "").strip()
+    substantive = len(text) >= 4 and text not in ("你好", "嗨", "hi", "在吗", "嗯")
+    if substantive:
+        value = text if len(text) <= 24 else text[:24] + "…"
+        return {"key": key, "value": value, "confidence": 0.55, "source": "dialogue"}
+    placeholder = "暂无明确描述" if key == "prior_experience" else "目标待明确"
+    return {"key": key, "value": placeholder, "confidence": 0.4, "source": "inferred"}
+
+
+def opening_reply(ack: bool, next_key: str | None) -> tuple[str, list[str]]:
+    """开场段回复：简短确认 + 下一主观维追问；next_key=None 表示开场结束（转微测）。"""
+    head = "了解了。" if ack else "好的。"
+    if next_key is None:
+        return head + _MICROTEST_INTRO, []
+    return head + _OPENING_QUESTION[next_key], list(_OPENING_CHIPS[next_key])
+
+
+def next_opening_key(collected: set[str]) -> str | None:
+    """开场下一个要问的主观维；都齐 → None（转微测）。"""
+    for key in _OPENING_PROBE:
+        if key not in collected:
             return key
     return None
 
 
-def _compose_reply(
-    updates: list[dict[str, Any]], focus: str, first_turn: bool, ask_count: int = 0
-) -> str:
-    """组装回复：对本轮抽取的简短确认 + 针对下一维度的追问。
+# ── 微测段（ability）：交互对象 + 回复 ────────────────────────────────────────
 
-    ask_count>0 表示该维度此前已问过（模糊回答致重问）→ 换措辞，不原样重发。
-    """
-    if updates:
-        ack = "了解了。"
-    elif first_turn:
-        ack = "好的，我们开始吧。"
-    else:
-        ack = "好的。"
-    return f"{ack}{_question_for(focus, ask_count)}"
-
-
-def respond(
-    *,
-    context: dict[str, Any] | None,
-    history: list[dict[str, str]],
-    message: str,
-    known_keys: list[str],
-    asked_keys: list[str],
-    first_turn: bool,
-) -> dict[str, Any]:
-    """执行一轮对话诊断。
-
-    Args:
-        context: 首轮可带的已知信息（major/goal），非首轮忽略。
-        history: 既往多轮 [{role, content}]（真实模式透传给抽取，可用于消歧）。
-        message: 学生本轮自然语言输入。
-        known_keys: 本轮之前画像已有的维度 key（采集进度）。
-        asked_keys: 既往各轮已追问过的维度 key（推进进度，避免重复追问）。
-        first_turn: 是否首轮（决定是否吸收 context、开场白措辞）。
-
-    Returns:
-        {reply, updates, suggestions, diagnosisComplete, focus}——updates 已经过
-        LLMClient 契约清洗；focus 为本轮追问的维度 key（None 表示收尾，供调用方
-        记入 asked）；diagnosisComplete 由 Agent 按采集/推进进度确定性判定。
-    """
-    updates = get_llm().extract_portrait(
-        message=message, context=context if first_turn else None, first_turn=first_turn
-    )
-    # 采集进度 = 本轮前已有维度 ∪ 本轮新抽取维度
-    filled = set(known_keys) | {u["key"] for u in updates}
-    # 收尾判定：画像维度数 ≥ 阈值（≥6，含 inferred 计数）才完成——与赛题「≥6 维异质
-    # 画像」及前端「满 6 维」门控严格一致；未达 6 维则继续追问缺口维度，**不因 focus
-    # 耗尽（某维已问过但未采集）提前收尾**，避免「满 5 维即收敛」的口径漂移。
-    done = len(filled) >= _COMPLETE_THRESHOLD
-    focus = None if done else _next_focus(filled, set(asked_keys))
-    if done:
-        reply, suggestions = _CLOSING_REPLY, []
-    else:
-        # 该维度此前被追问的次数（focus 落到「已问维度」即重问场景）→ 换措辞，严禁原样重发
-        ask_count = asked_keys.count(focus)
-        reply = _compose_reply(updates, focus, first_turn, ask_count)
-        suggestions = list(_SUGGESTIONS[focus])
+def quiz_interaction(session_id: str, idx: int, question: dict[str, Any]) -> dict[str, Any]:
+    """把一道微测题封装成前端可渲染的交互对象（引导式抛题）。"""
+    options = [
+        {"value": o.get("option_id"), "label": o.get("option_text", "")}
+        for o in question.get("options", [])
+    ]
     return {
-        "reply": reply,
-        "updates": updates,
-        "suggestions": suggestions,
-        "diagnosisComplete": done,
-        "focus": focus,
+        "id": f"{session_id}:microtest:{idx}",
+        "type": "quiz",
+        "dimKey": "knowledge_base",
+        "prompt": question["questionText"],
+        "options": options,
+        "meta": {"kpId": question["kpId"], "kpName": question["kpName"]},
     }
+
+
+def microtest_reply(ack_correct: bool | None, question: dict[str, Any]) -> str:
+    """微测段回复：对上一题的中性确认（不泄题对错以免诱导）+ 抛出下一题题面。"""
+    if ack_correct is None:
+        ack = ""  # 首题（开场刚转入）由 intro 衔接，无需 ack
+    else:
+        ack = "好，记下了。"
+    return f"{ack}下面这道关于「{question['kpName']}」的题，你的判断是？\n{question['questionText']}"
+
+
+# ── 偏好段（preference）：交互对象 + 归类 + 回复 ──────────────────────────────
+
+def preference_interaction(session_id: str, idx: int, dim_key: str) -> dict[str, Any]:
+    """把一个偏好维封装成「二/三选一」交互对象（只归类型、不打分）。"""
+    q = PREFERENCE_QUESTIONS[dim_key]
+    options = [
+        {"value": o["optionKey"], "label": o["label"], "hint": o["hint"]}
+        for o in q["options"]
+    ]
+    return {
+        "id": f"{session_id}:preference:{idx}",
+        "type": "preference",
+        "dimKey": dim_key,
+        "prompt": q["prompt"],
+        "options": options,
+    }
+
+
+def preference_reply(first: bool, dim_key: str) -> str:
+    """偏好段回复：引导语 + 偏好问题。first=True 用 intro 衔接微测收尾。"""
+    head = _PREFERENCE_INTRO if first else "好的。"
+    return head + PREFERENCE_QUESTIONS[dim_key]["prompt"]
+
+
+def classify_preference(dim_key: str, value: str) -> dict[str, Any]:
+    """据用户选择/作答把偏好维归类到某个类型（optionKey），**不打分**。
+
+    优先按 optionKey 精确命中（前端点选回传 optionKey）；否则对自由文本做关键词归类；
+    都不命中 → 取首个类型并标低置信（不臆造强偏好）。返回未清洗的偏好维增量。
+    """
+    options = PREFERENCE_QUESTIONS[dim_key]["options"]
+    value_norm = (value or "").strip()
+    option_key = None
+    confidence = 0.9
+    # 1) optionKey 精确命中
+    for o in options:
+        if value_norm == o["optionKey"]:
+            option_key = o["optionKey"]
+            break
+    # 2) 自由文本关键词归类
+    if option_key is None:
+        option_key = _match_preference_text(dim_key, value_norm)
+        confidence = 0.7
+    # 3) 兜底：首个类型，低置信
+    if option_key is None:
+        option_key = options[0]["optionKey"]
+        confidence = 0.4
+    label = _PREFERENCE_LABELS[dim_key][option_key]
+    return {
+        "key": dim_key,
+        "value": label,
+        "optionKey": option_key,
+        "confidence": confidence,
+        "source": "dialogue",
+    }
+
+
+# 偏好自由文本归类关键词（兜底，前端点选优先走 optionKey 精确命中）
+_PREFERENCE_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
+    "cognitive_style": {
+        "visual": ("图", "示意", "图像", "可视", "画"),
+        "textual": ("定义", "文字", "概念", "读", "原理"),
+        "example": ("例", "案例", "实例", "上手", "实践", "动手"),
+    },
+    "learning_pace": {
+        "overview": ("概览", "全局", "快速", "先过", "通读", "快"),
+        "deepdive": ("细", "钻", "稳", "逐", "深入", "扎实"),
+    },
+    "error_preference": {
+        "concept": ("概念", "混淆", "记混", "理解"),
+        "calculation": ("计算", "粗心", "算错", "看错", "推导"),
+        "coding": ("代码", "实现", "编程", "调试", "写不对"),
+    },
+}
+
+
+def _match_preference_text(dim_key: str, text: str) -> str | None:
+    for option_key, words in _PREFERENCE_KEYWORDS.get(dim_key, {}).items():
+        if any(w in text for w in words):
+            return option_key
+    return None
+
+
+def closing_reply() -> str:
+    return _CLOSING_REPLY

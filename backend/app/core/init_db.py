@@ -512,11 +512,31 @@ def _migrate_path_plan() -> None:
             conn.execute(text("ALTER TABLE journeys ADD COLUMN path_plan JSON"))
 
 
+def _migrate_mastery_score() -> None:
+    """C2 轻量迁移：既有开发库 mastery 表缺 score/confidence/score_source 列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。
+    既有行三列默认 NULL（能力分未测 → 4.4 雷达回落未测/低基线，不臆造）。
+    """
+    inspector = inspect(engine)
+    if "mastery" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("mastery")}
+    with engine.begin() as conn:
+        if "score" not in columns:
+            conn.execute(text("ALTER TABLE mastery ADD COLUMN score INTEGER"))
+        if "confidence" not in columns:
+            conn.execute(text("ALTER TABLE mastery ADD COLUMN confidence FLOAT"))
+        if "score_source" not in columns:
+            conn.execute(text("ALTER TABLE mastery ADD COLUMN score_source VARCHAR(16)"))
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
     _migrate_b9()
     _migrate_path_plan()
+    _migrate_mastery_score()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

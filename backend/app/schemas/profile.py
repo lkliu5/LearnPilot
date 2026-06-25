@@ -71,18 +71,22 @@ class GeneratePathRequest(BaseModel):
 
 
 class PortraitDimensionItem(BaseModel):
-    """单个画像维度（接口文档 17.2 PortraitDimension）。
+    """单个画像维度（接口文档 17.2 PortraitDimension，C2 三分类扩展）。
 
     简历 / 手动路径把表单输入映射为与对话诊断同一套 canonical key 后回写。
-    updatedAt 由服务端统一加盖，请求体可不带。
+    updatedAt 由服务端统一加盖，请求体可不带。新增 kind/basis/optionKey 向后兼容
+    （旧客户端不传则服务端按 key 自动归类、缺省为空）。
     """
 
     key: str
     label: str
+    kind: str | None = None  # ability|preference|subjective（缺省服务端按 key 归类）
     value: str = ""
-    score: int | None = None  # 仅可量化维度（如知识基础）0-100
+    score: int | None = None  # 仅 ability 维（如知识基础）0-100；偏好/主观维禁止打分
+    basis: str | None = None  # ability 维「依据」：分数来自哪几道题 / 哪些作答（防臆造）
+    optionKey: str | None = None  # preference 维类型码（图像型/稳步细钻型/概念混淆…）
     confidence: float = 0.6
-    source: str = "manual"  # dialogue|manual|inferred
+    source: str = "manual"  # dialogue|manual|inferred|diagnostic
 
 
 class StudentPortraitWriteRequest(BaseModel):
@@ -100,4 +104,7 @@ class DialogueRequest(BaseModel):
 
     sessionId: str | None = None
     message: str = ""
+    # C2 三段式：当上一轮抛出微测题 / 偏好题时，answer 携带点选项的稳定值
+    # （微测 = option_id；偏好 = optionKey）。自由文本作答可只传 message（服务端兜底归类）。
+    answer: str | None = None
     context: dict[str, Any] | None = None

@@ -73,9 +73,67 @@ PORTRAIT_DIMENSIONS: list[tuple[str, str]] = [
 _PORTRAIT_LABELS: dict[str, str] = dict(PORTRAIT_DIMENSIONS)
 _PORTRAIT_KEYS: tuple[str, ...] = tuple(k for k, _ in PORTRAIT_DIMENSIONS)
 # source 枚举（17.1 防幻觉约束）：dialogue 明确陈述 / manual 显式填写 / inferred 间接推断
-_PORTRAIT_SOURCES: tuple[str, ...] = ("dialogue", "manual", "inferred")
+# diagnostic 诊断微测「测」出（行为反推，非自陈）——能力维度专用，带依据 basis。
+_PORTRAIT_SOURCES: tuple[str, ...] = ("dialogue", "manual", "inferred", "diagnostic")
 # inferred（推断）维度 confidence 上限（17.1：inferred 须给较低 confidence）
 _INFERRED_CONFIDENCE_CAP: float = 0.6
+
+# ── 画像三分类（C2 重构：能力靠测、偏好归类型、主观靠对话） ──────────────────
+# 把 17.2 六维严格分为三类，各用各的测法，杜绝「把能力与偏好混进同一 0-100 轴」：
+#   ability    能力维：可打分(0-100)，由「诊断微测」行为反推，带依据 basis，不靠自陈；
+#   preference 偏好维：只有类型、无高低，由「偏好选择题」归类，禁止打分/上 0-100 轴；
+#   subjective 主观维：描述性，对话自然采集，不强行打分。
+PORTRAIT_DIM_KINDS: dict[str, str] = {
+    "knowledge_base": "ability",
+    "prior_experience": "subjective",
+    "learning_goal": "subjective",
+    "cognitive_style": "preference",
+    "learning_pace": "preference",
+    "error_preference": "preference",
+}
+ABILITY_DIM_KEYS: tuple[str, ...] = tuple(
+    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "ability"
+)
+PREFERENCE_DIM_KEYS: tuple[str, ...] = tuple(
+    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "preference"
+)
+SUBJECTIVE_DIM_KEYS: tuple[str, ...] = tuple(
+    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "subjective"
+)
+_PORTRAIT_KINDS: tuple[str, ...] = ("ability", "preference", "subjective")
+
+# 偏好选择题选项库（17.5）：每个偏好维一组「二/三选一」，选项只归类型不打分。
+# 结构：dim_key -> {prompt, options:[{optionKey, label, hint}]}；optionKey 为稳定类型码。
+PREFERENCE_QUESTIONS: dict[str, dict[str, Any]] = {
+    "cognitive_style": {
+        "prompt": "遇到一个全新的概念，你更想先看到哪一种？",
+        "options": [
+            {"optionKey": "visual", "label": "图像型", "hint": "先看一张示意图/结构图"},
+            {"optionKey": "textual", "label": "文字型", "hint": "先读一段准确的定义"},
+            {"optionKey": "example", "label": "案例型", "hint": "先看一个具体的例子"},
+        ],
+    },
+    "learning_pace": {
+        "prompt": "拿到一章新内容，你更倾向怎么推进？",
+        "options": [
+            {"optionKey": "overview", "label": "快速概览型", "hint": "先快速过一遍全局，再回头补细节"},
+            {"optionKey": "deepdive", "label": "稳步细钻型", "hint": "从头逐点稳稳钻透再往下"},
+        ],
+    },
+    "error_preference": {
+        "prompt": "回想以往做错的题，最常见的原因是哪一类？",
+        "options": [
+            {"optionKey": "concept", "label": "概念混淆", "hint": "概念记混 / 理解有偏差"},
+            {"optionKey": "calculation", "label": "计算粗心", "hint": "看错条件 / 算错一步"},
+            {"optionKey": "coding", "label": "代码卡壳", "hint": "思路对但实现 / 代码写不对"},
+        ],
+    },
+}
+# optionKey -> 类型中文标签（偏好维 value 取此，呈现为类型标签而非分数）
+_PREFERENCE_LABELS: dict[str, dict[str, str]] = {
+    dim: {o["optionKey"]: o["label"] for o in q["options"]}
+    for dim, q in PREFERENCE_QUESTIONS.items()
+}
 
 # mock 讲义的 RAG 来源（接口文档 8.2 sources；type∈教材|论文|文档|课程，confidence 0-1）。
 # B5 接入真实 RAG 后由检索命中切片回填，此处为确定性占位。
@@ -297,16 +355,26 @@ def _sanitize_portrait_updates(updates: Any) -> list[dict[str, Any]]:
         confidence = max(0.0, min(1.0, confidence))
         if source == "inferred":
             confidence = min(confidence, _INFERRED_CONFIDENCE_CAP)
+        kind = PORTRAIT_DIM_KINDS.get(key, "subjective")
         cleaned: dict[str, Any] = {
             "key": key,
             "label": _PORTRAIT_LABELS[key],
+            "kind": kind,
             "value": value,
             "confidence": round(confidence, 2),
             "source": source,
         }
+        # score 仅能力维有意义（偏好/主观维严禁打分、不上 0-100 轴）；非能力维一律剥离 score
         score = item.get("score")
-        if isinstance(score, (int, float)) and not isinstance(score, bool):
+        if kind == "ability" and isinstance(score, (int, float)) and not isinstance(score, bool):
             cleaned["score"] = max(0, min(100, int(score)))
+        basis = item.get("basis")  # 能力维「依据」：分数来自哪几道题/哪些作答（可解释、防臆造）
+        if isinstance(basis, str) and basis.strip():
+            cleaned["basis"] = basis.strip()
+        # 偏好维类型码：归类到 PREFERENCE_QUESTIONS 的某个 optionKey（只记类型、不打分）
+        option_key = item.get("optionKey")
+        if kind == "preference" and isinstance(option_key, str) and option_key.strip():
+            cleaned["optionKey"] = option_key.strip()
         by_key[key] = cleaned
     return list(by_key.values())
 

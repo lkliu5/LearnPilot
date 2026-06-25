@@ -84,6 +84,11 @@ class Mastery(Base):
     user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
     kp_id: Mapped[str] = mapped_column(String(32), index=True)
     status: Mapped[str] = mapped_column(String(16))  # learning|pending-check|passed
+    # C2 能力口径统一：能力分(0-100)单一来源——诊断微测写低置信基线、真实 quiz 写高置信，
+    # 同一行覆盖更新；4.4 能力雷达读此分。三列均可空（向后兼容旧行，未测=None）。
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100，None=未测
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-1
+    score_source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # diagnostic|quiz
 
 
 class Journey(Base):

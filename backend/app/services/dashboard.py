@@ -1,23 +1,23 @@
-"""学情概览聚合服务（B6；C1-c 真实化）。
+"""学情概览聚合服务（B6；C1-c 真实化；C2 能力/偏好分轴重构）。
 
 覆盖接口文档 12.1：GET /dashboard/overview——为减少首屏请求数做后端聚合。
 **全部数值由该用户真实数据派生（禁止臆造）**，与前端 services/dashboard.ts 的
-`synthesizeOverview` 逐位同口径，使「首页 overview」与「确认弹窗（前端合成）」一致：
+`synthesizeOverview` 逐位同口径。
 
-- 雷达 / 优势 / 盲区 / 综合分 / 水平 ← 该用户真实 StudentPortrait（17.2）的异质维度：
-    - 轴值：可量化维度（带 score）取 score，其余取 confidence×100（前端 axisOf 同口径）；
-    - 优势：source≠inferred 且取值高的维度（降序前 3）；
-    - 盲区：inferred 或取值 <60 的维度（升序前 3）；
-    - 综合分：各维轴值均值（保留 1 位，前端 Math.round(mean*10)/10 同口径）；
-    - 水平：综合分分档（前端阈值 <40 初学 / <60 入门 / <80 中级 / ≥80 高级）；
-    - 空画像（尚未诊断）→ 雷达/优势/盲区为空、综合分 0、水平「初学」（不杜撰）。
-- 知识图谱覆盖率 / 已学资源 ← 该用户真实 Mastery（7.1）：已通过的核心知识点占比 / 计数，
-  属「学习活动」指标，**未学习的新用户恒为 0**（与前端 masteredCore 口径一致，绝不臆造）。
-- comparison.betterThanPct ← 综合分单调映射（演示性相对位次，结构保留；综合分 0 即 0）。
-- targetSummary ← Journey（与 7.4 同源）。
+C2 关键修复——**能力打分、偏好归类型，不再混进同一 0-100 雷达轴**：
+- radar / 优势 / 盲区 / 综合分 / 水平 ← **能力维**（各知识点掌握度），由诊断微测 / 真实
+  quiz 写入 Mastery 的能力分驱动（= 4.4 能力雷达同源，口径统一）：
+    - 轴值：Mastery 实测分；passed 无分→80、learning/pending→50、未测→0（不臆造）；
+    - 优势：得分高的知识点（降序前 3）；盲区：得分 <60 或未测（升序前 3）；
+    - 综合分：各能力轴均值（保留 1 位）；水平：分档（<40 初学/<60 入门/<80 中级/≥80 高级）；
+    - 未诊断/未测 → 能力轴全 0、综合分 0、水平「初学」（不杜撰）。
+- preferences（新增）← StudentPortrait 偏好维（认知风格/学习节奏/易错倾向），**以类型标签
+  呈现、无分数、不上雷达轴**（修复「学习节奏哪有满分」的混轴别扭）。
+- 知识图谱覆盖率 / 已学资源 ← 真实 Mastery（已通过核心知识点占比 / 计数），新用户恒 0。
+- comparison.betterThanPct ← 综合分单调映射；targetSummary ← Journey（7.4 同源）。
 
-口径权威：前端 synthesizeOverview / CANONICAL_DIMS。雷达轴次序对齐前端 CANONICAL 顺序，
-保证两处展示逐项一致（响应字段名/层级不变，仅数据来源真实化）。
+口径权威：前端 synthesizeOverview。能力雷达轴次序对齐 4.4 ABILITY_DIMENSIONS（知识点
+lesson_seq 升序），保证「确认弹窗」与「首页 overview」逐项一致。
 """
 from __future__ import annotations
 
@@ -26,20 +26,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.llm import PREFERENCE_DIM_KEYS
 from app.models.entities import Journey, KnowledgePoint, StudentPortrait, User
 from app.services import mastery as mastery_service
-
-# 与前端 services/profileDialogue.ts CANONICAL_DIMS 同序——雷达轴次序口径对齐，
-# 保证「确认弹窗（synthesizeOverview）」与「首页 overview（本服务）」逐项一致。
-_CANONICAL_DIM_KEYS: list[str] = [
-    "knowledge_base",
-    "cognitive_style",
-    "error_preference",
-    "learning_goal",
-    "prior_experience",
-    "learning_pace",
-]
-_CANONICAL_DIM_SET = set(_CANONICAL_DIM_KEYS)
+from app.services import profile as profile_service
 
 # betterThanPct 标定系数（演示性相对位次；综合分为 0 时即 0，不杜撰）
 _BETTER_THAN_FACTOR = 1.365
@@ -50,16 +40,13 @@ def _round_half_up(x: float) -> int:
     return math.floor(x + 0.5)
 
 
-def _axis_of(dim: dict[str, Any]) -> int:
-    """画像维度 → 雷达轴值：可量化维度取 score，否则 confidence×100（前端 axisOf 同口径）。"""
-    score = dim.get("score")
-    if isinstance(score, (int, float)) and not isinstance(score, bool):
-        return int(score)
-    try:
-        confidence = float(dim.get("confidence") or 0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-    return _round_half_up(confidence * 100)
+def _is_tested(entry: dict[str, Any] | None) -> bool:
+    """该知识点是否已被实测：有能力分（微测/quiz/手动基线写入）或已通过测验。"""
+    if entry is None:
+        return False
+    if entry.get("score") is not None:
+        return True
+    return entry.get("status") == mastery_service.STATUS_PASSED
 
 
 def _level_for(score: float) -> str:
@@ -73,60 +60,62 @@ def _level_for(score: float) -> str:
     return "初学"
 
 
-def _ordered_dims(dimensions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """按 CANONICAL 顺序排列画像维度，其余维度顺次附后（前端同序，雷达轴稳定不丢维）。"""
+def _preferences(dimensions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """从画像中提取偏好维 → 类型标签（无分数、不上轴）。"""
     by_key = {d.get("key"): d for d in dimensions if d.get("key")}
-    canon = [by_key[k] for k in _CANONICAL_DIM_KEYS if k in by_key]
-    extras = [d for d in dimensions if d.get("key") not in _CANONICAL_DIM_SET]
-    return canon + extras
+    out: list[dict[str, Any]] = []
+    for key in PREFERENCE_DIM_KEYS:
+        dim = by_key.get(key)
+        if not dim:
+            continue
+        out.append(
+            {
+                "key": key,
+                "label": dim.get("label") or key,
+                "value": dim.get("value") or "",  # 类型中文标签（如「图像型」）
+                "optionKey": dim.get("optionKey"),
+            }
+        )
+    return out
 
 
 def overview(db: Session, user: User) -> dict[str, Any]:
-    """学情概览聚合（接口文档 12.1）。全部数值由该用户真实数据派生（见模块文档）。"""
-    row = db.get(StudentPortrait, user.id)
-    dimensions: list[dict[str, Any]] = list(row.dimensions or []) if row else []
-    ordered = _ordered_dims(dimensions)
-
-    # 画像维度 → (展示名, 轴值, 是否推断)；雷达 / 优势 / 盲区 / 综合分均由此派生
+    """学情概览聚合（接口文档 12.1）。能力靠测打分、偏好归类型（见模块文档）。"""
+    # 能力雷达：与 4.4 同源（Mastery 实测能力分驱动，按知识点 lesson_seq 升序）
+    ability = profile_service.ability_portrait(db, user)
+    score_map = mastery_service.get_score_map(db, user.id)
+    kps = sorted(db.query(KnowledgePoint).all(), key=lambda k: k.lesson_seq)
     scored = [
-        {
-            "name": d.get("label") or d.get("key") or "",
-            "mastery": _axis_of(d),
-            "inferred": d.get("source") == "inferred",
-        }
-        for d in ordered
+        {"name": name, "mastery": value, "tested": _is_tested(score_map.get(kp.id))}
+        for name, value, kp in zip(ability["dimensions"], ability["values"], kps)
     ]
+    radar = {"dimensions": ability["dimensions"], "values": ability["values"]}
 
-    radar = {
-        "dimensions": [s["name"] for s in scored],
-        "values": [s["mastery"] for s in scored],
-    }
-
-    # 优势：非 inferred，按轴值降序前 3（稳定排序，同分保持 CANONICAL 次序）
+    # 优势 / 盲区只在**已测**知识点上判定（未测 ≠ 盲区，不臆造强弱项）：
+    # 优势 = 已测且得分高（降序前 3）；盲区 = 已测且 <60（升序前 3）。
+    tested = [s for s in scored if s["tested"]]
     strong_topics = [
         {"name": s["name"], "mastery": s["mastery"]}
-        for s in sorted(
-            (s for s in scored if not s["inferred"]), key=lambda s: -s["mastery"]
-        )
+        for s in sorted(tested, key=lambda s: -s["mastery"])
     ][:3]
-    # 盲区：inferred 或轴值 <60，按轴值升序前 3
     weak_topics = [
         {"name": s["name"], "mastery": s["mastery"]}
-        for s in sorted(
-            (s for s in scored if s["inferred"] or s["mastery"] < 60),
-            key=lambda s: s["mastery"],
-        )
+        for s in sorted((s for s in tested if s["mastery"] < 60), key=lambda s: s["mastery"])
     ][:3]
 
-    # 综合分：各维轴值均值（前端 Math.round(mean*10)/10 同口径）；无维度 → 0
+    # 综合分：各能力轴均值（前端 Math.round(mean*10)/10 同口径）；无能力轴 → 0
     overall_score = (
         _round_half_up(sum(s["mastery"] for s in scored) / len(scored) * 10) / 10
         if scored
         else 0.0
     )
 
-    # 知识图谱覆盖率 / 已学资源：真实 Mastery 派生——已通过的核心知识点占比 / 计数。
-    # 未学习的新用户无 Mastery 行 → passed=0 → 覆盖率 0、已学资源 0（与前端 masteredCore 一致）。
+    # 偏好画像：类型标签（不打分、不上轴）
+    row = db.get(StudentPortrait, user.id)
+    dimensions: list[dict[str, Any]] = list(row.dimensions or []) if row else []
+    preferences = _preferences(dimensions)
+
+    # 知识图谱覆盖率 / 已学资源：真实 Mastery 派生（已通过核心知识点占比 / 计数）。
     core_kp_ids = [kp.id for kp in db.query(KnowledgePoint).all()]
     status_map = mastery_service.get_status_map(db, user.id)
     passed_core = sum(
@@ -144,6 +133,7 @@ def overview(db: Session, user: User) -> dict[str, Any]:
         "strong_topics": strong_topics,
         "weak_topics": weak_topics,
         "radar": radar,
+        "preferences": preferences,
         "comparison": {
             "betterThanPct": min(99, round(overall_score * _BETTER_THAN_FACTOR))
         },

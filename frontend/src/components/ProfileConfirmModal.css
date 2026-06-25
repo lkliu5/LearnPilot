@@ -138,3 +138,13 @@
   .pcm__body { grid-template-columns: 1fr; }
   .pcm__radar { height: 240px; }
 }
+
+/* C2：偏好类型标签（无分数、不上轴） */
+.pcm__prefs { display: flex; flex-wrap: wrap; gap: 8px; }
+.pcm__pref {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--purple-200); background: var(--purple-50);
+}
+.pcm__pref-type { font-size: 0.82rem; font-weight: 700; color: var(--purple-700); }
+.pcm__pref-dim { font-size: 0.66rem; color: var(--gray-500); }

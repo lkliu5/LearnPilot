@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import ChatPanel, { type ChatMsg } from './ChatPanel'
 import StudentPortraitPanel from './StudentPortraitPanel'
 import ProfileConfirmModal from './ProfileConfirmModal'
@@ -6,6 +7,7 @@ import {
   CANONICAL_DIMS,
   getStudentPortrait,
   profileDialogueStream,
+  type DialogueInteraction,
   type PortraitDimension,
 } from '../services/profileDialogue'
 import { getJobMatch, type JobMatchResult } from '../services/jobMatch'
@@ -42,6 +44,8 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
   /** 异质画像维度（按 key 索引，event:portrait 增量合并） */
   const [dims, setDims] = useState<Record<string, PortraitDimension>>({})
   const [portraitTs, setPortraitTs] = useState<string | undefined>(undefined)
+  /** 当前待作答的引导式交互（微测题 / 偏好选择题），由 event:interaction 驱动 */
+  const [interaction, setInteraction] = useState<DialogueInteraction | null>(null)
   const sessionRef = useRef<string | undefined>(undefined)
 
   /** 「学情概况确认」弹窗：诊断完成且满 6 维才弹（防止确认到不足维度的画像） */
@@ -113,13 +117,13 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
     setPortraitTs(updates[updates.length - 1].updatedAt ?? new Date().toISOString())
   }
 
-  /* 17.1 SSE：逐 delta 追加既有 agent 气泡；event:portrait 实时刷右栏；done 后刷新 chips + 完成态。
-     首个 delta 前沿用打字三点动画；失败保留已渲染片段与已抽取维度（17.1 约定）。 */
-  const send = async () => {
-    const text = input.trim()
-    if (!text || sending) return
-    setMsgs((m) => [...m, { role: 'user', text }])
-    setInput('')
+  /* 17.1 SSE：逐 delta 追加既有 agent 气泡；event:portrait 实时刷右栏；event:interaction 抛出
+     待作答微测/偏好卡片；done 后刷新 chips + 完成态。首个 delta 前沿用打字三点动画；失败保留
+     已渲染片段与已抽取维度（17.1 约定）。displayText 入用户气泡；answer 携带点选项稳定值。 */
+  const runTurn = async (displayText: string, answer?: string) => {
+    if (sending) return
+    setMsgs((m) => [...m, { role: 'user', text: displayText }])
+    setInteraction(null) // 提交后即收起卡片，避免重复作答
     setTyping(true)
     setSending(true)
 
@@ -132,8 +136,6 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
         setTyping(false)
         setMsgs((m) => [...m, { role: 'agent', text: acc }])
       } else {
-        // 仅当末条确为正在流式的 agent 气泡时才改写其文本；否则追加新气泡，
-        // 杜绝误把用户气泡覆盖成 agent（修正气泡 role 归属，issue#2）。
         setMsgs((m) => {
           const last = m[m.length - 1]
           return last && last.role === 'agent'
@@ -146,15 +148,16 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
     try {
       const done = await profileDialogueStream({
         sessionId: sessionRef.current,
-        message: text,
+        message: displayText,
+        answer,
         context: sessionRef.current ? undefined : context, // 仅首轮带冷启动 context
         onDelta: appendDelta,
         onPortrait: applyPortrait,
+        onInteraction: setInteraction,
       })
       sessionRef.current = done.sessionId
       if (done.suggestions.length) setChips(done.suggestions)
       if (done.diagnosisComplete) setComplete(true)
-      // 空流兜底（无任何 delta）
       if (!started) setMsgs((m) => [...m, { role: 'agent', text: '（已记录你的回答）' }])
     } catch (e) {
       console.error('[profile-dialogue] SSE 失败', e)
@@ -165,23 +168,66 @@ export default function ProfileDialogue({ onFinish, context }: Props) {
     }
   }
 
+  const send = () => {
+    const text = input.trim()
+    if (!text || sending) return
+    setInput('')
+    void runTurn(text)
+  }
+
+  // 点选微测/偏好选项：用户气泡显示选项标签，answer 回传稳定值（option_id / optionKey）
+  const pickOption = (opt: { value: string; label: string }) => void runTurn(opt.label, opt.value)
+
   return (
     <div className="pd">
       <div className="pd__chat profile-builder__card">
         <ChatPanel
           avatar="🎓"
           title="学习画像助手"
-          subtitle="自然语言对话 · 自动抽取特征 · 摒弃繁琐表单"
+          subtitle="对话采集 · 微测真实能力 · 偏好归类型"
           msgs={msgs}
           typing={typing}
-          chips={chips}
+          chips={interaction ? [] : chips}
           onChip={(q) => (q.startsWith('生成') ? setShowConfirm(true) : setInput(q))}
           input={input}
           onInput={setInput}
           onSend={send}
-          placeholder="用自己的话说说你的情况…"
+          placeholder={interaction ? '点选上方选项，或直接输入…' : '用自己的话说说你的情况…'}
           sending={sending}
         />
+
+        {/* 引导式交互卡片：微测题（选项=判断）/ 偏好选择题（选项=类型），点选即作答 */}
+        <AnimatePresence>
+          {interaction && (
+            <motion.div
+              className={`pd-itx pd-itx--${interaction.type}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+            >
+              <div className="pd-itx__head">
+                <span className="pd-itx__tag">
+                  {interaction.type === 'quiz' ? '诊断微测 · 行为反推能力' : '偏好选择 · 只归类型不打分'}
+                </span>
+                {interaction.meta?.kpName && <span className="pd-itx__kp">{interaction.meta.kpName}</span>}
+              </div>
+              <div className="pd-itx__prompt">{interaction.prompt}</div>
+              <div className="pd-itx__opts">
+                {interaction.options.map((o) => (
+                  <button
+                    key={o.value}
+                    className="pd-itx__opt"
+                    disabled={sending}
+                    onClick={() => pickOption(o)}
+                  >
+                    <span className="pd-itx__opt-label">{o.label}</span>
+                    {o.hint && <span className="pd-itx__opt-hint">{o.hint}</span>}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <aside className="pd__aside">

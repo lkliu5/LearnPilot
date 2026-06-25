@@ -1,26 +1,40 @@
 /**
- * 对话式学习画像诊断数据获取层（接口文档第 17 章，接口 37/38）。
+ * 对话式学习画像诊断数据获取层（接口文档第 17 章，接口 37/38；C2 三段式重构）。
  *
- * - 17.1 `POST /profile/dialogue`：与 8.7/15.4 一致的 SSE 双模式——请求头带
- *   `Accept: text/event-stream` 时逐 `data:{delta}` 下发追问语，`event: portrait`
- *   下发本轮抽取的画像维度增量，`event: done` 终态（sessionId/suggestions/diagnosisComplete）。
- * - 17.2/17.3 `GET /profile/student-portrait`：异质 ≥6 维 StudentPortrait。
+ * - 17.1 `POST /profile/dialogue`：SSE 双模式——`data:{delta}` 逐句下发回复，
+ *   `event: portrait` 下发画像维度增量，`event: interaction` 下发「引导式抛出」的
+ *   微测题 / 偏好选择题（前端渲染为可点选卡片，作答经 `answer` 回传），
+ *   `event: done` 终态（sessionId/suggestions/diagnosisComplete）。
+ * - 17.2/17.3 `GET /profile/student-portrait`：异质画像（三分类 ability/preference/subjective）。
+ * - 4.4 `GET /profile/ability-portrait`：知识点能力雷达（由微测/quiz 写入的 Mastery 分驱动）。
  *
- * Mock-first：无后端（USE_REAL_API=false）时走本地脚本化多轮对话，逐 token 模拟流式 +
- * 边问边抽画像，保证「无任何 API Key 跑通全链路」。
+ * C2：画像分三类，各用各的测法——**能力靠测打分、偏好归类型、主观靠对话**：
+ *   - ability    可打分(0-100)+依据 basis，由诊断微测行为反推；
+ *   - preference 只有类型(optionKey)、无分数，由偏好选择题归类；
+ *   - subjective 描述性，对话采集。
+ *
+ * Mock-first：无后端（USE_REAL_API=false）时本地三段式状态机驱动全链路。
  */
 import { ApiError, USE_REAL_API, apiGet, apiPut, getToken } from './api'
+
+export type DimKind = 'ability' | 'preference' | 'subjective'
 
 /** 17.2 PortraitDimension（亦即 17.1 portraitUpdates[] / event:portrait 的 updates[] 元素） */
 export interface PortraitDimension {
   key: string
   label: string
+  /** 三分类：ability 打分 / preference 归类型 / subjective 描述（旧客户端可能不带，按 key 归类） */
+  kind?: DimKind
   value: string
-  /** 仅可量化维度（如知识基础）给出，0-100 */
+  /** 仅 ability 维给出，0-100（偏好/主观维严禁打分） */
   score?: number
+  /** ability 维「依据」：分数来自哪几道题 / 哪些作答（可解释、防臆造） */
+  basis?: string
+  /** preference 维类型码（visual/deepdive/concept…） */
+  optionKey?: string
   /** 置信度 0-1；inferred 维度须偏低（≤0.6） */
   confidence: number
-  source: 'dialogue' | 'manual' | 'inferred'
+  source: 'dialogue' | 'manual' | 'inferred' | 'diagnostic'
   updatedAt?: string
 }
 
@@ -31,6 +45,16 @@ export interface StudentPortrait {
   updatedAt: string
 }
 
+/** 17.1 引导式交互（微测题 / 偏好选择题） */
+export interface DialogueInteraction {
+  id: string
+  type: 'quiz' | 'preference'
+  dimKey: string
+  prompt: string
+  options: { value: string; label: string; hint?: string }[]
+  meta?: { kpId?: string; kpName?: string }
+}
+
 /** 17.1 本轮终态（event:done） */
 export interface DialogueDone {
   sessionId: string
@@ -38,29 +62,50 @@ export interface DialogueDone {
   diagnosisComplete: boolean
 }
 
-export interface DialogueStreamOptions {
-  /** 多轮上下文 id，首轮可空（由后端 / mock 生成并经 done 回传） */
-  sessionId?: string
-  message: string
-  /** 首轮可带已知信息辅助冷启动（4.1 枚举：major/goal） */
-  context?: { major?: string; goal?: string }
-  /** 逐增量片段（追问语 token） */
-  onDelta: (delta: string) => void
-  /** 本轮抽取的画像维度增量（可多次回调，边问边抽） */
-  onPortrait: (updates: PortraitDimension[]) => void
+/** 4.4 知识点能力雷达 */
+export interface AbilityPortrait {
+  dimensions: string[]
+  values: number[]
 }
 
-/**
- * 建议维度集（17.2，key 稳定）。右侧画像面板按此顺序展示「N/6」与待采集占位。
- * 异质：knowledge_base 可量化（带 score），其余为定性维度。
- */
-export const CANONICAL_DIMS: { key: string; label: string }[] = [
-  { key: 'knowledge_base', label: '知识基础' },
-  { key: 'cognitive_style', label: '认知风格' },
-  { key: 'error_preference', label: '易错点偏好' },
-  { key: 'learning_goal', label: '学习目标' },
-  { key: 'prior_experience', label: '先验经验' },
-  { key: 'learning_pace', label: '学习节奏' },
+/** 能力雷达固定 6 轴（知识点，与后端 4.4 ABILITY_DIMENSIONS 同序） */
+export const ABILITY_RADAR_DIMS: string[] = [
+  '机器学习基础', '神经网络', '深度学习', '注意力机制', 'Transformer', '大模型微调',
+]
+
+export interface DialogueStreamOptions {
+  sessionId?: string
+  message: string
+  /** 上一轮抛出微测/偏好题时，携带点选的稳定值（微测=option_id；偏好=optionKey） */
+  answer?: string
+  context?: { major?: string; goal?: string }
+  onDelta: (delta: string) => void
+  onPortrait: (updates: PortraitDimension[]) => void
+  /** 本轮抛出的待作答交互（无则 null） */
+  onInteraction: (interaction: DialogueInteraction | null) => void
+}
+
+/** 维度分类工具：按 kind（缺省按 key）归类，供面板分区渲染。 */
+export const DIM_KIND_BY_KEY: Record<string, DimKind> = {
+  knowledge_base: 'ability',
+  prior_experience: 'subjective',
+  learning_goal: 'subjective',
+  cognitive_style: 'preference',
+  learning_pace: 'preference',
+  error_preference: 'preference',
+}
+export function dimKind(d: PortraitDimension): DimKind {
+  return d.kind ?? DIM_KIND_BY_KEY[d.key] ?? 'subjective'
+}
+
+/** 建议维度集（17.2，key 稳定）：分三类，面板按此顺序展示「N/6」与待采集占位。 */
+export const CANONICAL_DIMS: { key: string; label: string; kind: DimKind }[] = [
+  { key: 'knowledge_base', label: '知识基础', kind: 'ability' },
+  { key: 'cognitive_style', label: '认知风格', kind: 'preference' },
+  { key: 'learning_pace', label: '学习节奏', kind: 'preference' },
+  { key: 'error_preference', label: '易错点偏好', kind: 'preference' },
+  { key: 'learning_goal', label: '学习目标', kind: 'subjective' },
+  { key: 'prior_experience', label: '先验经验', kind: 'subjective' },
 ]
 
 /* ============ 对外统一入口（按总开关切真实 / mock） ============ */
@@ -71,21 +116,21 @@ export function profileDialogueStream(opts: DialogueStreamOptions): Promise<Dial
 
 export function getStudentPortrait(): Promise<StudentPortrait> {
   if (USE_REAL_API) return apiGet<StudentPortrait>('/profile/student-portrait')
-  // mock：尚无诊断数据，返回空画像（17.3 约定，非错误）
   return Promise.resolve({ dimensions: [], version: 'v1', updatedAt: new Date().toISOString() })
 }
 
-/**
- * 覆盖写入权威画像（17.4）。简历 / 手动路径「确认画像」时调用，把已映射为 canonical
- * 维度的整份画像整体覆盖写入同一行 StudentPortrait（重做即覆盖、不分叉）。
- * mock 模式下无后端，前端 store 已是权威，故直接 no-op（成功）。
- */
+/** 4.4 能力雷达（知识点掌握度，由微测/quiz 驱动）。mock 据已测画像合成。 */
+export function getAbilityPortrait(): Promise<AbilityPortrait> {
+  if (USE_REAL_API) return apiGet<AbilityPortrait>('/profile/ability-portrait')
+  return Promise.resolve(mockAbilityRadar())
+}
+
 export function saveStudentPortrait(dimensions: PortraitDimension[]): Promise<void> {
   if (!USE_REAL_API) return Promise.resolve()
   return apiPut<unknown>('/profile/student-portrait', { dimensions }).then(() => undefined)
 }
 
-/* ============ 真实后端 SSE（镜像 tutor.ts，新增 event:portrait 处理） ============ */
+/* ============ 真实后端 SSE（新增 event:interaction 处理） ============ */
 
 async function realDialogue(opts: DialogueStreamOptions): Promise<DialogueDone> {
   const headers: Record<string, string> = {
@@ -98,10 +143,14 @@ async function realDialogue(opts: DialogueStreamOptions): Promise<DialogueDone> 
   const res = await fetch('/api/v1/profile/dialogue', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ sessionId: opts.sessionId, message: opts.message, context: opts.context }),
+    body: JSON.stringify({
+      sessionId: opts.sessionId,
+      message: opts.message,
+      answer: opts.answer,
+      context: opts.context,
+    }),
   })
 
-  // 非流式回包（401 / 业务码）：解信封抛业务码
   const ctype = res.headers.get('content-type') ?? ''
   if (!ctype.includes('text/event-stream')) {
     let env: { code?: number; message?: string } = {}
@@ -136,6 +185,8 @@ async function realDialogue(opts: DialogueStreamOptions): Promise<DialogueDone> 
       }
     } else if (event === 'portrait') {
       if (Array.isArray(payload.updates) && payload.updates.length) opts.onPortrait(payload.updates)
+    } else if (event === 'interaction') {
+      opts.onInteraction(payload as DialogueInteraction)
     } else if (event === 'error') {
       throw new ApiError(payload.code ?? 2001, payload.message || '画像诊断回复生成失败')
     } else if (typeof payload.delta === 'string') {
@@ -165,106 +216,232 @@ async function realDialogue(opts: DialogueStreamOptions): Promise<DialogueDone> 
   return done
 }
 
-/* ============ 本地 mock（脚本化多轮 · 逐 token 流式 · 边问边抽画像） ============ */
+/* ============ 本地 mock：三段式状态机（开场→微测→偏好），逐 token 流式 ============ */
 
-interface MockTurn {
-  reply: string
-  updates: Omit<PortraitDimension, 'updatedAt'>[]
-  suggestions: string[]
-  diagnosisComplete: boolean
+interface MockMicroQuestion {
+  kpId: string
+  kpName: string
+  prompt: string
+  options: { value: string; label: string }[]
+  correct: string
 }
 
-/**
- * 脚本化诊断流：每条用户消息推进一轮，逐步填满 6 个异质维度（首轮抽 2 维），
- * 末轮 diagnosisComplete=true。维度取值遵守 17.1 防幻觉约束：
- * 推断维度（error_preference）标 inferred 且 confidence ≤ 0.6。
- */
-const MOCK_SCRIPT: MockTurn[] = [
+// 微测题（mock，由浅入深）：每题含正确答案，按作答行为反推能力（答对/答错）
+const MOCK_MICROTEST: MockMicroQuestion[] = [
   {
-    reply:
-      '了解了。听起来你有一定的工程底子——那在「机器学习 / 神经网络」这块，你是系统学过，还是主要靠项目里边用边查？',
-    updates: [
-      { key: 'prior_experience', label: '先验经验', value: '有 Python 工程实践（爬虫 / 脚本）', confidence: 0.8, source: 'dialogue' },
-      { key: 'knowledge_base', label: '知识基础', value: '有编程基础，ML 理论一般', score: 55, confidence: 0.7, source: 'dialogue' },
+    kpId: 'ml', kpName: '机器学习基础',
+    prompt: '下列哪一项属于典型的无监督学习任务？',
+    options: [
+      { value: 'a', label: '根据房屋特征预测房价' },
+      { value: 'b', label: '对用户按行为相似度进行聚类' },
+      { value: 'c', label: '判断邮件是否为垃圾邮件' },
     ],
-    suggestions: ['完整学过一些', '主要靠项目里边用边查', '基本零基础'],
-    diagnosisComplete: false,
+    correct: 'b',
   },
   {
-    reply:
-      '明白了。那你平时更习惯怎么学新东西——是先把概念原理弄透再上手，还是先跑通一个例子、遇到问题再回头补理论？',
-    updates: [
-      { key: 'cognitive_style', label: '认知风格', value: '偏实践 / 动手型，先跑通再补理论', confidence: 0.65, source: 'dialogue' },
+    kpId: 'nn', kpName: '神经网络基础',
+    prompt: '引入激活函数最主要的目的是？',
+    options: [
+      { value: 'a', label: '加快矩阵乘法运算速度' },
+      { value: 'b', label: '为网络引入非线性表达能力' },
+      { value: 'c', label: '减少网络参数数量' },
     ],
-    suggestions: ['先弄懂原理再动手', '先跑通例子再补理论', '看情况，两者都有'],
-    diagnosisComplete: false,
+    correct: 'b',
   },
   {
-    reply:
-      '这个学习方式很清晰。那你这次学习主要冲着什么目标去——是转岗 / 求职，还是项目需要、或单纯兴趣？方便的话说说想达到的程度。',
-    updates: [
-      { key: 'learning_goal', label: '学习目标', value: '转大模型应用工程师', confidence: 0.9, source: 'dialogue' },
+    kpId: 'dl', kpName: '深度学习原理',
+    prompt: '反向传播算法的核心数学工具是？',
+    options: [
+      { value: 'a', label: '贝叶斯定理' },
+      { value: 'b', label: '链式法则' },
+      { value: 'c', label: '傅里叶变换' },
     ],
-    suggestions: ['转岗求职', '项目需要', '兴趣 / 自我提升'],
-    diagnosisComplete: false,
+    correct: 'b',
   },
   {
-    reply:
-      '目标很明确。回想你之前学这些时，最容易卡住或弄混的地方通常是什么？比如某些概念总记不牢、或一到推导就发懵？',
-    updates: [
-      // 由「偏实践 / 概念理论一般」间接推断，故标 inferred + 低置信度（17.1 防幻觉约束）
-      { key: 'error_preference', label: '易错点偏好', value: '概念易混淆（如梯度 / 反向传播）', confidence: 0.5, source: 'inferred' },
+    kpId: 'transformer', kpName: 'Transformer架构',
+    prompt: '自注意力机制的核心作用是？',
+    options: [
+      { value: 'a', label: '让每个位置都能关注序列中其他位置' },
+      { value: 'b', label: '对图像做卷积下采样' },
+      { value: 'c', label: '随机丢弃部分神经元' },
     ],
-    suggestions: ['概念容易混', '数学推导发怵', '代码实现不熟'],
-    diagnosisComplete: false,
+    correct: 'a',
   },
   {
-    reply:
-      '都记下了 ✦。最后一个——你大概能投入的学习节奏是怎样的？是每天稳定推进，还是周末集中冲、平时较零散？',
-    updates: [
-      { key: 'learning_pace', label: '学习节奏', value: '适中，偏稳扎稳打', confidence: 0.6, source: 'dialogue' },
+    kpId: 'finetune', kpName: '大模型微调技术',
+    prompt: 'LoRA 微调的主要优势是？',
+    options: [
+      { value: 'a', label: '必须更新全部参数' },
+      { value: 'b', label: '只训练少量低秩矩阵、显存开销小' },
+      { value: 'c', label: '完全不需要任何训练数据' },
     ],
-    suggestions: ['每天稳定推进', '周末集中冲', '比较零散'],
-    diagnosisComplete: false,
-  },
-  {
-    reply:
-      '好的，画像已经比较完整了 🎉 右侧 6 个维度都采集到了。我已经能据此为你定制学习路径——随时可以生成；后续学习和测验里，画像还会「随学随新」继续更新。',
-    updates: [
-      // 末轮据对话整体把知识基础 score 略作校准（体现可量化维度更新）
-      { key: 'knowledge_base', label: '知识基础', value: '有编程基础，ML 理论待夯实', score: 62, confidence: 0.75, source: 'dialogue' },
-    ],
-    suggestions: ['生成学习路径', '我再补充几句'],
-    diagnosisComplete: true,
+    correct: 'b',
   },
 ]
 
+const MOCK_PREFERENCE: { dimKey: string; label: string; prompt: string; options: { value: string; label: string; hint: string }[] }[] = [
+  {
+    dimKey: 'cognitive_style', label: '认知风格',
+    prompt: '遇到一个全新的概念，你更想先看到哪一种？',
+    options: [
+      { value: 'visual', label: '图像型', hint: '先看一张示意图/结构图' },
+      { value: 'textual', label: '文字型', hint: '先读一段准确定义' },
+      { value: 'example', label: '案例型', hint: '先看一个具体例子' },
+    ],
+  },
+  {
+    dimKey: 'learning_pace', label: '学习节奏',
+    prompt: '拿到一章新内容，你更倾向怎么推进？',
+    options: [
+      { value: 'overview', label: '快速概览型', hint: '先快速过全局再补细节' },
+      { value: 'deepdive', label: '稳步细钻型', hint: '从头逐点稳稳钻透' },
+    ],
+  },
+  {
+    dimKey: 'error_preference', label: '易错点偏好',
+    prompt: '回想以往做错的题，最常见的原因是哪一类？',
+    options: [
+      { value: 'concept', label: '概念混淆', hint: '概念记混/理解偏差' },
+      { value: 'calculation', label: '计算粗心', hint: '看错条件/算错一步' },
+      { value: 'coding', label: '代码卡壳', hint: '思路对但实现写不对' },
+    ],
+  },
+]
+const PREF_LABELS: Record<string, Record<string, string>> = Object.fromEntries(
+  MOCK_PREFERENCE.map((p) => [p.dimKey, Object.fromEntries(p.options.map((o) => [o.value, o.label]))])
+)
+
+interface MockSession {
+  stage: 'opening' | 'microtest' | 'preference' | 'done'
+  openingTurns: number
+  microIdx: number
+  microCorrect: number
+  microResults: { kpName: string; correct: boolean }[]
+  prefIdx: number
+  pending: DialogueInteraction | null
+}
+const mockSessions = new Map<string, MockSession>()
 let mockSeq = 0
-const mockTurns = new Map<string, number>()
+let mockAbility: AbilityPortrait = { dimensions: [...ABILITY_RADAR_DIMS], values: [0, 0, 0, 0, 0, 0] }
+function mockAbilityRadar(): AbilityPortrait {
+  return { dimensions: [...mockAbility.dimensions], values: [...mockAbility.values] }
+}
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-/** 逐 2~3 字符下发，模拟 SSE token 流式 */
 async function streamText(text: string, onDelta: (d: string) => void) {
   for (let i = 0; i < text.length; i += 2) {
     onDelta(text.slice(i, i + 2))
-    await sleep(20)
+    await sleep(18)
   }
+}
+const now = () => new Date().toISOString()
+
+function quizInteraction(idx: number): DialogueInteraction {
+  const q = MOCK_MICROTEST[idx]
+  return {
+    id: `mock:microtest:${idx}`,
+    type: 'quiz',
+    dimKey: 'knowledge_base',
+    prompt: q.prompt,
+    options: q.options,
+    meta: { kpId: q.kpId, kpName: q.kpName },
+  }
+}
+function prefInteraction(idx: number): DialogueInteraction {
+  const p = MOCK_PREFERENCE[idx]
+  return { id: `mock:preference:${idx}`, type: 'preference', dimKey: p.dimKey, prompt: p.prompt, options: p.options }
 }
 
 async function mockDialogue(opts: DialogueStreamOptions): Promise<DialogueDone> {
   const sid = opts.sessionId ?? `d_mock_${++mockSeq}`
-  const turn = mockTurns.get(sid) ?? 0
-  const script = MOCK_SCRIPT[Math.min(turn, MOCK_SCRIPT.length - 1)]
+  let s = mockSessions.get(sid)
+  if (!s) {
+    s = { stage: 'opening', openingTurns: 0, microIdx: 0, microCorrect: 0, microResults: [], prefIdx: 0, pending: null }
+    mockSessions.set(sid, s)
+  }
+  const ans = opts.answer ?? opts.message
+  let reply = ''
+  const updates: PortraitDimension[] = []
+  let interaction: DialogueInteraction | null = null
+  let suggestions: string[] = []
 
-  await streamText(script.reply, opts.onDelta)
-
-  if (script.updates.length) {
-    await sleep(160) // 追问语落定后再「抽出」画像，呈现边问边抽的节奏
-    const now = new Date().toISOString()
-    opts.onPortrait(script.updates.map((u) => ({ ...u, updatedAt: now })))
+  if (s.stage === 'opening') {
+    const key = s.openingTurns === 0 ? 'prior_experience' : 'learning_goal'
+    const label = key === 'prior_experience' ? '先验经验' : '学习目标'
+    const v = (opts.message || '').trim()
+    updates.push({ key, label, kind: 'subjective', value: v && v.length <= 24 ? v : key === 'prior_experience' ? '有相关经验' : '提升能力', confidence: 0.55, source: 'dialogue', updatedAt: now() })
+    s.openingTurns += 1
+    if (s.openingTurns >= 2) {
+      s.stage = 'microtest'
+      interaction = quizInteraction(0)
+      s.pending = interaction
+      reply = '好的，主观情况我了解了。下面做几道小题快速「测」一下你的真实基础——凭直觉选就行。'
+      reply += `\n关于「${MOCK_MICROTEST[0].kpName}」：${MOCK_MICROTEST[0].prompt}`
+    } else {
+      reply = '了解了。那这次学习你最想达成的目标是什么？'
+      suggestions = ['转岗 / 求职', '考试 / 认证', '兴趣自学']
+    }
+  } else if (s.stage === 'microtest') {
+    const q = MOCK_MICROTEST[s.microIdx]
+    const correct = ans === q.correct
+    s.microResults.push({ kpName: q.kpName, correct })
+    if (correct) s.microCorrect += 1
+    s.microIdx += 1
+    if (s.microIdx < MOCK_MICROTEST.length) {
+      const nq = MOCK_MICROTEST[s.microIdx]
+      interaction = quizInteraction(s.microIdx)
+      s.pending = interaction
+      reply = `好，记下了。下面这道关于「${nq.kpName}」的题，你的判断是？\n${nq.prompt}`
+    } else {
+      // 微测结束：据作答反推能力 + 合成能力雷达
+      const total = s.microResults.length
+      const score = Math.round((s.microCorrect / total) * 100)
+      const verdict = score >= 80 ? '扎实' : score >= 50 ? '一般' : '薄弱'
+      const correctKps = s.microResults.filter((r) => r.correct).map((r) => r.kpName)
+      const wrongKps = s.microResults.filter((r) => !r.correct).map((r) => r.kpName)
+      const basis = `诊断微测答对 ${s.microCorrect}/${total} 题` +
+        (correctKps.length ? `；答对：${correctKps.join('、')}` : '') +
+        (wrongKps.length ? `；答错：${wrongKps.join('、')}` : '') + '。'
+      updates.push({ key: 'knowledge_base', label: '知识基础', kind: 'ability', value: verdict, score, basis, confidence: Math.min(0.7, 0.4 + 0.06 * total), source: 'diagnostic', updatedAt: now() })
+      // mock 能力雷达：答对的知识点轴高、答错的低
+      mockAbility = {
+        dimensions: [...ABILITY_RADAR_DIMS],
+        values: ABILITY_RADAR_DIMS.map((name) => {
+          const r = s!.microResults.find((x) => x.kpName.includes(name.slice(0, 3)) || name.includes(x.kpName.slice(0, 3)))
+          return r ? (r.correct ? 78 : 32) : score
+        }),
+      }
+      s.stage = 'preference'
+      interaction = prefInteraction(0)
+      s.pending = interaction
+      reply = `速测完成 ✦，能力画像已据作答测出（${verdict}）。最后了解一下学习偏好（只归类型、不打分）——\n${MOCK_PREFERENCE[0].prompt}`
+    }
+  } else if (s.stage === 'preference') {
+    const p = MOCK_PREFERENCE[s.prefIdx]
+    const optionKey = p.options.some((o) => o.value === ans) ? ans : p.options[0].value
+    updates.push({ key: p.dimKey, label: p.label, kind: 'preference', value: PREF_LABELS[p.dimKey][optionKey], optionKey, confidence: 0.9, source: 'dialogue', updatedAt: now() })
+    s.prefIdx += 1
+    if (s.prefIdx < MOCK_PREFERENCE.length) {
+      const np = MOCK_PREFERENCE[s.prefIdx]
+      interaction = prefInteraction(s.prefIdx)
+      s.pending = interaction
+      reply = `好的。${np.prompt}`
+    } else {
+      s.stage = 'done'
+      reply = '都记下了 🎉 能力靠测、偏好归类型、主观靠对话，你的动态学习画像已构建完整，可据此生成个性化学习路径了。'
+      suggestions = ['生成学习路径']
+    }
+  } else {
+    reply = '你的画像已构建完整，随时可以生成学习路径。'
+    suggestions = ['生成学习路径']
   }
 
-  mockTurns.set(sid, turn + 1)
-  return { sessionId: sid, suggestions: script.suggestions, diagnosisComplete: script.diagnosisComplete }
+  await streamText(reply, opts.onDelta)
+  if (updates.length) {
+    await sleep(120)
+    opts.onPortrait(updates)
+  }
+  opts.onInteraction(interaction)
+  return { sessionId: sid, suggestions, diagnosisComplete: s.stage === 'done' }
 }
