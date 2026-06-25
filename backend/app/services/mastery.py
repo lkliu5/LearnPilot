@@ -53,11 +53,38 @@ def set_status(db: Session, user_id: str, kp_id: str, status: str) -> str:
 
 
 def ensure_learning(db: Session, user_id: str, kp_id: str) -> str:
-    """学习行为（如生成讲义）触发：未开始 → learning；已有状态保持不变。"""
-    current = _current_status(db, user_id, kp_id)
-    if current is None:
+    """真实学习行为（如生成讲义）触发：未开始 → learning；已有状态保持不变。
+
+    若该知识点此前仅有「诊断微测基线」（score_source=diagnostic，非真实学习），此刻真实
+    学习开始 → 清除诊断标记（保留能力分），使其从"未开始"提升为"学习中"（路径据此显示
+    in_progress）。这保证「微测答对 ≠ 学完/在学」与「真实学习」严格解耦。
+    """
+    row = _get_row(db, user_id, kp_id)
+    if row is None:
         return set_status(db, user_id, kp_id, STATUS_LEARNING)
-    return current
+    if row.status == STATUS_PASSED:
+        return STATUS_PASSED
+    if row.score_source == "diagnostic":  # 真实学习开始 → 提升（清诊断标记，保留能力分）
+        row.score_source = None
+        if row.status not in (STATUS_LEARNING, STATUS_PENDING_CHECK):
+            row.status = STATUS_LEARNING
+        db.commit()
+    return row.status
+
+
+def learning_step(status: str | None, source: str | None) -> tuple[str, int]:
+    """掌握状态 → 学习路径节点展示状态/进度（接口文档 2.3 status/progress）。
+
+    **「已完成」只来自真实学习行为**（通过阶段测试 → status=passed）；诊断微测基线
+    （source=diagnostic，未真实学习）一律视为「未开始」（pending），绝不显示已完成/进行中
+    ——保证零基础新用户路径无任何「已完成」，且「微测≠学完」与学习进度解耦。
+    """
+    if status == STATUS_PASSED:
+        return ("completed", 100)
+    # 仅诊断基线（未真实学习）→ 未开始；真实学习中/待检验才 in_progress
+    if status in (STATUS_LEARNING, STATUS_PENDING_CHECK) and source != "diagnostic":
+        return ("in_progress", 70 if status == STATUS_PENDING_CHECK else 40)
+    return ("pending", 0)
 
 
 def mark_check(db: Session, user_id: str, kp_id: str) -> str:

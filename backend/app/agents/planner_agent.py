@@ -33,13 +33,8 @@ from app.services import student_portrait as portrait_service
 # （与「能力靠测」一致：用实测分而非仅 passed 状态判定"学什么/什么顺序"）。
 _PROFICIENT_SCORE: int = 70
 
-# 掌握状态 → 路径步骤展示状态/进度（接口文档 2.3 status/progress；2.2 掌握枚举）
-_STATUS_TO_STEP: dict[str, tuple[str, int]] = {
-    mastery_service.STATUS_PASSED: ("completed", 100),
-    mastery_service.STATUS_PENDING_CHECK: ("in_progress", 70),
-    mastery_service.STATUS_LEARNING: ("in_progress", 40),
-}
-_STEP_NOT_STARTED = ("pending", 0)
+# 掌握状态 → 路径步骤展示状态/进度：统一走 mastery_service.learning_step（诊断基线视为
+# 未开始、仅真实通过测验才"已完成"），不再静态映射。
 
 # KP → 岗位雷达能力维名（core.llm.ABILITY_DIMENSIONS 口径）：用于读 JobSnapshot.radar
 # 的该知识点岗位需求值（cnn 无独立能力维，回落「深度学习」需求）。
@@ -295,6 +290,8 @@ def plan_path(
             {
                 "kp": kp,
                 "status": status,
+                # 能力分来源（quiz/diagnostic/None）：用于区分"真实学习"与"仅诊断基线"
+                "source": (score_map.get(kp.id) or {}).get("source"),
                 "score": score,
                 "signals": {
                     "weak": weak,
@@ -319,7 +316,8 @@ def plan_path(
         seed = lessons_by_seq.get(kp.lesson_seq)
         base_diff = seed.difficulty if seed is not None else "初级"
         difficulty = _adapt_difficulty(base_diff, foundation)
-        status, progress = _STATUS_TO_STEP.get(entry["status"], _STEP_NOT_STARTED)
+        # 「已完成」只来自真实通过测验（passed）；诊断微测基线视为未开始（微测≠学完）
+        status, progress = mastery_service.learning_step(entry["status"], entry["source"])
         description = (seed.description if seed is not None else "") or kp.description
 
         lesson: dict[str, Any] = {

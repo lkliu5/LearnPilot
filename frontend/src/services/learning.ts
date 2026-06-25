@@ -193,10 +193,12 @@ async function mockLearningPath(): Promise<LearningPathData> {
   const lessons: Lesson[] = scored.map((e, i) => {
     const difficulty = _adaptDifficulty(_BASE_DIFF[e.k.id], foundation)
     const order = i + 1
+    // 「已完成」只来自真实通过测验（passed）；「进行中」只来自真实学习行为（mastery 状态）。
+    // 微测能力分（kpScore）仅用于排序/薄弱判定，**绝不**让节点显示已完成/进行中（微测≠学完）。
     let status_: Lesson['status'] = 'pending'
     let progress = 0
     if (e.mastered) { status_ = 'completed'; progress = 100 }
-    else if (e.st === 'learning' || e.st === 'pending-check' || e.kpScore > 0) { status_ = 'in_progress'; progress = e.kpScore > 0 ? Math.min(60, e.kpScore) : 40 }
+    else if (e.st === 'learning' || e.st === 'pending-check') { status_ = 'in_progress'; progress = e.st === 'pending-check' ? 70 : 40 }
     const ab = e.kpScore > 0 ? `（微测能力分 ${e.kpScore}）` : ''
     let reason = ''
     if (e.mastered) { proficientCount++; reason = `你已掌握「${e.k.name}」（测验通过），后置到第 ${order} 步用于巩固复习，可快速跳过。` }

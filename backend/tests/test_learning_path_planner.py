@@ -261,6 +261,56 @@ def test_per_kp_ability_orders_and_preference_drives_resources():
         db.close()
 
 
+def test_fresh_and_diagnostic_users_have_no_completed_nodes(client):
+    """紧急修复回归：零基础新用户 / 仅做过微测的用户 → 路径无任何「已完成」节点。
+
+    ① 全新未诊断用户 → 全部 pending（不再沿用种子表写死的 completed/in_progress）；
+    ② 做过微测（写诊断基线）但未真实学习 → 仍全部 pending（微测≠学完，二者解耦）；
+    ③ 真实通过某知识点阶段测试 → 仅该节点 completed，其余仍未完成。
+    """
+    import uuid
+
+    username = f"fresh_{uuid.uuid4().hex[:8]}"
+    reg = client.post(f"{API}/auth/register", json={"username": username, "password": "123456"})
+    headers = {"Authorization": f"Bearer {reg.json()['data']['token']}"}
+    uid = reg.json()["data"]["user"]["userId"]
+
+    def statuses() -> list[str]:
+        data = client.get(f"{API}/learning-path", headers=headers).json()["data"]
+        return [l["status"] for l in data["lessons"]]
+
+    # ① 全新未诊断 → 全部 pending（绝无 completed）
+    assert statuses() == ["pending"] * 6, "零基础新用户不应出现已完成/进行中节点"
+
+    # ② 写诊断微测基线（status=learning + source=diagnostic）+ 标记已诊断 → 仍全 pending
+    db = SessionLocal()
+    try:
+        for kp in ("ml", "nn", "dl", "cnn", "transformer", "finetune"):
+            mastery_service.set_baseline(db, uid, kp, score=80, confidence=0.45)  # 即便答得好
+        j = db.get(Journey, uid) or Journey(user_id=uid)
+        j.has_diagnosed = True
+        db.add(j)
+        db.commit()
+        assert "completed" not in statuses(), "微测基线不应使节点变已完成（微测≠学完）"
+        assert "in_progress" not in statuses(), "微测基线不应使节点变进行中（未真实学习）"
+
+        # ③ 真实通过 nn 阶段测试 → 仅 nn completed
+        mastery_service.set_score(db, uid, "nn", score=100)
+        mastery_service.mark_pass(db, uid, "nn")
+        db.commit()
+        data = client.get(f"{API}/learning-path", headers=headers).json()["data"]
+        by_topic = {l["topic"]: l["status"] for l in data["lessons"]}
+        assert by_topic["神经网络基础"] == "completed"
+        assert [t for t, s in by_topic.items() if s == "completed"] == ["神经网络基础"], "只有真实通过的节点才已完成"
+    finally:
+        db.query(Mastery).filter(Mastery.user_id == uid).delete()
+        for row in (db.get(StudentPortrait, uid), db.get(Journey, uid), db.get(User, uid)):
+            if row is not None:
+                db.delete(row)
+        db.commit()
+        db.close()
+
+
 def test_get_path_recomputes_when_portrait_changes(client):
     """C2 验证：画像变 → GET /learning-path 路径相应重算（缓存指纹失效，不写死）。"""
     import uuid

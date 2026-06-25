@@ -25,8 +25,9 @@ from app.core.database import SessionLocal, get_db
 from app.core.envelope import success
 from app.core.security import get_current_user
 from app.core.tasks import Task, submit
-from app.models.entities import Journey, Lesson, User
+from app.models.entities import Journey, KnowledgePoint, Lesson, User
 from app.schemas.profile import GeneratePathRequest
+from app.services import mastery as mastery_service
 
 router = APIRouter(tags=["learning-path"])
 
@@ -34,10 +35,24 @@ router = APIRouter(tags=["learning-path"])
 _LESSON_FIELDS = ("sequence", "topic", "difficulty", "status", "progress", "description")
 
 
-def _seed_lessons(db: Session) -> list[dict[str, Any]]:
-    """全局种子 6 课（接口文档 2.3），按 sequence 升序——未生成个性化路径时的回落。"""
-    lessons = db.query(Lesson).order_by(Lesson.sequence).all()
-    return [{f: getattr(ls, f) for f in _LESSON_FIELDS} for ls in lessons]
+def _seed_lessons(db: Session, user_id: str) -> list[dict[str, Any]]:
+    """全局种子 6 课（接口文档 2.3，按 sequence 升序）——未诊断时的回落。
+
+    **状态/进度由该用户真实 Mastery 派生（不再沿用种子表里写死的 completed/in_progress）**：
+    通过阶段测试(passed)→completed；真实学习中→in_progress；否则未开始(pending)。诊断微测
+    基线视为未开始。零基础新用户（无 Mastery）→ 全部 pending，绝不出现"已完成"。
+    """
+    kp_by_seq = {kp.lesson_seq: kp.id for kp in db.query(KnowledgePoint).all()}
+    score_map = mastery_service.get_score_map(db, user_id)
+    out: list[dict[str, Any]] = []
+    for ls in db.query(Lesson).order_by(Lesson.sequence).all():
+        entry = score_map.get(kp_by_seq.get(ls.sequence) or "") or {}
+        status, progress = mastery_service.learning_step(entry.get("status"), entry.get("source"))
+        out.append({
+            "sequence": ls.sequence, "topic": ls.topic, "difficulty": ls.difficulty,
+            "status": status, "progress": progress, "description": ls.description,
+        })
+    return out
 
 
 def _resolve_lessons(
@@ -50,7 +65,7 @@ def _resolve_lessons(
     （narrate=False，零网络、不阻塞），并刷新缓存与指纹；③ 未诊断 → 全局种子路径。
     """
     if journey is None or not journey.has_diagnosed:
-        return _seed_lessons(db), ""
+        return _seed_lessons(db, user_id), ""
     current_fp = portrait_fingerprint(db, user_id)
     if journey.path_plan and journey.path_fingerprint == current_fp:
         return list(journey.path_plan), journey.path_narrative or ""  # 命中缓存
