@@ -6,7 +6,11 @@
 /* ========== 全局布局 ========== */
 .app {
   display: flex;
-  min-height: 100vh;
+  /* 固定为视口高度（非 min-height）：否则内容超高时 .app 会被撑大，
+     作为唯一滚动容器的 .app__main(flex:1) 随之拉伸到内容高度、内部 overflow 失效，
+     而 .app 的 overflow:hidden 又裁掉超出视口的部分 → 整页无法用滚轮滚动。
+     限高后 .app__main 重新获得有界高度，其 overflow-y:auto 正常滚动（侧栏为 fixed，不受影响）。 */
+  height: 100vh;
   position: relative;
   overflow: hidden;
 }

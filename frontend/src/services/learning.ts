@@ -159,7 +159,7 @@ async function mockLearningPath(): Promise<LearningPathData> {
     // 未诊断 → 种子静态 6 课（与后端 GET 未诊断回落同义）
     const seed = KNOWLEDGE_POINTS.map((k) => ({
       sequence: k.lessonSeq, topic: k.name, difficulty: _BASE_DIFF[k.id], status: 'pending' as const,
-      progress: 0, description: '',
+      progress: 0, description: '', kpId: k.id,
     }))
     return { lessons: seed, milestones: _milestones(false, false, seed), summary: { ..._summary(seed), narrative: '' } }
   }

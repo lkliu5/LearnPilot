@@ -40,10 +40,15 @@ export default function AskTutorDock({ kpId, kpName }: Props) {
   const [suggestion, setSuggestion] = useState<RemedialSuggestResult | null>(null)
   const controlRef = useRef<{ cancelled: boolean } | null>(null)
 
-  /* 一次完整提问：先逐字流式回答（B-1），结束后再识别问题点出资源清单。 */
+  /* 一次完整提问：先逐字流式回答（B-1），结束后再识别问题点出资源清单。
+     设计要点（修复「即时辅导一直卡住/不稳定」）：
+     1) 不再用 `if (answering||suggesting) return` 静默丢弃新提问——而是「取消上一条 + 重启本条」，
+        让选中提问可随时重试、与抽屉内直接提问表现一致；
+     2) 凡因取消而提前 return 的路径，状态(answering/suggesting)由「接管者」负责重置：
+        新提问会自行置位，关闭抽屉由 close() 显式清零——避免回调 return 后 busy 永久为 true、
+        重开抽屉时输入框/按钮被 disabled 卡死。 */
   const ask = async (q: string) => {
-    if (answering || suggesting) return
-    // 中止上一条仍在流的回答
+    // 取消上一条仍在流的回答/在途的资源建议（避免并发串扰）
     if (controlRef.current) controlRef.current.cancelled = true
     const control = { cancelled: false }
     controlRef.current = control
@@ -51,16 +56,17 @@ export default function AskTutorDock({ kpId, kpName }: Props) {
     setQuestion(q)
     setAnswer('')
     setSuggestion(null)
+    setSuggesting(false)
     setAnswering(true)
     try {
       await streamInstantReply(
-        { kpId, message: q, kpName, onDelta: (d) => setAnswer((prev) => prev + d) },
+        { kpId, message: q, kpName, onDelta: (d) => { if (!control.cancelled) setAnswer((prev) => prev + d) } },
         control
       )
     } catch (e) {
       console.error('[instant-tutor] 流式回答失败', e)
     }
-    if (control.cancelled) return
+    if (control.cancelled) return // 已被新提问/关闭接管，状态由接管者重置
     setAnswering(false)
 
     // 回答收尾后再出资源清单
@@ -84,7 +90,14 @@ export default function AskTutorDock({ kpId, kpName }: Props) {
     void ask(`针对「${kpName}」当前讲义内容，我还没完全理解，帮我做更针对性的拆解`)
 
   const close = () => {
-    if (controlRef.current) controlRef.current.cancelled = true
+    // 关闭即中止在途回答/建议，并清零忙碌态——否则下次打开抽屉时 busy 仍为 true，
+    // 输入框与按钮被 disabled，表现为「即时辅导一直卡住」。
+    if (controlRef.current) {
+      controlRef.current.cancelled = true
+      controlRef.current = null
+    }
+    setAnswering(false)
+    setSuggesting(false)
     setOpen(false)
   }
 

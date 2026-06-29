@@ -22,8 +22,9 @@ export interface TutorStreamOptions {
   onDelta: (delta: string) => void
 }
 
-/** SSE 流式对话：正常结束 resolve done 负载；连接失败 / event:error 时 reject。 */
-export async function tutorChatStream(opts: TutorStreamOptions): Promise<TutorDone> {
+/** SSE 流式对话：正常结束 resolve done 负载；连接失败 / event:error 时 reject。
+ *  可选 `signal`：用于超时/取消中止底层 fetch（避免后端挂起时 reader.read() 永久阻塞）。 */
+export async function tutorChatStream(opts: TutorStreamOptions, signal?: AbortSignal): Promise<TutorDone> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
@@ -35,6 +36,7 @@ export async function tutorChatStream(opts: TutorStreamOptions): Promise<TutorDo
     method: 'POST',
     headers,
     body: JSON.stringify({ kpId: opts.kpId, sessionId: opts.sessionId, message: opts.message }),
+    signal,
   })
 
   // 非流式回包（401 / 1004 等信封错误）：解信封抛业务码
@@ -138,19 +140,43 @@ export async function streamInstantReply(
 
   if (USE_REAL_API) {
     let started = false
+    // 超时看门狗：整体上限 + 「首字节/长时间无新增量」空闲上限，超时即中止底层 fetch，
+    // 避免后端 SSE 挂起导致回答永久停在「正在思考…」（即时辅导卡死）。
+    const ac = new AbortController()
+    const OVERALL_MS = 25_000
+    const IDLE_MS = 9_000
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+    const overallTimer = setTimeout(() => ac.abort(), OVERALL_MS)
+    const bumpIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => ac.abort(), IDLE_MS)
+    }
+    bumpIdle()
     try {
-      await tutorChatStream({
-        kpId: opts.kpId,
-        message: opts.message,
-        onDelta: (d) => {
-          started = true
-          emit(d)
+      await tutorChatStream(
+        {
+          kpId: opts.kpId,
+          message: opts.message,
+          onDelta: (d) => {
+            // 抽屉关闭/发起新问题 → control.cancelled，立即中止读取，不再继续出字
+            if (control.cancelled) {
+              ac.abort()
+              return
+            }
+            started = true
+            bumpIdle()
+            emit(d)
+          },
         },
-      })
+        ac.signal
+      )
       return
     } catch (e) {
-      console.error('[instant-tutor] SSE 失败，回退本地流式', e)
-      if (started) return // 已渲染片段，保留，不再叠加兜底文本
+      console.error('[instant-tutor] SSE 失败/超时，回退本地流式', e)
+      if (started || control.cancelled) return // 已出字则保留片段；已取消则不再兜底
+    } finally {
+      clearTimeout(overallTimer)
+      if (idleTimer) clearTimeout(idleTimer)
     }
   }
 

@@ -13,7 +13,8 @@ import { reportStuck } from '../services/stuckSignal'
 import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
-import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import { kpById } from '../data/knowledgePoints'
+import { KP_RESOURCES } from '../data/kpResources'
 import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
@@ -457,9 +458,18 @@ function lectureOutline(md: string): string {
 const Loading = () => <div className="resource-loading">资源加载中…</div>
 
 export default function LearningResource({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
-  /* 当前知识点：联调从 resourceNav 路由传参通道取（页面随导航重挂载，挂载时读取即可）；
-     mock 模式恒为 CURRENT_KP_ID——本地演示内容只有 nn 一套，避免「标题 CNN、内容 nn」错配 */
-  const kpId = USE_REAL_API ? getResourceKpId() : CURRENT_KP_ID
+  /* 当前知识点：无论联调/mock 都从 resourceNav 路由传参通道取（页面随导航重挂载，挂载时读取即可）。
+     mock 模式按 kpId 选对应知识点内容（KP_RESOURCES），故从学习路径点不同知识点会进入对应内容，
+     不再全部落到神经网络；未命中的 kpId 回退到 nn 的精修常量（见下方 mockRes）。 */
+  const kpId = getResourceKpId()
+  /* mock 模式下当前知识点的本地内容包（讲义三档/测验/导图/图解）。
+     KP_RESOURCES 未收录 nn——nn 沿用本文件下方既有精修常量作为默认兜底。 */
+  const mockRes = KP_RESOURCES[kpId] ?? {
+    lectureByLevel,
+    quiz: quizQuestions,
+    mindmap: mindmapMarkdown,
+    diagram: mermaidChart,
+  }
   /* 进入模式：「开始学习」→ flow（费曼+康奈尔有序流）；「查看资源」→ browse（8-tab 中枢）*/
   const [mode, setMode] = useState<ResourceMode>(() => getResourceMode())
   /* 资源详情过场：openId=当前打开的内容（null=只显示卡片网格）。
@@ -519,7 +529,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   /* 联调数据源（mock 模式下不使用，保持现有常量驱动）：
      questions 来自 GET /quiz/{kp}（联调初值为空，避免拉取期间闪现 nn 演示题）；
      lectureMap 缓存各难度档 markdown */
-  const [questions, setQuestions] = useState<QuizQuestion[]>(USE_REAL_API ? [] : quizQuestions)
+  const [questions, setQuestions] = useState<QuizQuestion[]>(USE_REAL_API ? [] : mockRes.quiz)
   const [lectureMap, setLectureMap] = useState<Record<string, string>>({})
   /* 知识图解 Mermaid：联调按当前 kpId 经后端 LLMClient 真实生成；mock 用本地常量 */
   const [diagramChart, setDiagramChart] = useState<string>('')
@@ -630,12 +640,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   useEffect(() => () => regenSocketRef.current?.close(), [])
 
   /* 当前展示的讲义内容：联调取后端缓存，mock 取本地三档常量 */
-  const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : lectureByLevel[level]
+  const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : mockRes.lectureByLevel[level]
 
   /* 思维导图：联调由当前讲义 markdown 实时结构化（标题大纲，与"从讲义结构化得到"的
      设计一致；后端 8.4 导图接口未实现，讲义已按 kpId 请求故大纲随 kpId 变化）；
      mock 保持本地大纲常量 */
-  const activeMindmap = USE_REAL_API ? lectureOutline(activeLecture) : mindmapMarkdown
+  const activeMindmap = USE_REAL_API ? lectureOutline(activeLecture) : mockRes.mindmap
 
   const handleQuizResult = (
     wrong: QuizQuestion[],
@@ -877,7 +887,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             {USE_REAL_API && !diagramChart ? (
               <div className="resource-loading">「{kpName}」的知识图解生成中，请稍候…</div>
             ) : (
-              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mermaidChart} />
+              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mockRes.diagram} />
             )}
           </Suspense>
         )
@@ -978,7 +988,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               kpName={kpName}
               level={level}
               lectureMarkdown={activeLecture}
-              diagramChart={USE_REAL_API ? diagramChart : mermaidChart}
+              diagramChart={USE_REAL_API ? diagramChart : mockRes.diagram}
               questions={questions}
               kpStatus={kpStatus}
               onQuizResult={handleQuizResult}
