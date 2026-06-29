@@ -31,7 +31,8 @@ from app.models.entities import (
 from app.rag.reranker import get_reranker
 from app.rag.retriever import get_retriever
 from app.services import mastery as mastery_service
-from app.workflows.learning_workflow import run_learning_workflow
+from app.services import student_portrait as portrait_service
+from app.workflows.learning_workflow import _ability_tier, run_learning_workflow
 
 # 接口文档 8.2 sources[].type 合法取值；文档 category 不在其中时回落「文档」
 _SOURCE_TYPES = {"教材", "论文", "文档", "课程"}
@@ -416,9 +417,19 @@ def generate_lecture(
     # 学习该知识点 → 掌握度置 learning（未开始时）
     mastery_service.ensure_learning(db, user_id, kp_id)
 
+    # 据请求用户画像派生当前知识点的讲义深度档（能力强/零基础产出深度不同的讲义）。
+    # 空画像 → tier=None 落难度基线（与 B5b/B10 直出契约一致）。
+    portrait = (
+        portrait_service.get_portrait(db, user_id) if user_id else {"dimensions": []}
+    )
+    tier = _ability_tier(portrait, kp_id, kp.name)
+
     llm = get_llm()
-    # mock 缓存 kind 与 B2 完全一致；真实模式按 provider 隔离，互不污染
-    kind = "lecture" if llm.is_mock else f"lecture@{llm.provider}"
+    # mock 缓存 kind 与 B2 完全一致；真实模式按 provider 隔离，互不污染。
+    # 个性化分档：tier 非空时按档隔离缓存（lecture#advanced 等），保证不同用户深度互不覆盖；
+    # tier=None（无画像信号）→ 维持原 kind=lecture（直出契约不回归）。
+    base_kind = "lecture" if llm.is_mock else f"lecture@{llm.provider}"
+    kind = base_kind if tier is None else f"{base_kind}#{tier}"
     cached = (
         db.query(ResourceCache)
         .filter(
@@ -438,7 +449,7 @@ def generate_lecture(
     # mock 直接生成（不经工作流）→ null；真实模式由工作流预分配 id 并落 WorkflowTrace。
     workflow_id: str | None = None
     if llm.is_mock:
-        generated = llm.generate_lecture(kp.id, kp.name, difficulty, kp.description)
+        generated = llm.generate_lecture(kp.id, kp.name, difficulty, kp.description, tier)
         markdown = generated["markdown"]
         sources = generated["sources"]
         rate = generated["hallucinationRate"]

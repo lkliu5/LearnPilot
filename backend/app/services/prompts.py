@@ -19,6 +19,54 @@ from app.models.entities import PromptTemplate
 # 占位符语法：{varName}
 _PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
+# ---- generation 模板（CC 内容质量提升：递进结构 + 标准 LaTeX + 贴画像深度） ----------
+# 在 B8「接地可校验」基础上增强：①六段递进结构（概念→原理→例子→代码→误区→小结）；
+# ②公式一律标准 LaTeX（$...$ / $$...$$，交前端 KaTeX 渲染）；③新增 {learnerProfile}
+# 占位符，让同一知识点对能力强 / 零基础用户产出深度不同的讲义。防幻觉铁律不变（不绕过 Critic）。
+_GENERATION_TEMPLATE = (
+    "你是领域知识讲义生成专家，依据检索资料生成与学习者难度、能力画像适配的高质量课程讲义。\n"
+    "铁律（防幻觉）：讲义中每一个事实、定义、公式与结论都必须来自下方检索资料，"
+    "只做重组、改写、推导展开与详略取舍，措辞尽量贴近资料原文；"
+    "比喻、例子、代码同样只能取自资料或资料的直接逻辑推论，严禁自创资料之外的事实与数据；"
+    "资料未覆盖的内容宁可从简或不写。\n"
+    "知识点：{kpName}\n"
+    "必须覆盖的核心概念：{description}\n"
+    "难度：{difficulty}\n"
+    "学习者画像：{learnerProfile}\n"
+    "结构要求（按此递进组织，不要平铺罗列）：①概念引入（要解决什么问题、给直觉/类比）→"
+    "②核心原理（含必要公式）→③具体例子（每个关键概念至少配一个）→④代码示例"
+    "（带注释、注明输入与输出；涉及算法/实现处给可运行片段）→⑤常见误区→⑥小结。\n"
+    "公式格式：一律用标准 LaTeX——行内 $...$、独立公式 $$...$$，规范转义"
+    "（如 \\frac、\\sqrt、\\sum、上标 ^、下标 _）；禁止用 \\(...\\) 或纯文本符号堆叠。\n"
+    "贴画像给不同深度：依据上面的「学习者画像」调节深度——能力强者补公式推导、底层原理与"
+    "对比延伸，信息密度高；零基础者多用类比、少堆术语、步骤更细、先直觉后形式化；"
+    "难度档在此基础上叠加，使同一知识点对不同用户产出深度不同的讲义。\n"
+    "检索资料：{ragContext}\n"
+    "请输出 Markdown 讲义，按上述六段递进结构组织，覆盖全部核心概念。"
+)
+
+# generation 历史默认模板（仅当库内仍是某历史默认、未被管理员 PUT 改过时，自动升级到最新默认；
+# 管理员自定义模板不在此集合，故升级逻辑不会覆盖人工改动）。
+_GENERATION_V1 = (
+    "你是领域知识讲义生成专家，依据检索资料生成与学习者难度适配的讲义。\n"
+    "铁律：讲义中每一个事实、定义、公式与结论都必须来自下方检索资料，"
+    "只做重组、改写与详略取舍，措辞尽量贴近资料原文；"
+    "比喻、例子、代码同样只能取自资料，严禁自创类比或引入资料之外的事实与数据；"
+    "资料未覆盖的内容宁可从简或不写。\n"
+    "知识点：{kpName}\n"
+    "必须覆盖的核心概念：{description}\n"
+    "难度：{difficulty}\n"
+    "难度风格约定——入门：用资料中的比喻与直白讲解建立直觉，不出现代码与数学公式，"
+    "篇幅最短；初级：核心概念讲解 + 资料中的基础代码示例，仅保留必要公式，篇幅适中；"
+    "高级：数学形式化表达 + 代码实现 + 资料中的工程权衡与优化细节，信息密度最高。\n"
+    "检索资料：{ragContext}\n"
+    "请输出 Markdown 讲义：概念讲解、示例、要点小结，并覆盖上述核心概念。"
+)
+
+# agentId -> 历史默认模板集合（命中即可安全升级到 _DEFAULTS 的当前默认）
+_PRIOR_DEFAULTS: dict[str, set[str]] = {"generation": {_GENERATION_V1}}
+
+
 # 默认模板（agentId -> (name, template, variables)）。
 # name 与接口文档 11.2 agents[].name 逐字一致；generation 模板与 14.5 示例同构。
 _DEFAULTS: dict[str, tuple[str, str, list[str]]] = {
@@ -33,22 +81,8 @@ _DEFAULTS: dict[str, tuple[str, str, list[str]]] = {
     ),
     "generation": (
         "领域知识生成Agent",
-        # B8 调优：①铁律改为「只重组检索资料中的事实、措辞贴近原文」（接地可校验）；
-        # ②三档难度风格约定（适配率区分度）；③注入核心概念清单 {description}（覆盖率）。
-        "你是领域知识讲义生成专家，依据检索资料生成与学习者难度适配的讲义。\n"
-        "铁律：讲义中每一个事实、定义、公式与结论都必须来自下方检索资料，"
-        "只做重组、改写与详略取舍，措辞尽量贴近资料原文；"
-        "比喻、例子、代码同样只能取自资料，严禁自创类比或引入资料之外的事实与数据；"
-        "资料未覆盖的内容宁可从简或不写。\n"
-        "知识点：{kpName}\n"
-        "必须覆盖的核心概念：{description}\n"
-        "难度：{difficulty}\n"
-        "难度风格约定——入门：用资料中的比喻与直白讲解建立直觉，不出现代码与数学公式，"
-        "篇幅最短；初级：核心概念讲解 + 资料中的基础代码示例，仅保留必要公式，篇幅适中；"
-        "高级：数学形式化表达 + 代码实现 + 资料中的工程权衡与优化细节，信息密度最高。\n"
-        "检索资料：{ragContext}\n"
-        "请输出 Markdown 讲义：概念讲解、示例、要点小结，并覆盖上述核心概念。",
-        ["kpName", "description", "difficulty", "ragContext"],
+        _GENERATION_TEMPLATE,
+        ["kpName", "description", "difficulty", "ragContext", "learnerProfile"],
     ),
     "critic": (
         "内容审核校验Agent",
@@ -75,9 +109,9 @@ def _get_or_seed(db: Session, agent_id: str) -> PromptTemplate | None:
     """按 agentId 取模板；首次访问时落默认种子（幂等）。未知 agentId → None。"""
     if agent_id not in _DEFAULTS:
         return None
+    name, template, variables = _DEFAULTS[agent_id]
     row = db.get(PromptTemplate, agent_id)
     if row is None:
-        name, template, variables = _DEFAULTS[agent_id]
         row = PromptTemplate(
             agent_id=agent_id,
             name=name,
@@ -86,6 +120,14 @@ def _get_or_seed(db: Session, agent_id: str) -> PromptTemplate | None:
             version=1,
         )
         db.add(row)
+        db.commit()
+        db.refresh(row)
+    elif row.template in _PRIOR_DEFAULTS.get(agent_id, set()) and row.template != template:
+        # 库内仍是历史默认（未被管理员 PUT 改过）→ 平滑升级到当前默认，保留人工改动不被覆盖。
+        row.template = template
+        row.variables = list(variables)
+        row.version += 1
+        row.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(row)
     return row

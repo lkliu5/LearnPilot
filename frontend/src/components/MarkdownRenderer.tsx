@@ -1,15 +1,21 @@
 import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import 'katex/dist/katex.min.css'
 
 /**
- * Markdown 讲义渲染（react-markdown v9 + Prism 代码高亮）。
- * 注：v9 的 code 组件不再提供 inline 形参，改用是否带 language-* class 判定块级代码。
+ * Markdown 讲义渲染（react-markdown v9 + Prism 代码高亮 + KaTeX 数学公式）。
+ * - remark-math 解析行内 $...$ 与块级 $$...$$，rehype-katex 渲染为公式（CC 内容质量提升·公式修复）；
+ * - v9 的 code 组件不再提供 inline 形参，改用是否带 language-* class 判定块级代码。
  */
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           code({ node: _node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')

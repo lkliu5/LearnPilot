@@ -70,6 +70,46 @@ def _portrait_summary(portrait: dict[str, Any]) -> str:
     return "；".join(parts) if parts else "画像尚未采集（按通用基线诊断）"
 
 
+# 知识点 → 画像能力维度（用于据当前用户在该维度的掌握分派生讲义深度档）
+_KP_ABILITY: dict[str, str] = {
+    "ml": "机器学习基础", "nn": "神经网络", "dl": "深度学习",
+    "cnn": "深度学习", "transformer": "Transformer",
+    "finetune": "大模型微调", "attention": "注意力机制",
+}
+
+
+def _ability_tier(portrait: dict[str, Any], kp_id: str, kp_name: str) -> str | None:
+    """据画像能力维度派生当前知识点的讲义深度档：advanced / beginner / basic / None。
+
+    优先取与本知识点对应的能力维度分数；无对应维度则退化为全部能力维度均分；
+    完全无能力信号（空画像）→ None（按难度基线，不强加个性化，保证直出/工作流同档一致）。
+    使「同一知识点、同一难度」对能力强（≥70→advanced）与零基础（≤35→beginner）用户产出
+    深度不同的讲义——这是「真个性化」的又一硬证据。
+    """
+    dims = portrait.get("dimensions") or []
+    ability = [
+        d for d in dims
+        if isinstance(d.get("score"), (int, float)) and not isinstance(d.get("score"), bool)
+    ]
+    if not ability:
+        return None
+    target_label = _KP_ABILITY.get(kp_id)
+    score: float | None = None
+    if target_label:
+        for d in ability:
+            label = d.get("label") or d.get("key") or ""
+            if target_label in label or (label and label in target_label) or target_label in kp_name:
+                score = float(d["score"])
+                break
+    if score is None:
+        score = sum(float(d["score"]) for d in ability) / len(ability)
+    if score >= 70:
+        return "advanced"
+    if score <= 35:
+        return "beginner"
+    return "basic"
+
+
 def _list_reducer(left: list | None, right: list | None) -> list:
     """追加而非覆盖（需求文档 9.3 messages_reducer / error_reducer）。"""
     return (left or []) + (right or [])
@@ -225,6 +265,18 @@ def _build_graph(db: Session, retriever: Retriever, disable_critic: bool = False
     def generation_node(state: WorkflowState) -> dict:
         started, t0 = _now_iso(), time.perf_counter()
         retry_index = state.get("retry_count", 0)
+        # 读当前用户画像 → 派生讲义深度档（能力强/零基础产出深度不同的讲义），并把画像文本
+        # 注入生成 prompt（真实模式据此调节深度）。空画像 → tier=None 落难度基线（不强加个性化）。
+        user_id = state.get("user_id") or ""
+        portrait = (
+            portrait_service.get_portrait(db, user_id) if user_id else {"dimensions": []}
+        )
+        # 空画像用生成专用的中性占位（避免诊断专用措辞混入生成 prompt）。
+        learner_profile = (
+            _portrait_summary(portrait)
+            if (portrait.get("dimensions") or [])
+            else "画像尚未采集（按通用基线）"
+        )
         res = run_generator(
             db,
             kp_name=state["kp_name"],
@@ -232,6 +284,8 @@ def _build_graph(db: Session, retriever: Retriever, disable_critic: bool = False
             rag_context=state.get("reranked_context") or [],
             feedback=state.get("generation_feedback"),
             description=state.get("kp_description", ""),
+            learner_profile=learner_profile,
+            depth_tier=_ability_tier(portrait, state["kp_id"], state["kp_name"]),
         )
         markdown = res["output"]["markdown"]
         nth = f"第 {retry_index + 1} 次" if retry_index else "首次"

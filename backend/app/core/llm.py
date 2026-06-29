@@ -475,80 +475,148 @@ def _strip_md_fence(text: str) -> str:
     return t
 
 
-def _clean_mermaid(raw: str) -> str:
-    """Mermaid 知识图解契约清洗（接口文档 8.5）：剥围栏、校验首行为 flowchart/graph。
+# 前端 mermaid v11 支持的图型白名单（图解丰富化：按内容选流程图/层次图/关系图/思维导图等）。
+_MERMAID_HEADS: tuple[str, ...] = (
+    "flowchart", "graph", "mindmap", "classdiagram", "sequencediagram",
+    "statediagram", "erdiagram", "journey", "timeline", "quadrantchart",
+    "gitgraph", "requirementdiagram",
+)
 
-    非法输出（无法解析为合法 Mermaid 流程图）→ 抛 LLMGenerationError，由调用方回落
+
+def _clean_mermaid(raw: str) -> str:
+    """Mermaid 知识图解契约清洗（接口文档 8.5）：剥围栏、校验首行为受支持图型。
+
+    放宽到 _MERMAID_HEADS（流程图/层次图/关系图/思维导图等），让真实生成可按内容选用
+    更贴切的图型；仍拒绝非图解文本。非法输出 → 抛 LLMGenerationError，由调用方回落
     确定性主题模板，保证图解始终可渲染（演示兜底，不向路由抛错）。
     """
     text = _strip_md_fence(raw or "").strip()
     if not text:
         raise LLMGenerationError("知识图解输出为空")
     head = text.splitlines()[0].strip().lower()
-    if not (head.startswith("flowchart") or head.startswith("graph")):
-        raise LLMGenerationError("知识图解输出非合法 Mermaid flowchart/graph")
+    if not any(head.startswith(h) for h in _MERMAID_HEADS):
+        raise LLMGenerationError("知识图解输出非合法 Mermaid 图（首行图型不受支持）")
     return text
 
 
 # Mermaid 知识图解模板（接口文档 8.5；mock 与 deepseek 兜底共用）。
-# nn 与前端 LearningResource.mermaidChart 逐字一致（不回归），其余知识点收录精写模板。
+# 图解丰富化：不同知识点选用贴合其内容结构的不同图型——
+#   nn/ml/dl 训练回路用横向流程图（flowchart LR，含反馈边）；
+#   cnn 层级管线用纵向流程图（flowchart TD）；
+#   transformer 用带 subgraph 的编码器块结构图；
+#   finetune 谱系用思维导图（mindmap）。
+# 约束：nn/cnn/dl/ml 首行恒为 flowchart（契约测试 test_b7a / test_contract_snapshot 钉死）。
 _DIAGRAM_TEMPLATES: dict[str, str] = {
     "nn": (
         "flowchart LR\n"
-        '  X["输入 x"] --> S(["加权求和<br/>Σ w·x"])\n'
+        '  X["输入 x"] --> S(["加权求和<br/>z = Σ wᵢxᵢ + b"])\n'
         '  W["权重 w"] --> S\n'
-        '  S --> B(["加偏置<br/>+ b"])\n'
-        '  B --> A{{"激活函数<br/>ReLU"}}\n'
+        '  B0["偏置 b"] --> S\n'
+        '  S --> A{{"激活函数<br/>a = ReLU(z)"}}\n'
         '  A --> O["输出 a"]\n'
-        "  O -. 反向传播更新 .-> W\n"
+        '  O --> L(["损失 L"])\n'
+        '  Y["标签 y"] --> L\n'
+        "  L -. 反向传播<br/>∂L/∂w .-> W\n"
     ),
     "ml": (
         "flowchart LR\n"
-        '  D["数据集"] --> F(["特征工程"])\n'
-        '  F --> M["模型"]\n'
-        '  M --> L(["损失函数"])\n'
+        '  D["数据集"] --> SP{{"划分<br/>训练/验证/测试"}}\n'
+        '  SP --> F(["特征工程<br/>标准化"])\n'
+        '  F --> M["模型 f_θ"]\n'
+        '  M --> L(["损失 + λ正则"])\n'
         '  L --> O{{"优化器"}}\n'
         "  O -. 参数更新 .-> M\n"
-        '  M --> E["评估<br/>泛化能力"]\n'
+        '  M --> E["验证集评估<br/>看泛化"]\n'
+        "  E -. 调超参/正则 .-> SP\n"
     ),
     "dl": (
         "flowchart LR\n"
         '  X["输入"] --> FW(["前向传播"])\n'
-        '  FW --> L["损失 L"]\n'
+        '  FW --> P["预测 ŷ"]\n'
+        '  P --> L["损失 L"]\n'
+        '  Y["标签 y"] --> L\n'
         '  L --> BP(["反向传播<br/>链式法则"])\n'
         '  BP --> G["梯度 ∂L/∂θ"]\n'
-        '  G --> U{{"梯度下降<br/>θ ← θ − η·g"}}\n'
-        "  U -. 迭代更新 .-> FW\n"
+        '  G --> U{{"优化器更新<br/>θ ← θ − η·g"}}\n'
+        '  N["归一化 / 残差<br/>稳住深层"] --> FW\n'
+        "  U -. 迭代 .-> FW\n"
     ),
     "cnn": (
-        "flowchart LR\n"
-        '  I["输入图像"] --> C1(["卷积层"])\n'
+        "flowchart TD\n"
+        '  I["输入图像<br/>H×W×3"] --> C1(["卷积层<br/>局部+权重共享"])\n'
         '  C1 --> A1{{"ReLU"}}\n'
-        '  A1 --> P1(["池化层"])\n'
-        '  P1 --> C2(["卷积层 ×N"])\n'
-        '  C2 --> FC["全连接层"]\n'
-        '  FC --> O["分类输出"]\n'
+        '  A1 --> P1(["池化<br/>降采样·扩感受野"])\n'
+        '  P1 --> C2(["卷积 ×N<br/>浅层→深层语义"])\n'
+        '  C2 --> FL["展平 Flatten"]\n'
+        '  FL --> FC["全连接层"]\n'
+        '  FC --> SM{{"Softmax"}}\n'
+        '  SM --> O["分类输出"]\n'
     ),
     "transformer": (
-        "flowchart LR\n"
-        '  E["输入嵌入"] --> PE(["+ 位置编码"])\n'
-        '  PE --> MHA(["多头自注意力"])\n'
-        '  MHA --> AN1{{"Add & Norm"}}\n'
-        '  AN1 --> FFN(["前馈网络"])\n'
-        '  FFN --> AN2{{"Add & Norm"}}\n'
-        '  AN2 --> O["输出表示"]\n'
+        "flowchart TD\n"
+        '  E["输入嵌入"] --> PE["+ 位置编码"]\n'
+        "  PE --> ENC\n"
+        '  subgraph ENC["编码器块 ×N"]\n'
+        "    direction TB\n"
+        '    MHA["多头自注意力<br/>softmax(QKᵀ/√dₖ)V"] --> AN1["Add & Norm"]\n'
+        '    AN1 --> FFN["前馈网络 FFN"]\n'
+        '    FFN --> AN2["Add & Norm"]\n'
+        "  end\n"
+        '  ENC --> O["输出表示"]\n'
     ),
     "finetune": (
-        "flowchart LR\n"
-        '  PT["预训练大模型"] --> FT{{"微调策略"}}\n'
-        '  FT --> FP(["全参微调"])\n'
-        '  FT --> LR(["LoRA<br/>低秩增量"])\n'
-        '  FP --> SFT["指令微调 SFT"]\n'
-        "  LR --> SFT\n"
-        '  SFT --> AL(["对齐<br/>RLHF / DPO"])\n'
-        '  AL --> D["部署应用"]\n'
+        "mindmap\n"
+        '  root(("大模型微调"))\n'
+        "    全参微调\n"
+        "      更新全部权重\n"
+        "      效果上限高·最贵\n"
+        "    LoRA\n"
+        "      冻结原权重\n"
+        "      低秩增量 BA\n"
+        "      省显存·可热插拔\n"
+        "    指令微调 SFT\n"
+        "      指令-回答数据\n"
+        "      教模型听话\n"
+        "    对齐\n"
+        "      RLHF\n"
+        "      DPO\n"
+        "      更合规无害\n"
     ),
 }
+
+
+def _generic_diagram(kp_name: str, description: str) -> str:
+    """未收录知识点：按 description 内容结构动态合成 Mermaid（不同知识点产出不同图）。
+
+    按内容选图型：含「分类/类型/组成」等 → 层次图（graph TD）；否则 → 流程图
+    （flowchart LR，节点形状轮换，含反馈边）。恒以 flowchart/graph 开头，始终可渲染。
+    """
+    raw = description or ""
+    for sep in ("、", "，", "；", "。", "/", "·", " ", "（", "）", "(", ")"):
+        raw = raw.replace(sep, "\n")
+    concepts = [c.strip() for c in raw.split("\n") if c.strip()][:5]
+    taxonomy = any(
+        k in (description or "")
+        for k in ("分类", "种类", "类型", "对比", "区别", "几种", "包括", "组成", "构成")
+    )
+    if taxonomy and concepts:
+        lines = ["graph TD", f'  ROOT["{kp_name}"]']
+        for i, c in enumerate(concepts):
+            lines.append(f'  ROOT --> C{i}["{c}"]')
+        return "\n".join(lines) + "\n"
+    # 默认流程图：输入 → 核心步骤（由概念展开，形状轮换）→ 输出，并带迭代反馈边
+    shapes = (("([", "])"), ("[", "]"), ("{{", "}}"))
+    steps = concepts or [f"{kp_name}核心"]
+    lines = ["flowchart LR", '  IN["输入 / 前置"]']
+    prev = "IN"
+    for i, c in enumerate(steps):
+        op, cl = shapes[i % 3]
+        nid = f"S{i}"
+        lines.append(f'  {prev} --> {nid}{op}"{c}"{cl}')
+        prev = nid
+    lines.append(f'  {prev} --> OUT["输出 / 应用"]')
+    lines.append("  OUT -. 迭代优化 .-> IN")
+    return "\n".join(lines) + "\n"
 
 
 _QUESTION_TYPES = ("single", "multiple", "boolean")
@@ -1100,72 +1168,46 @@ class LLMClient:
         return paragraphs
 
     def generate_lecture(
-        self, kp_id: str, kp_name: str, difficulty: str, description: str = ""
+        self,
+        kp_id: str,
+        kp_name: str,
+        difficulty: str,
+        description: str = "",
+        tier: str | None = None,
     ) -> dict[str, Any]:
         """生成自适应讲义（接口文档 8.2）。返回 markdown + sources + hallucinationRate。
 
-        mock 口径：按难度档（入门/初级/高级）确定性产出三种讲述风格的 Markdown
-        （初级/高级含 ```python 代码块```），sources/hallucinationRate 为占位常量。
-        真实模式讲义不走本方法——经 workflows.run_learning_workflow
-        「RAG 检索 → 生成 Agent → 审核 Agent」生成（services.resource 分支）。
+        mock 口径：按难度档 + 画像能力档 tier（advanced/beginner/basic/None）确定性产出
+        递进式 Markdown（概念→原理含 LaTeX 公式→例子→代码→误区→小结）。tier 由调用方
+        据请求用户画像派生（services.resource），使同一知识点对不同用户产出深度不同的讲义；
+        tier=None（无画像信号）→ 按难度基线。sources/hallucinationRate 为占位常量。
+        真实模式讲义不走本方法——经 workflows.run_learning_workflow 生成。
         """
         if not self.is_mock:
             raise LLMGenerationError(
                 "真实模式讲义应经 run_learning_workflow 生成，不应调用 generate_lecture"
             )
         return {
-            "markdown": self._lecture_markdown(kp_name, difficulty, description),
+            "markdown": self._lecture_markdown(kp_name, difficulty, description, tier),
             "sources": [dict(s) for s in _LECTURE_SOURCES],
             "hallucinationRate": _LECTURE_HALLUCINATION_RATE,
         }
 
     @staticmethod
-    def _lecture_markdown(name: str, difficulty: str, description: str) -> str:
-        """按难度档生成讲义 Markdown（确定性 mock）。"""
-        desc = description or f"{name}是本知识点的核心内容。"
-        code_block = (
-            "```python\n"
-            "import numpy as np\n\n"
-            "def forward(x, w, b):\n"
-            "    z = np.dot(x, w) + b      # 加权求和 + 偏置\n"
-            "    return np.maximum(0, z)   # ReLU 激活\n\n"
-            "print(forward(np.array([0.5, 0.8]), np.array([0.4, 0.7]), 0.1))\n"
-            "```"
-        )
-        if difficulty == "入门":
-            return (
-                f"# {name}（入门版）\n\n"
-                f"> 本讲义由**领域知识生成 Agent**按「入门」难度生成——用最直白的比喻，少公式。\n\n"
-                f"## 一、先建立直觉\n\n{desc}\n\n"
-                f"不必纠结公式：先把握「{name}」要解决什么问题、大致怎么做。\n\n"
-                f"## 二、一句话理解\n\n"
-                f"**{name}**的核心，是用一套可学习的规则，把输入逐步变换为更有用的表示。\n\n"
-                f"> 小结：先有直觉，下一步看「初级版」了解具体计算与代码。"
-            )
-        if difficulty == "高级":
-            return (
-                f"# {name}（高级版）\n\n"
-                f"> 本讲义由**领域知识生成 Agent**按「高级」难度生成——侧重数学形式化与工程细节。\n\n"
-                f"## 一、问题形式化\n\n{desc}\n\n"
-                f"将{name}抽象为参数化映射 \\(f_\\theta\\)，以损失 \\(L\\) 为目标，"
-                f"经梯度 \\(\\partial L/\\partial \\theta\\) 迭代优化。\n\n"
-                f"## 二、关键实现\n\n{code_block}\n\n"
-                f"## 三、工程权衡\n\n"
-                f"- 数值稳定性：注意归一化与初始化对收敛的影响。\n"
-                f"- 计算/显存：在精度与吞吐间按部署约束取舍。\n\n"
-                f"> 小结：掌握形式化与实现细节后，可结合「测验」检验理解深度。"
-            )
-        # 默认「初级」
-        return (
-            f"# {name}（初级版）\n\n"
-            f"> 本讲义由**领域知识生成 Agent**适配为「初级」难度，并经**内容审核 Agent** RAG 交叉校验（幻觉率 <5%）。\n\n"
-            f"## 一、核心概念\n\n{desc}\n\n"
-            f"## 二、动手理解\n\n{code_block}\n\n"
-            f"## 三、要点回顾\n\n"
-            f"- 抓住「{name}」的输入、变换与输出三段式。\n"
-            f"- 通过代码与示例建立可复现的认知。\n\n"
-            f"> 小结：完成本节后建议进入「测验」巩固，或切到「高级版」深入。"
-        )
+    def _lecture_markdown(
+        name: str, difficulty: str, description: str, tier: str | None = None
+    ) -> str:
+        """生成递进式讲义 Markdown（确定性 mock / 真实回落共用）。
+
+        结构：概念引入→核心原理(含 LaTeX 公式)→具体例子→代码示例→常见误区→小结。
+        - difficulty 决定基线深度；tier（画像能力档 advanced/beginner/basic）个性化主控，
+          使「同一知识点、同一难度」对能力强 / 零基础两位用户产出深度不同的讲义；
+        - tier=None（直出 / 无画像信号）→ 按难度基线，保证直出与工作流产物在同 depth 逐字一致。
+        合成逻辑见 app.core.lecture_content.compose_lecture（纯函数，便于扩充知识原子）。
+        """
+        from app.core import lecture_content
+
+        return lecture_content.compose_lecture(name, difficulty, description, tier)
 
     # ---- 简答题 AI 评分（接口文档 9.3，C-fix 批2） -----------------------------
     def score_short_answer(
@@ -1499,28 +1541,31 @@ class LLMClient:
 
     @staticmethod
     def _mock_diagram(kp_id: str, kp_name: str, description: str) -> str:
-        """确定性主题知识图解（mock / deepseek 兜底共用）。"""
+        """确定性主题知识图解（mock / deepseek 兜底共用）。
+
+        已收录知识点用精写模板（图型按内容各异）；未收录知识点按 description 动态合成
+        （不同知识点产出不同图、图型按内容自选），见 _generic_diagram。
+        """
         tpl = _DIAGRAM_TEMPLATES.get(kp_id)
         if tpl:
             return tpl
-        desc = (description or "").strip()
-        core = desc[:14] if desc else f"{kp_name}核心"
-        return (
-            "flowchart LR\n"
-            f'  A["输入 / 前置"] --> B(["{kp_name}<br/>{core}"])\n'
-            '  B --> C{{"关键步骤"}}\n'
-            '  C --> O["输出 / 应用"]\n'
-            "  O -. 迭代优化 .-> B\n"
-        )
+        return _generic_diagram(kp_name, description)
 
     def _deepseek_diagram(self, kp_name: str, description: str) -> str:
-        """真实知识图解生成 + 契约清洗（接口文档 8.5）。"""
+        """真实知识图解生成 + 契约清洗（接口文档 8.5）。
+
+        提示要求按知识点内容结构**自选最贴切的图型**（流程/管线→flowchart；
+        分类/谱系→mindmap 或 graph TD；模块结构→带 subgraph 的 flowchart），避免千篇一律。
+        """
         system = (
-            "你是知识图解专家。根据给定知识点生成一张用于教学的 Mermaid 流程图，"
-            "只输出 Mermaid 源码本身，不要任何解释文字、不要 ``` 围栏。要求："
-            "第一行必须是 `flowchart LR`（或 `flowchart TD`）；6-10 个节点，"
-            "体现该知识点「输入 → 核心步骤 → 输出」的工作机制；节点文字简短"
-            "（不超过 12 字）且紧扣该主题，禁止跑题到其它领域；只输出 Mermaid 源码。"
+            "你是知识图解专家。根据给定知识点生成一张用于教学的 Mermaid 图，"
+            "只输出 Mermaid 源码本身，不要任何解释文字、不要 ``` 围栏。要求：\n"
+            "1) 按内容结构自选最贴切的图型：流程/计算管线用 `flowchart LR` 或 `flowchart TD`；"
+            "分类/谱系/对比用 `mindmap` 或 `graph TD` 层次图；含多模块的结构用带 `subgraph` 的 flowchart。\n"
+            "2) 第一行必须是所选图型的合法声明（如 `flowchart TD` / `mindmap` / `graph TD`）。\n"
+            "3) 6-12 个节点，体现该知识点的核心机制或构成；节点文字简短（不超过 12 字）"
+            "且紧扣该主题，禁止跑题到其它领域。\n"
+            "4) 只输出 Mermaid 源码。"
         )
         prompt = f"知识点：{kp_name}\n知识点说明：{description or kp_name}"
         raw = llm_deepseek.chat(prompt, system=system)
@@ -2512,12 +2557,17 @@ class LLMClient:
         }
 
     def _mock_generation(self, variables: dict[str, Any]) -> dict[str, Any]:
-        """生成 Agent mock：复用 B2 的确定性讲义产出（按 kpName/难度）。"""
+        """生成 Agent mock：确定性递进讲义产出（按 kpName/难度 + 画像能力档 depthTier）。
+
+        depthTier 由工作流 generation_node 依当前用户画像派生（advanced/beginner/basic）；
+        直出 /resource/lecture 不传 → tier=None 走难度基线（与 B5b/B10 契约一致）。
+        """
         kp_name = variables.get("kpName") or "神经网络"
         difficulty = variables.get("difficulty") or "初级"
+        tier = variables.get("depthTier") or None
         return {
             "markdown": self._lecture_markdown(
-                kp_name, difficulty, variables.get("description", "")
+                kp_name, difficulty, variables.get("description", ""), tier
             ),
         }
 

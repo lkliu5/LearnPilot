@@ -17,6 +17,7 @@
     "echarts-for-react": "^3.0.0",
     "framer-motion": "^11.0.0",
     "gsap": "^3.15.0",
+    "katex": "^0.16.47",
     "markmap-lib": "^0.18.12",
     "markmap-view": "^0.18.12",
     "mermaid": "^11.15.0",
@@ -25,6 +26,8 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.0",
     "react-syntax-highlighter": "^15.5.0",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
     "remotion": "^4.0.471",
     "three": "^0.184.0",
     "zustand": "^4.5.0"
