@@ -5,9 +5,12 @@
 1. **图解优先（最稳）**：结构 / 流程类小节复用既有 Mermaid 图解能力
    （``LLMClient.generate_diagram``，mock 确定性、离线可跑），以 ```mermaid 围栏嵌入
    「核心原理」小节末尾，前端 MarkdownRenderer 识别 ```mermaid 走 MermaidDiagram 渲染。
-2. **真实图片补充**：适合配真实图处用已接入的 Tavily 图片搜索
-   （``web_search.search_images``）。**URL 一律取自搜索结果**（沿用「URL 只取真实候选、
-   防幻觉」原则，绝不让 LLM 编造图片链接），并标注来源域名（出处链接）。无合适图 → 不插。
+2. **真实图片补充**：适合配真实图处用可插拔的**图片搜索 Provider**
+   （``app/services/image_search.py``，默认 Wikimedia Commons 免版权图源，预留 Pexels 兜底）。
+   之前走 Tavily 图片搜索，返回的多是带防盗链 / 会过期的 CDN 链接（byteimg），页面加载被拒、
+   几乎总是「图片暂不可用」；改用免版权、URL 稳定（``upload.wikimedia.org``，不防盗链）、
+   可标注来源的图源。**URL 一律取自搜索结果**（沿用「URL 只取真实候选、防幻觉」原则，绝不让
+   LLM 编造图片链接），并标注来源（Wikimedia 文件页链接）。无合适图 → 不插（宁缺毋滥）。
 3. **mock 模式不发真实搜索**：用确定性 base64 内联 SVG 占位图（自包含、永不 404、无网络），
    既演示前端图片渲染 + 来源标注 + 裂图兜底，又满足「mock 占位、不发真实请求」。
 
@@ -95,7 +98,7 @@ def _diagram_block(kp_id: str, kp_name: str, description: str, llm: Any) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# 配图块（mock 确定性占位 / 真实 Tavily 图片，URL 防幻觉）
+# 配图块（mock 确定性占位 / 真实免版权图源，URL 防幻觉）
 # --------------------------------------------------------------------------- #
 def _image_block(kp_name: str, description: str, llm: Any) -> str | None:
     """生成一张配图的 Markdown（``![alt](url)`` + 来源标注）。无合适图 → None。"""
@@ -105,31 +108,41 @@ def _image_block(kp_name: str, description: str, llm: Any) -> str | None:
         alt = _md_escape(f"{kp_name} 示意图")
         return f"![{alt}]({url})\n\n*示意图（mock 占位，未发起真实搜索）*"
 
-    # 真实模式：Tavily 图片搜索，URL 只取自搜索结果（防幻觉），并标注来源
+    # 真实模式：免版权图源搜索（默认 Wikimedia Commons），URL 只取自搜索结果（防幻觉），并标注来源
     hit = _search_real_image(kp_name, description)
     if not hit:
         return None  # 无真实可用图 → 不强插（宁缺毋滥）
     url = hit["url"]
-    source = hit["source"]
+    source = hit.get("source") or _domain(url)
+    # 来源标注优先指向图源「来源页」（如 Wikimedia 文件页），回落图片直链
+    source_url = hit.get("source_url") or url
     # 第三方图片描述文本同样过内容安全（不绕过）：核心讲义/图解已在 LLMClient 层被 guard 包裹，
     # 此处的 alt 来自外部搜索结果，故显式再过一次 guard。
     from app.core import content_safety
 
-    alt_raw = hit.get("description") or f"{kp_name} 配图"
+    alt_raw = hit.get("description") or hit.get("title") or f"{kp_name} 配图"
     alt = _md_escape(content_safety.guard(alt_raw, where="lecture_image_alt"))
-    return f"![{alt}]({url})\n\n*图片来源：[{source}]({url})*"
+    license_name = (hit.get("license") or "").strip()
+    license_suffix = f"（{_md_escape(license_name)}）" if license_name else ""
+    return f"![{alt}]({url})\n\n*图片来源：[{_md_escape(source)}]({source_url}){license_suffix}*"
 
 
 def _search_real_image(kp_name: str, description: str) -> dict[str, Any] | None:
-    """经可插拔搜索 Provider 取一张真实配图；URL 必须为搜索返回的真实 http(s) 链接。"""
-    from app.services import web_search
+    """经可插拔图片搜索 Provider 取一张真实配图；URL 必须为搜索返回的真实 http(s) 链接。
 
-    provider = web_search.get_provider()
+    URL 一律取自图源结果（防幻觉，绝不由 LLM 编造）；返回 ``source`` / ``source_url`` 用于来源标注。
+    """
+    from app.services import image_search
+
+    provider = image_search.get_provider()
     if not getattr(provider, "online", False):
-        return None  # 无联网能力 → 不插真实图
-    query = f"{kp_name} 原理 示意图 diagram"
+        return None  # 无图源能力 → 不插真实图
+    # 关键词直接用知识点名（免版权图源按相关性排序；附加英文/泛词反而拉低 Commons 命中相关性）
+    query = (kp_name or "").strip()
+    if not query:
+        return None
     try:
-        hits = provider.search_images(query, max_results=settings.search_max_results)
+        hits = provider.search_images(query, max_results=settings.image_search_max_results)
     except Exception as exc:  # noqa: BLE001 搜索失败不致命 → 不插图
         logger.warning("讲义配图搜索失败，跳过配图：%s", exc)
         return None
@@ -137,7 +150,14 @@ def _search_real_image(kp_name: str, description: str) -> dict[str, Any] | None:
         url = str((h or {}).get("url") or "").strip()
         # 防幻觉二次校验：仅接受真实 http(s) URL（链接来自 Provider，非 LLM 编造）
         if url.startswith("http://") or url.startswith("https://"):
-            return {"url": url, "source": _domain(url), "description": (h or {}).get("description")}
+            return {
+                "url": url,
+                "source": (h or {}).get("source") or _domain(url),
+                "source_url": (h or {}).get("source_url") or "",
+                "title": (h or {}).get("title") or "",
+                "description": (h or {}).get("description") or "",
+                "license": (h or {}).get("license") or "",
+            }
     return None
 
 

@@ -100,6 +100,22 @@ class Settings(BaseSettings):
     search_timeout_seconds: float = 12.0
     search_max_results: int = 8
 
+    # 讲义真实配图「图片搜索 provider」（app/services/image_search.py）：与上面的文本搜索
+    # （Tavily 等）解耦，专走**免版权、URL 稳定、可标注来源**的图源，替换掉之前 Tavily 图片那条
+    # 带防盗链 / 会过期 CDN 链接（byteimg）导致「图片暂不可用」的路。
+    # - image_provider：none（不插真实图）| wikimedia（默认，Wikimedia Commons，免密钥）| pexels（需 Key）；
+    # - wikimedia_api_url：Commons MediaWiki API 入口（免密钥，联网即可用）；
+    # - pexels_api_key / pexels_base_url：预留兜底图源（配 Key 即作为 Wikimedia 没命中时的 fallback）；
+    # - image_search_timeout_seconds / image_search_max_results：单次搜图超时与候选条数。
+    # 缺省 wikimedia：真实 LLM 模式联网取真实图；mock 模式由 lecture_media 拦截走占位、不调本模块
+    # （无任何 Key 仍跑通全链路，CLAUDE.md 纪律）。
+    image_provider: str = "wikimedia"
+    wikimedia_api_url: str = "https://commons.wikimedia.org/w/api.php"
+    pexels_api_key: str = ""
+    pexels_base_url: str = "https://api.pexels.com"
+    image_search_timeout_seconds: float = 12.0
+    image_search_max_results: int = 8
+
     # 语音合成 TTS（讲解视频/导学旁白配音，移植自桌面端 voice.py 的合成逻辑，Web 化）：
     # - tts_provider：edge（默认，edge-tts 微软神经语音，联网免密钥）| none（禁用 → 前端回落浏览器 TTS）；
     # - tts_voice / tts_rate / tts_pitch：默认自然中文女声 XiaoyiNeural（语速 -10%、音调 +2Hz）；
