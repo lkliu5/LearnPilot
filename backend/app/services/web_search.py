@@ -53,6 +53,13 @@ class SearchProvider(Protocol):
         """返回搜索命中 [{title,url,source,snippet,type}]；无能力/失败 → []。"""
         ...
 
+    def search_images(self, query: str, *, max_results: int) -> list[dict[str, Any]]:
+        """返回图片命中 [{url, source, description}]；无能力/失败 → []。
+
+        URL 一律取自搜索结果（不编造），交由上层做防幻觉校验后嵌入讲义；用于讲义配图。
+        """
+        ...
+
 
 class _OfflineProvider:
     """无搜索能力：online=False，search 恒返回 []（上层走种子兜底）。"""
@@ -61,6 +68,9 @@ class _OfflineProvider:
     online = False
 
     def search(self, query: str, *, max_results: int) -> list[dict[str, Any]]:
+        return []
+
+    def search_images(self, query: str, *, max_results: int) -> list[dict[str, Any]]:
         return []
 
 
@@ -111,6 +121,44 @@ class _TavilyProvider:
                     "type": _infer_type(url, title),
                 }
             )
+        return hits
+
+    def search_images(self, query: str, *, max_results: int) -> list[dict[str, Any]]:
+        """Tavily 图片搜索（include_images）。URL 取自结果，失败/无能力 → []。"""
+        if not self.online:
+            return []
+        try:
+            import requests  # 延迟导入，避免无搜索能力时的硬依赖
+
+            resp = requests.post(
+                f"{self.base_url}/search",
+                json={
+                    "api_key": self.api_key,
+                    "query": query,
+                    "max_results": max_results,
+                    "search_depth": "basic",
+                    "include_images": True,
+                    "include_image_descriptions": True,
+                },
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001 联网失败不致命 → 不插图
+            logger.warning("Tavily 图片搜索失败，跳过配图：%s", exc)
+            return []
+        hits: list[dict[str, Any]] = []
+        for img in (data.get("images") or [])[:max_results]:
+            # Tavily images 可能是 url 字符串或 {url, description}（开了描述时）
+            if isinstance(img, str):
+                url, desc = img.strip(), ""
+            elif isinstance(img, dict):
+                url, desc = str(img.get("url") or "").strip(), str(img.get("description") or "")
+            else:
+                continue
+            if not (url.startswith("http://") or url.startswith("https://")):
+                continue
+            hits.append({"url": url, "source": _source_of(url), "description": desc})
         return hits
 
 

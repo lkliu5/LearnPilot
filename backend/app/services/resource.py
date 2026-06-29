@@ -21,6 +21,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core import lecture_media
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
 from app.models.entities import (
     ExternalResource,
@@ -467,6 +468,11 @@ def generate_lecture(
         rate = final["hallucinationRate"]
         workflow_id = result["workflowId"]
 
+    # 图文并茂：注入图解（图解优先）+ 配图（真实图 / mock 占位），不改返回结构
+    markdown = lecture_media.enrich_lecture(
+        markdown, kp_id=kp.id, kp_name=kp.name, description=kp.description or "", llm=llm
+    )
+
     payload = {
         "kpId": kp.id,
         "difficulty": difficulty,
@@ -513,6 +519,12 @@ def cache_lecture_from_workflow(
     llm = get_llm()
     kind = "lecture" if llm.is_mock else f"lecture@{llm.provider}"
     markdown = final.get("markdown") or ""
+    # 与 /resource/lecture 同口径做图文增强，保证大屏工作流回写的讲义同样图文并茂
+    kp = db.get(KnowledgePoint, kp_id)
+    if kp is not None and markdown:
+        markdown = lecture_media.enrich_lecture(
+            markdown, kp_id=kp.id, kp_name=kp.name, description=kp.description or "", llm=llm
+        )
     sources = _map_sources(db, result.get("trace", {}).get("ragContextUsed") or [])
     rate = final.get("hallucinationRate")
     payload = {

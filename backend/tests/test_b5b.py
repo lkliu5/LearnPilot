@@ -319,7 +319,9 @@ def test_lecture_real_mode_workflow_sources_and_rate(db, deepseek_llm, monkeypat
 
     payload = resource_service.generate_lecture(db, "u_10001", "nn", "高级")
     assert payload["kpId"] == "nn" and payload["difficulty"] == "高级"
-    assert payload["markdown"] == grounded_md  # 真实生成（非 B2 模板讲义）
+    # 真实生成内容为正文主体（非 B2 模板讲义）；图文增强在其后追加结构图解（图解优先）
+    assert payload["markdown"].startswith(grounded_md)
+    assert "```mermaid" in payload["markdown"]
     assert payload["hallucinationRate"] == 0.0  # 全部句子接地
     # sources 来自检索 chunk：document_title/source_location → title，score → confidence
     assert payload["sources"] == [
@@ -358,7 +360,13 @@ def test_lecture_mock_mode_unchanged(client, db, learner_headers):
     markdown 与 B2 逐字一致，但 sources 取真实检索映射、并带 workflowId）。本用例
     断言的是「直出生成」契约，故先清掉 nn 三档讲义缓存，确保走确定性新生成。
     """
-    from app.core.llm import _LECTURE_HALLUCINATION_RATE, _LECTURE_SOURCES, LLMClient
+    from app.core import lecture_media
+    from app.core.llm import (
+        _LECTURE_HALLUCINATION_RATE,
+        _LECTURE_SOURCES,
+        LLMClient,
+        get_llm,
+    )
     from app.models.entities import ResourceCache
 
     db.query(ResourceCache).filter(
@@ -378,11 +386,16 @@ def test_lecture_mock_mode_unchanged(client, db, learner_headers):
         data = body["data"]
         assert data["sources"] == _LECTURE_SOURCES
         assert data["hallucinationRate"] == _LECTURE_HALLUCINATION_RATE
-        # markdown 与 B2 确定性产出逐字一致（kp=nn 的 name/description 来自种子）
-        expected = LLMClient._lecture_markdown(
-            "神经网络基础", difficulty, _kp_description(client, learner_headers)
+        # markdown = B2 确定性产出 + 图文增强（确定性：嵌入 mermaid 图解 + mock 占位配图）
+        desc = _kp_description(client, learner_headers)
+        core = LLMClient._lecture_markdown("神经网络基础", difficulty, desc)
+        expected = lecture_media.enrich_lecture(
+            core, kp_id="nn", kp_name="神经网络基础", description=desc, llm=get_llm()
         )
         assert data["markdown"] == expected
+        # 图文并茂：结构图解（mermaid）+ mock 确定性占位配图（不发真实搜索）
+        assert "```mermaid" in data["markdown"]
+        assert "data:image/svg+xml" in data["markdown"]
 
 
 def _kp_description(client, headers) -> str:

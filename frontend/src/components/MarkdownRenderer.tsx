@@ -1,14 +1,43 @@
-import ReactMarkdown from 'react-markdown'
+import { lazy, Suspense, useState } from 'react'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 
+// 讲义内嵌图解：```mermaid 围栏复用既有 MermaidDiagram 渲染（懒加载，避免无图解页引入 mermaid）。
+const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
+
+/**
+ * 讲义配图：图片渲染 + 来源标注（来源走紧随其后的 Markdown 段落）+ 裂图兜底。
+ * 加载失败时优雅隐藏破图、显示占位（不显示浏览器默认破图标）。
+ */
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return (
+      <span className="md-image-fallback" role="img" aria-label={alt || '图片暂不可用'}>
+        🖼️ 图片暂不可用
+      </span>
+    )
+  }
+  return (
+    <img
+      className="md-image"
+      src={src}
+      alt={alt || ''}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 /**
  * Markdown 讲义渲染（react-markdown v9 + Prism 代码高亮 + KaTeX 数学公式）。
- * - remark-math 解析行内 $...$ 与块级 $$...$$，rehype-katex 渲染为公式（CC 内容质量提升·公式修复）；
- * - v9 的 code 组件不再提供 inline 形参，改用是否带 language-* class 判定块级代码。
+ * - remark-math 解析行内 $...$ 与块级 $$...$$，rehype-katex 渲染为公式；
+ * - ```mermaid 围栏走 MermaidDiagram（讲义内嵌结构 / 流程图解）；
+ * - 图片走 MarkdownImage（来源标注 + 裂图兜底）；urlTransform 放行自包含 data:image 占位图。
  */
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
@@ -16,9 +45,17 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        urlTransform={(url) => (url.startsWith('data:image/') ? url : defaultUrlTransform(url))}
         components={{
           code({ node: _node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
+            if (match && match[1] === 'mermaid') {
+              return (
+                <Suspense fallback={<div className="mermaid-loading">图解加载中…</div>}>
+                  <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
+                </Suspense>
+              )
+            }
             return match ? (
               <SyntaxHighlighter
                 style={oneDark}
@@ -34,6 +71,8 @@ export default function MarkdownRenderer({ content }: { content: string }) {
               </code>
             )
           },
+          pre: ({ children }) => <div className="md-codeblock">{children}</div>,
+          img: ({ src, alt }) => <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} />,
           h1: ({ children }) => <h1 className="resource-title">{children}</h1>,
           h2: ({ children }) => <h2 className="section-title">{children}</h2>,
           h3: ({ children }) => <h3 className="subsection-title">{children}</h3>,
