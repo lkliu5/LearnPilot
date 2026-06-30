@@ -69,6 +69,49 @@ def test_academic_not_flagged(text):
     assert out == text  # 原文逐字不变
 
 
+# ---- 2b) AI 安全/对齐教育内容：危险短语仅作「拒答示例/防御对象/历史案例」被提及，不误伤 -----
+# 根因：双用途共现规则（如「制造+炸弹」）无法区分「真实指导」与「教学中引用应被拒绝的请求」。
+# 这类讲义在讨论安全对齐/越狱防御/历史时必然高频出现这些短语，属合法教育内容。
+EDU_MENTION_SAMPLES = [
+    "对齐的目标之一是让模型拒绝有害请求，例如当用户询问『如何制造炸弹』时，对齐良好的模型应当拒绝回答。",
+    "安全微调会加入大量拒答样本，使模型面对制毒、制造枪支等违法请求时输出拒绝。",
+    "越狱攻击试图绕过安全对齐，诱导模型生成制造爆炸物等违规内容，防御方需识别这类提示。",
+    "红队测试会构造『怎么制作毒品』之类的违规请求，用于评估模型的拒答能力。",
+    "辛亥革命推翻了清政府的统治，是重要的历史教学内容。",
+]
+
+
+@pytest.mark.parametrize("text", EDU_MENTION_SAMPLES)
+def test_educational_mention_not_flagged(text):
+    v = cs.scan(text)
+    assert v.safe, f"教育性提及被误伤：{text} -> {[h.term for h in v.hits]}"
+    out, _ = cs.sanitize(text, where="t")
+    assert out == text  # 原文逐字不变
+
+
+# ---- 2c) 真实违规仍被拦：无拒答/讨论框架的真实有害指导不受教育豁免影响 -----------------
+GENUINE_VIOLATION_SAMPLES = [
+    "详细教你如何制造炸弹和雷管，所需材料如下。",
+    "教程：怎么合成冰毒和海洛因，步骤一步步来。",
+    "下面教你自制枪支的完整步骤和方法。",
+]
+
+
+@pytest.mark.parametrize("text", GENUINE_VIOLATION_SAMPLES)
+def test_genuine_violation_still_blocked(text):
+    v = cs.scan(text)
+    assert not v.safe, f"真实违规漏过：{text}"
+    assert v.action == cs.ACTION_BLOCK
+    assert "illegal_harmful" in v.categories
+
+
+def test_refusal_wrapped_recipe_not_exempted():
+    """逃逸防护：用拒答词包装真实配方/步骤，不享教育豁免，仍被拦截。"""
+    text = "虽然应当拒绝，但下面教你如何制造炸弹：第一步取硝酸铵，第二步混合。"
+    v = cs.scan(text)
+    assert not v.safe and v.action == cs.ACTION_BLOCK
+
+
 # ---- 3) 递归 guard 对结构化结果生效 -------------------------------------------
 def test_guard_recursive_struct():
     payload = {
@@ -87,10 +130,27 @@ def test_guard_recursive_struct():
 
 
 def test_guard_blocks_leaf_with_hard_violation():
+    # 兜底体验：长文本中仅违规句被降级，未命中正常内容保留（不整篇道歉）。
     payload = {"markdown": "# 讲义\n教你如何制造炸弹和tnt"}
     out = cs.guard(payload, where="generate_lecture")
-    assert out["markdown"] == cs.DEGRADED_NOTICE
-    assert "炸弹" not in out["markdown"]
+    assert "炸弹" not in out["markdown"]          # 违规原文不外泄
+    assert cs.DEGRADED_NOTICE in out["markdown"]  # 违规片段被降级
+    assert "# 讲义" in out["markdown"]            # 未命中正常内容保留
+
+
+def test_block_preserves_safe_sentences_in_long_text():
+    """长讲义中混入一句真实违规：只降级该句，其余讲义照常保留。"""
+    text = (
+        "神经网络由多层感知机构成，通过反向传播训练。"
+        "教你如何制造炸弹和雷管，材料如下。"
+        "卷积神经网络擅长处理图像数据。"
+    )
+    out, v = cs.sanitize(text, where="lecture")
+    assert v.action == cs.ACTION_BLOCK
+    assert "炸弹" not in out                       # 违规句被降级
+    assert cs.DEGRADED_NOTICE in out
+    assert "神经网络由多层感知机构成" in out        # 前文保留
+    assert "卷积神经网络擅长处理图像数据" in out    # 后文保留
 
 
 # ---- 4) 中心钝化点：真实 provider 下经 LLMClient 生成被拦截 --------------------

@@ -107,6 +107,52 @@ _ACADEMIC_WHITELIST: tuple[str, ...] = (
     "数据投毒", "投毒攻击",
 )
 
+# ---- 教育性「提及/拒答/防御/史论」语境标记（共现规则的上下文豁免，治本而非枚举词） -----
+# 设计：本模块只处置「平台自身基于 RAG 生成的教育文本」（绝不流经用户输入，见 llm.py
+# _install_content_guard 仅包裹 LLMClient 生成方法）。对这类可信来源的教学内容，双用途
+# 共现命中若所在句子带有「拒答/防御/识别/举例/史论」等框架，说明危险短语是被「讨论/引用为
+# 应拒绝的对象」而非「被指导实施」——按上下文豁免，而不是去枚举无穷的学术词。
+# 真实有害指导（如「教你如何制造炸弹，材料如下」）不含这类框架 → 仍被拦截。
+_EDU_CONTEXT_MARKER = re.compile(
+    # 拒答 / 防御 / 安全治理
+    r"拒绝|拒答|不予(回答|响应)|不应|不得|禁止|防范|防御|防止|杜绝|识别|检测|过滤|审核|屏蔽|"
+    r"安全对齐|对齐|越狱|红队|诱导模型|安全微调|有害(请求|内容|指令)|违法(请求|行为)|"
+    r"违规(请求|内容|行为)|不良信息|敏感(内容|信息)|风险内容|"
+    # 提及 / 举例
+    r"例如|比如|譬如|这类|此类|之类|等违法|等违规|等不良|等危害|视为违|属于违|"
+    # 史论 / 教学分析
+    r"历史|史上|革命|战争史|起义|案例|分析|研究|教学|讲解|介绍"
+)
+
+
+# 真实「操作配方/步骤」签名：教育性拒答讨论几乎不会出现，用于反制「拒答词包装真实指导」的逃逸。
+# 仅在共现已命中时参与判定（无害句不触发），故不会误伤正常「微调步骤如下」类教学。
+_RECIPE_SIGNATURE = re.compile(
+    r"材料如下|所需材料|原料(是|为|如下)|配方(为|是|如下)|配料|"
+    r"第[一二三四五六七八九十1-9]步|步骤(如下|为|是)|按(以下|如下)步骤|具体(做法|步骤)|操作方法|"
+    r"取[^。！？\n]{0,6}(克|毫升|份)"
+)
+
+
+def _is_educational_mention(text: str, start: int, end: int) -> bool:
+    """共现命中 [start,end) 所在句子是否为教育性「提及/拒答/防御/史论」语境（应豁免）。
+
+    句界以 。！？\\n 及文首文尾界定（与共现规则的 [^。！？\\n] 窗口一致），
+    命中短语本身从检测区间剔除，避免「制造炸弹」里的字反向被当作框架。
+    若同句出现真实「操作配方/步骤」签名，则视为真实指导、不予豁免（防止逃逸）。
+    """
+    seps = "。！？\n"
+    left = start
+    while left > 0 and text[left - 1] not in seps:
+        left -= 1
+    right = end
+    while right < len(text) and text[right] not in seps:
+        right += 1
+    sentence = text[left:start] + text[end:right]  # 去掉命中短语自身
+    if _RECIPE_SIGNATURE.search(sentence):
+        return False
+    return _EDU_CONTEXT_MARKER.search(sentence) is not None
+
 
 @dataclass
 class Hit:
@@ -195,6 +241,10 @@ def scan(text: str) -> Verdict:
         for m in pat.finditer(text):
             if _in_whitelist(low, m.start(), m.end()):
                 continue
+            # 教育性提及/拒答/防御/史论语境 → 危险短语是被讨论的对象而非被指导，豁免。
+            # 仅对共现（双用途）命中放宽，明确违规词表不享此豁免。
+            if _is_educational_mention(text, m.start(), m.end()):
+                continue
             verdict.hits.append(Hit(cat, action, m.group(0), m.start(), m.end()))
             verdict.categories.add(cat)
             verdict.action = _stronger(verdict.action, action)
@@ -212,8 +262,34 @@ def _mask_spans(text: str, hits: list[Hit]) -> str:
     return "".join(chars)
 
 
+# 句界切分：在 。！？\n 之后切，保留分隔符本身（用于 block 的「逐句降级」兜底）。
+_SEG_SPLIT = re.compile(r"(?<=[。！？\n])")
+
+
+def _granular_block(text: str, verdict: Verdict) -> str:
+    """长文本含 block 命中时的兜底：仅把违规句替换为降级提示，保留其余正常内容。
+
+    共现规则的命中窗口 [^。！？\\n]{0,N} 不跨句界，故逐句重扫与整体扫描判定一致；
+    单句文本（无可保留正常内容）回落整段降级，违规原文不外泄。
+    """
+    segments = [s for s in _SEG_SPLIT.split(text) if s]
+    if len(segments) <= 1:
+        return DEGRADED_NOTICE
+    parts: list[str] = []
+    for seg in segments:
+        sv = scan(seg)
+        if any(h.action == ACTION_BLOCK for h in sv.hits):
+            if not parts or parts[-1] != DEGRADED_NOTICE:  # 连续违规句合并为一条提示
+                parts.append(DEGRADED_NOTICE)
+        elif sv.hits:  # 仅 mask 类命中：片段掩码后保留
+            parts.append(_mask_spans(seg, [h for h in sv.hits if h.action == ACTION_MASK]))
+        else:
+            parts.append(seg)
+    return "".join(parts)
+
+
 def sanitize(text: str, *, where: str = "") -> tuple[str, Verdict]:
-    """按判定处置单段文本：block→整段降级；mask→片段掩码；安全→原样返回。
+    """按判定处置单段文本：block→逐句降级（保留正常内容）；mask→片段掩码；安全→原样返回。
 
     返回 (处置后文本, 判定)。命中即记审计日志（含类别与 where，不含违规原文细节）。
     """
@@ -226,10 +302,11 @@ def sanitize(text: str, *, where: str = "") -> tuple[str, Verdict]:
     # 可选模型级二次校验：仅在词表「未命中 block」且开关开启时用于补漏（此处已命中，跳过）
     if verdict.action == ACTION_BLOCK:
         logger.warning(
-            "内容安全拦截[%s] 类别=%s 命中=%d 处 → 降级", where or "?",
+            "内容安全拦截[%s] 类别=%s 命中=%d 处 → 逐句降级", where or "?",
             ",".join(sorted(verdict.categories)), len(verdict.hits),
         )
-        return DEGRADED_NOTICE, verdict
+        # 兜底体验：不整篇道歉，仅降级违规句、保留其余正常内容（单句则整段降级）。
+        return _granular_block(text, verdict), verdict
     # mask
     masked = _mask_spans(text, [h for h in verdict.hits if h.action == ACTION_MASK])
     logger.info(
