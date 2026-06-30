@@ -214,7 +214,7 @@ export default function LearningFlow({
                   {inputTab === 'video' && (
                     <Suspense fallback={<Loading />}>
                       <div className="resource-modal-hint">AI 生成的讲解视频（Remotion 渲染）+ 同步旁白：</div>
-                      <VideoLecture />
+                      <VideoLecture difficulty={level} />
                     </Suspense>
                   )}
                   {inputTab === 'lecture' && (

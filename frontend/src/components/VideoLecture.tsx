@@ -37,7 +37,8 @@ const SETTLE_FRAME = 36
 export default function VideoLecture({
   title: propTitle,
   scenes: propScenes,
-}: { title?: string; scenes?: LectureScene[] } = {}) {
+  difficulty = '初级',
+}: { title?: string; scenes?: LectureScene[]; difficulty?: string } = {}) {
   const playerRef = useRef<PlayerRef>(null)
   const [seg, setSeg] = useState(0)
   const [narration, setNarration] = useState(true)
@@ -60,8 +61,8 @@ export default function VideoLecture({
   const [fetchedTitle, setFetchedTitle] = useState<string>(DEFAULT_TITLE)
   useEffect(() => {
     if (controlled || !USE_REAL_API) return
-    // 难度固定「初级」：与讲义默认档一致
-    getVideo(getResourceKpId(), '初级')
+    // 难度跟随当前实际选择（与讲义/缓存键 (kp_id, difficulty, kind) 一致；切档自动重取）
+    getVideo(getResourceKpId(), difficulty)
       .then((d) => {
         if (d.scenes?.length) {
           setFetchedScenes(d.scenes.map((s) => ({ title: s.title, points: s.points, narration: s.narration })))
@@ -69,24 +70,32 @@ export default function VideoLecture({
         }
       })
       .catch((e) => console.error('[video] 加载分镜脚本失败，使用本地默认脚本', e))
-  }, [controlled])
+  }, [controlled, difficulty])
 
   /* 服务端渲染 mp4（增强项）：拿到一体 mp4（画面+旁白已烧录）→ 用原生 <video> 播放/下载；
      渲染中显示轮询态；无渲染能力 / 失败 / 超时 / mock / 受控生成 → 保持下方实时 Player+TTS 兜底，
      绝不破坏「拿不到 mp4 也能看」。 */
   const [mp4Url, setMp4Url] = useState<string | null>(null)
   const [rendering, setRendering] = useState(false)
+  /* 渲染进度 0-100（来自任务 progress）：渲染中显示「正在生成真视频… X%」 */
+  const [renderProgress, setRenderProgress] = useState(0)
   useEffect(() => {
     if (controlled || !USE_REAL_API) return
     let cancelled = false
     let timer: number | undefined
+    // 难度切换 → 重新对齐缓存键：清掉上一档 mp4/进度，避免串档（如高级讲义却放初级视频）
+    setMp4Url(null)
+    setRendering(false)
+    setRenderProgress(0)
     const kp = getResourceKpId()
     const poll = (taskId: string, tries: number) => {
       timer = window.setTimeout(() => {
         getTaskStatus<{ videoUrl: string }>(taskId)
           .then((t) => {
             if (cancelled) return
+            if (typeof t.progress === 'number') setRenderProgress(t.progress)
             if (t.status === 'succeeded' && t.result?.videoUrl) {
+              setRenderProgress(100)
               setMp4Url(t.result.videoUrl)
               setRendering(false)
             } else if (t.status === 'failed' || tries <= 0) {
@@ -100,12 +109,13 @@ export default function VideoLecture({
           })
       }, 2000)
     }
-    startVideoRender(kp, '初级')
+    startVideoRender(kp, difficulty)
       .then((r) => {
         if (cancelled) return
         if (r.status === 'ready' && r.videoUrl) setMp4Url(r.videoUrl)
         else if (r.status === 'rendering' && r.taskId) {
           setRendering(true)
+          setRenderProgress(5)
           poll(r.taskId, 90) // 最长 ~3min 轮询，超时回落
         }
         // unavailable → 保持实时 Player 兜底
@@ -117,7 +127,7 @@ export default function VideoLecture({
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [controlled])
+  }, [controlled, difficulty])
 
   const scenes = controlled ? propScenes! : fetchedScenes
   const title = controlled ? propTitle || DEFAULT_TITLE : fetchedTitle
@@ -308,9 +318,21 @@ export default function VideoLecture({
     <div className="video-lecture">
       <div className="video-lecture__player">
         {rendering && (
-          <div className="video-lecture__rendering" role="status">
+          <div className="video-lecture__rendering" role="status" aria-live="polite">
             <span className="video-lecture__rendering-orb" />
-            正在后台渲染高清 mp4（画面+旁白一体），完成后自动切换 · 当前为实时预览
+            <div className="video-lecture__rendering-body">
+              <strong className="video-lecture__rendering-title">正在生成真视频…</strong>
+              <span className="video-lecture__rendering-sub">
+                画面 + 旁白烧录为一体 mp4，完成后自动切换 · 下方为实时预览，可先看
+              </span>
+              <div className="video-lecture__rendering-bar" aria-hidden>
+                <div
+                  className="video-lecture__rendering-fill"
+                  style={{ width: `${Math.min(100, Math.max(5, renderProgress))}%` }}
+                />
+              </div>
+            </div>
+            <span className="video-lecture__rendering-pct">{Math.min(100, Math.max(5, renderProgress))}%</span>
           </div>
         )}
         <Player

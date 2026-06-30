@@ -901,7 +901,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         return (
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">AI 生成的讲解视频（Remotion 渲染）+ 同步旁白，点击播放：</div>
-            <VideoLecture />
+            <VideoLecture difficulty={level} />
           </Suspense>
         )
       case 'mindmap':
