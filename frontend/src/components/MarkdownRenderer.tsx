@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkMath from 'remark-math'
+import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -36,6 +37,7 @@ function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
 /**
  * Markdown 讲义渲染（react-markdown v9 + Prism 代码高亮 + KaTeX 数学公式）。
  * - remark-math 解析行内 $...$ 与块级 $$...$$，rehype-katex 渲染为公式；
+ * - remark-gfm 解析 GFM 扩展（表格 | --- |、删除线 ~~、任务列表 - [ ]、自动链接）；
  * - ```mermaid 围栏走 MermaidDiagram（讲义内嵌结构 / 流程图解）；
  * - 图片走 MarkdownImage（来源标注 + 裂图兜底）；urlTransform 放行自包含 data:image 占位图。
  */
@@ -43,7 +45,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
-        remarkPlugins={[remarkMath]}
+        remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         urlTransform={(url) => (url.startsWith('data:image/') ? url : defaultUrlTransform(url))}
         components={{
@@ -80,6 +82,12 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           ul: ({ children }) => <ul className="content-list">{children}</ul>,
           ol: ({ children }) => <ol className="ordered-list">{children}</ol>,
           blockquote: ({ children }) => <blockquote className="content-quote">{children}</blockquote>,
+          // GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破讲义布局。
+          table: ({ children }) => (
+            <div className="md-table-wrap">
+              <table className="md-table">{children}</table>
+            </div>
+          ),
         }}
       >
         {content}

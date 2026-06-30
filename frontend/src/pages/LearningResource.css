@@ -318,6 +318,51 @@
   line-height: 1.7;
 }
 
+/* GFM 表格（remark-gfm）：对比类表格规范渲染，宽表横向滚动不破版 */
+.markdown-body .md-table-wrap {
+  margin: var(--space-md) 0;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border, rgba(120, 130, 150, 0.22));
+}
+
+.markdown-body .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.markdown-body .md-table th,
+.markdown-body .md-table td {
+  padding: 9px 14px;
+  border: 1px solid var(--border, rgba(120, 130, 150, 0.22));
+  text-align: left;
+  vertical-align: top;
+  color: var(--gray-700);
+}
+
+.markdown-body .md-table th {
+  background: var(--primary-50);
+  color: var(--gray-900);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.markdown-body .md-table tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--ink-soft) 4%, transparent);
+}
+
+/* GFM 删除线 / 任务列表复选框 */
+.markdown-body del { color: var(--gray-600); opacity: 0.75; }
+
+.markdown-body .content-list input[type='checkbox'],
+.markdown-body .ordered-list input[type='checkbox'] {
+  margin-right: 6px;
+  accent-color: var(--primary-500);
+}
+.markdown-body li.task-list-item { list-style: none; margin-left: -1.2em; }
+
 /* ===== 测试题 ===== */
 .quiz-container { display: flex; flex-direction: column; gap: var(--space-lg); }
 
@@ -815,6 +860,40 @@
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
 }
 .level-switch__hint { font-size: 0.72rem; color: var(--gray-400); }
+
+/* 讲义导出工具条（.md / .pdf）*/
+.lecture-export {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: var(--space-sm) 0 var(--space-md);
+}
+.lecture-export__label { font-size: 0.82rem; font-weight: 600; color: var(--gray-700); }
+.lecture-export__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.lecture-export__btn:hover:not(:disabled) {
+  border-color: var(--primary-400);
+  color: var(--primary-600);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.12);
+}
+.lecture-export__btn--pdf:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--purple-500, #7c3aed) 60%, transparent);
+  color: var(--purple-500, #7c3aed);
+}
+.lecture-export__btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .lecture-body { position: relative; }
 

@@ -16,6 +16,7 @@ import {
   type ReviewRef,
 } from '../services/learningFlow'
 import type { PageType } from '../App'
+import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import './LearningFlow.css'
 
 const VideoLecture = lazy(() => import('./VideoLecture'))
@@ -82,6 +83,7 @@ export default function LearningFlow({
   const [progress, setProgress] = useState<StepProgress | null>(null)
   const [phaseIdx, setPhaseIdx] = useState(0)
   const [inputTab, setInputTab] = useState<StepKey>('video')
+  const flowLectureRef = useRef<HTMLDivElement>(null)
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
   const [bootstrapped, setBootstrapped] = useState(false)
 
@@ -218,7 +220,38 @@ export default function LearningFlow({
                   {inputTab === 'lecture' && (
                     <div className="flow__lecture">
                       {lectureMarkdown ? (
-                        <MarkdownRenderer content={lectureMarkdown} />
+                        <>
+                          {/* 讲义导出：导出当前已渲染内容，不重新生成（.md 原文最稳；.pdf 经浏览器打印另存）*/}
+                          <div className="lecture-export">
+                            <span className="lecture-export__label">导出讲义：</span>
+                            <button
+                              type="button"
+                              className="lecture-export__btn"
+                              onClick={() => exportLectureMarkdown(lectureMarkdown, `讲义-${kpName}-${level}`)}
+                              title="下载讲义 Markdown 原文（.md）"
+                            >
+                              <span aria-hidden="true">⬇</span> Markdown
+                            </button>
+                            <button
+                              type="button"
+                              className="lecture-export__btn lecture-export__btn--pdf"
+                              onClick={() => {
+                                const body = flowLectureRef.current?.querySelector('.markdown-body') as HTMLElement | null
+                                if (!body) return
+                                const meta = `${kpName} · 难度：${level} · 导出于 ${new Date().toLocaleString('zh-CN')}`
+                                if (!exportLectureToPdf(body, `讲义-${kpName}-${level}`, meta)) {
+                                  window.alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试导出 PDF。')
+                                }
+                              }}
+                              title="导出为 PDF（经浏览器打印 → 另存为 PDF，保留公式/图解/表格/图片）"
+                            >
+                              <span aria-hidden="true">🖨</span> PDF
+                            </button>
+                          </div>
+                          <div ref={flowLectureRef}>
+                            <MarkdownRenderer content={lectureMarkdown} />
+                          </div>
+                        </>
                       ) : (
                         <div className="resource-loading">「{kpName}」的定制讲义生成中…</div>
                       )}

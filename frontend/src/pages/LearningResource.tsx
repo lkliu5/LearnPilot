@@ -19,6 +19,7 @@ import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
 import { StatusChip, type ItemStatus } from '../components/genStatus'
+import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import '../components/TutorResourcePanel.css'
 import type { ReviewRef } from '../services/learningFlow'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
@@ -87,9 +88,13 @@ print(neuron(x, w, bias=0.1))  # -> 0.88
 
 ## 三、常见激活函数
 
-- **ReLU**：\`max(0, x)\`，计算快、缓解梯度消失，最常用
-- **Sigmoid**：将输出压缩到 (0, 1)，适合二分类输出层
-- **Tanh**：输出范围 (-1, 1)，零均值，收敛通常快于 Sigmoid
+不同激活函数适用场景不同，下表做横向对比：
+
+| 激活函数 | 公式 | 输出范围 | 适用场景 |
+| --- | --- | --- | --- |
+| ReLU | \`max(0, x)\` | [0, +∞) | 隐藏层首选，计算快、缓解梯度消失 |
+| Sigmoid | \`1 / (1 + e^-x)\` | (0, 1) | 二分类输出层 |
+| Tanh | \`(e^x - e^-x) / (e^x + e^-x)\` | (-1, 1) | 零均值，收敛通常快于 Sigmoid |
 
 ## 四、反向传播与学习
 
@@ -647,6 +652,20 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
      mock 保持本地大纲常量 */
   const activeMindmap = USE_REAL_API ? lectureOutline(activeLecture) : mockRes.mindmap
 
+  /* 讲义导出（纯前端，导出"当前已渲染"的内容，不重新请求生成）。文件名：讲义-知识点-难度 */
+  const exportBaseName = `讲义-${kpName}-${level}`
+  const handleExportMarkdown = () => {
+    if (!activeLecture) return
+    exportLectureMarkdown(activeLecture, exportBaseName)
+  }
+  const handleExportPdf = () => {
+    const body = lectureRef.current?.querySelector('.markdown-body') as HTMLElement | null
+    if (!body) return
+    const meta = `${kpName} · 难度：${level} · 导出于 ${new Date().toLocaleString('zh-CN')}`
+    const ok = exportLectureToPdf(body, exportBaseName, meta)
+    if (!ok) window.alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试导出 PDF。')
+  }
+
   const handleQuizResult = (
     wrong: QuizQuestion[],
     submitted?: boolean,
@@ -830,6 +849,29 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
 
             {/* RAG 溯源（针对讲义内容，归位到讲义详情底部工具条上方）*/}
             <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
+
+            {/* 讲义导出：导出当前已渲染内容，不重新生成。.md 原文最稳；.pdf 经浏览器打印另存 */}
+            <div className="lecture-export">
+              <span className="lecture-export__label">导出讲义：</span>
+              <button
+                type="button"
+                className="lecture-export__btn"
+                onClick={handleExportMarkdown}
+                disabled={!activeLecture}
+                title="下载讲义 Markdown 原文（.md）"
+              >
+                <span aria-hidden="true">⬇</span> Markdown
+              </button>
+              <button
+                type="button"
+                className="lecture-export__btn lecture-export__btn--pdf"
+                onClick={handleExportPdf}
+                disabled={!activeLecture}
+                title="导出为 PDF（经浏览器打印 → 另存为 PDF，保留公式/图解/表格/图片）"
+              >
+                <span aria-hidden="true">🖨</span> PDF
+              </button>
+            </div>
 
             <div className="lecture-body" ref={lectureRef}>
               {/* B-2：在讲义正文里选中一段文字，就近浮出「就这段问 AI」→ 就该句发起即时辅导 */}
