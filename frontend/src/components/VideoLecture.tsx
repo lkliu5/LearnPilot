@@ -11,9 +11,10 @@ import {
   type LectureScene,
 } from '../remotion/LectureVideo'
 import { USE_REAL_API } from '../services/api'
-import { getVideo, type VideoNarrationLine } from '../services/resource'
+import { getVideo, startVideoRender, getTaskStatus, type VideoNarrationLine } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
 import { ttsSpeak, ttsStop } from '../services/tts'
+import { sanitizeFilename } from '../utils/lectureExport'
 import './VideoLecture.css'
 
 /* 由当前帧定位旁白段落索引 */
@@ -68,6 +69,54 @@ export default function VideoLecture({
         }
       })
       .catch((e) => console.error('[video] 加载分镜脚本失败，使用本地默认脚本', e))
+  }, [controlled])
+
+  /* 服务端渲染 mp4（增强项）：拿到一体 mp4（画面+旁白已烧录）→ 用原生 <video> 播放/下载；
+     渲染中显示轮询态；无渲染能力 / 失败 / 超时 / mock / 受控生成 → 保持下方实时 Player+TTS 兜底，
+     绝不破坏「拿不到 mp4 也能看」。 */
+  const [mp4Url, setMp4Url] = useState<string | null>(null)
+  const [rendering, setRendering] = useState(false)
+  useEffect(() => {
+    if (controlled || !USE_REAL_API) return
+    let cancelled = false
+    let timer: number | undefined
+    const kp = getResourceKpId()
+    const poll = (taskId: string, tries: number) => {
+      timer = window.setTimeout(() => {
+        getTaskStatus<{ videoUrl: string }>(taskId)
+          .then((t) => {
+            if (cancelled) return
+            if (t.status === 'succeeded' && t.result?.videoUrl) {
+              setMp4Url(t.result.videoUrl)
+              setRendering(false)
+            } else if (t.status === 'failed' || tries <= 0) {
+              setRendering(false) // 失败/超时 → 回落实时 Player
+            } else {
+              poll(taskId, tries - 1)
+            }
+          })
+          .catch(() => {
+            if (!cancelled) setRendering(false)
+          })
+      }, 2000)
+    }
+    startVideoRender(kp, '初级')
+      .then((r) => {
+        if (cancelled) return
+        if (r.status === 'ready' && r.videoUrl) setMp4Url(r.videoUrl)
+        else if (r.status === 'rendering' && r.taskId) {
+          setRendering(true)
+          poll(r.taskId, 90) // 最长 ~3min 轮询，超时回落
+        }
+        // unavailable → 保持实时 Player 兜底
+      })
+      .catch(() => {
+        /* 渲染触发失败 → 保持实时 Player 兜底 */
+      })
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
   }, [controlled])
 
   const scenes = controlled ? propScenes! : fetchedScenes
@@ -217,9 +266,53 @@ export default function VideoLecture({
     }
   }, [])
 
+  /* —— mp4 就绪：画面+旁白已烧录一体，用原生 <video> 播放并可下载（不再 Player+外挂 TTS） —— */
+  if (mp4Url) {
+    return (
+      <div className="video-lecture">
+        <div className="video-lecture__player">
+          <video
+            src={mp4Url}
+            controls
+            className="video-lecture__mp4"
+            style={{ width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-glass)', background: '#0a1024' }}
+          />
+          <div className="video-lecture__controls">
+            <a className="video-lecture__download" href={mp4Url} download={`讲解视频-${sanitizeFilename(title)}.mp4`}>
+              <span aria-hidden="true">⬇</span> 下载 mp4
+            </a>
+            <span className="video-lecture__seg-count">画面 + 旁白已烧录一体 · 真视频</span>
+          </div>
+        </div>
+        <div className="video-lecture__side">
+          <div className="video-lecture__side-head">
+            <span>🎙️ AI 旁白脚本</span>
+          </div>
+          <ol className="video-lecture__script">
+            {script.map((n, i) => (
+              <li key={i} className="video-lecture__line">
+                <span className="video-lecture__ts">{String(Math.floor(n.from / VIDEO_FPS)).padStart(2, '0')}s</span>
+                {n.text}
+              </li>
+            ))}
+          </ol>
+          <p className="video-lecture__note">
+            该视频由 Remotion 服务端渲染、edge-tts 旁白已混音烧录为一体 mp4（h264 + aac），可直接播放与下载，无需外挂 TTS。
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="video-lecture">
       <div className="video-lecture__player">
+        {rendering && (
+          <div className="video-lecture__rendering" role="status">
+            <span className="video-lecture__rendering-orb" />
+            正在后台渲染高清 mp4（画面+旁白一体），完成后自动切换 · 当前为实时预览
+          </div>
+        )}
         <Player
           ref={playerRef}
           component={LectureVideo}

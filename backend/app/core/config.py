@@ -131,6 +131,19 @@ class Settings(BaseSettings):
     tts_max_retries: int = 3
     tts_max_chars: int = 2000  # 单次合成文本上限（防超长滥用）
 
+    # 讲解视频服务端渲染（mp4）——增强项，非必需：拿不到 mp4 前端回落实时 Player+TTS。
+    # - video_render_enabled：总开关；关 / 无渲染能力（Node/依赖/无头浏览器缺失）→ videoUrl 维持 null、降级；
+    # - video_render_dir：渲染工作根目录（bundle 缓存 + 各段 TTS 临时音频 + out/*.mp4 产物，均入 .gitignore）；
+    # - video_frontend_dir：Remotion 渲染脚本 + node_modules 所在前端目录（相对 backend/ 工作目录）；
+    # - video_render_browser：无头浏览器可执行文件；留空时自动探测复用本机 Playwright chrome-headless-shell；
+    # - video_node_bin：Node 可执行文件名/路径；video_render_timeout_seconds：单次渲染子进程超时。
+    video_render_enabled: bool = True
+    video_render_dir: str = "./data/video"
+    video_frontend_dir: str = "../frontend"
+    video_render_browser: str = ""
+    video_node_bin: str = "node"
+    video_render_timeout_seconds: float = 300.0
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:

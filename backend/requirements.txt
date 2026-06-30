@@ -21,3 +21,7 @@ langgraph
 openai
 # TTS edge-tts：微软神经语音合成（免密钥、联网即用）；tts_provider=none 或离线时优雅降级、不崩
 edge-tts
+# 讲解视频服务端渲染（mp4，增强项）：量各段 edge-tts MP3 时长以对齐画面（纯 Python、无原生依赖）；
+# 缺失则视频渲染能力判为不可用、自动降级回实时 Player+TTS，不影响其余全链路。渲染器为 Node 侧
+# @remotion/renderer（见 frontend/package.json），经 subprocess 调用，无需系统 ffmpeg。
+mutagen

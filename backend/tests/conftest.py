@@ -66,13 +66,19 @@ def _force_mock_provider():
         "llm_provider": settings.llm_provider,
         "search_provider": settings.search_provider,
         "search_api_key": settings.search_api_key,
+        "video_render_enabled": settings.video_render_enabled,
     }
     settings.llm_provider = "mock"
     settings.search_provider = "none"
     settings.search_api_key = ""
+    # 视频服务端渲染默认关：测试与环境无关、确定性、零网络（edge-tts）、零子进程（node 渲染）。
+    # 渲染产物属增强项，关闭后 /resource/video.videoUrl 维持 null、/resource/video/render 回
+    # unavailable——既验证降级契约，又不让 10-15s 的渲染拖慢/污染测试。
+    settings.video_render_enabled = False
     llm_mod._client = None
     yield
     settings.llm_provider = original["llm_provider"]
     settings.search_provider = original["search_provider"]
     settings.search_api_key = original["search_api_key"]
+    settings.video_render_enabled = original["video_render_enabled"]
     llm_mod._client = None

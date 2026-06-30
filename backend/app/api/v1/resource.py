@@ -30,12 +30,14 @@ from app.schemas.resource import (
     TutorChatRequest,
     TutorGenerateRequest,
     TutorSuggestRequest,
+    VideoRenderRequest,
     VideoRequest,
 )
 from app.services import resource as resource_service
 from app.services import resource_search as resource_search_service
 from app.services import tutor as tutor_service
 from app.services import tutor_resource as tutor_resource_service
+from app.services import video_render as video_render_service
 
 router = APIRouter(tags=["resource"])
 
@@ -145,6 +147,30 @@ async def generate_video(
     """生成视频讲解（接口文档 8.3，B7-a）。videoUrl:null → 前端 Remotion Player。"""
     try:
         data = resource_service.generate_video(db, user.id, body.kpId, body.difficulty)
+    except resource_service.UnknownKnowledgePoint:
+        return fail(code=1004, message="知识点不存在", status_code=404)
+    except resource_service.InvalidDifficulty:
+        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+    return success(data)
+
+
+@router.post("/resource/video/render")
+async def render_video(
+    body: VideoRenderRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """触发讲解视频服务端渲染为 mp4（接口文档 8.3 增量，CC-video-mp4 第二步）。
+
+    返回 { status, taskId, videoUrl }：
+    - ready：已有渲染产物，videoUrl 可直接播放/下载（命中缓存「秒出」）；
+    - rendering：后台渲染中，前端轮询 GET /tasks/{taskId}，succeeded 后取 result.videoUrl；
+    - unavailable：无渲染能力 / 关闭 → videoUrl=null，前端回落实时 Remotion Player + TTS。
+
+    渲染是增强项：本接口绝不阻断「拿不到 mp4 也能看」的兜底；耗时渲染不入请求、走任务轮询。
+    """
+    try:
+        data = video_render_service.start_render(db, user.id, body.kpId, body.difficulty)
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:

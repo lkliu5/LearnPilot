@@ -50,7 +50,7 @@ export const DEFAULT_SCENES: LectureScene[] = [
   },
 ]
 
-const C = {
+export const C = {
   bg1: '#0a1024',
   bg2: '#111a3a',
   blue: '#60a5fa',
@@ -71,11 +71,14 @@ const fade = (frame: number, inEnd: number, outStart: number, outEnd: number) =>
 
 /* 通用分镜场景：首场景作封面（大标题 + 副标题），其余为「场景标题 + 要点卡片」。
    容纳任意主题、任意要点条数；要点逐条错峰入场，底部进度点指示当前场景。 */
-const SceneCard: React.FC<{ scene: LectureScene; index: number; total: number; videoTitle: string }> = ({
+/* dur：本场景实际帧时长（用于淡出对齐）。缺省 SCENE_FRAMES（Player 固定 6s/场景，行为不变）；
+   服务端渲染按各段 TTS 音频帧数传入变长 dur，淡出随之对齐，长旁白不会提前淡出留白。 */
+export const SceneCard: React.FC<{ scene: LectureScene; index: number; total: number; videoTitle: string; dur?: number }> = ({
   scene,
   index,
   total,
   videoTitle,
+  dur = SCENE_FRAMES,
 }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
@@ -88,7 +91,7 @@ const SceneCard: React.FC<{ scene: LectureScene; index: number; total: number; v
         justifyContent: 'center',
         flexDirection: 'column',
         padding: '0 80px',
-        opacity: fade(frame, 14, SCENE_FRAMES - 22, SCENE_FRAMES - 2),
+        opacity: fade(frame, 14, dur - 22, dur - 2),
       }}
     >
       <div style={{ fontSize: isCover ? 26 : 20, color: C.blue, letterSpacing: 4, marginBottom: 14, opacity: titleSpring }}>

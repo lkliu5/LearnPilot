@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import (
@@ -101,3 +102,12 @@ app.include_router(workflow.router, prefix=settings.api_prefix)
 app.include_router(learning.router, prefix=settings.api_prefix)
 # TTS：语音合成（edge-tts 神经语音，接口文档 8.9；新增 /tts/* 接口 45）
 app.include_router(tts.router, prefix=settings.api_prefix)
+
+# 讲解视频 mp4 静态产物（CC-video-mp4 第二步）：挂在 api_prefix 下复用前端 /api 代理，
+# videoUrl=/api/v1/media/video/<file>.mp4 可直接 <video> 播放 / 下载。目录入 .gitignore。
+from app.services.video_render import static_mount  # noqa: E402
+
+_mnt = static_mount()
+if _mnt is not None:
+    _url_path, _directory = _mnt
+    app.mount(_url_path, StaticFiles(directory=_directory), name="video-media")

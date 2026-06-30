@@ -1,0 +1,8 @@
+[probe] bundling...
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: Unable to snapshot resolve dependencies
+[probe] bundle done in 5.0s
+[probe] composition: 1280x720 30fps 360f
+  render 0%  render 0%  render 0%  render 20%  render 20%  render 20%  render 20%  render 20%  render 40%  render 40%  render 40%  render 40%  render 40%  render 60%  render 60%  render 60%  render 60%  render 60%  render 60%  render 100%
+[probe] render done in 10.1s
+[probe] TOTAL 15.1s -> F:\软件杯\frontend\probe-remotion\out.mp4
+EXIT:0

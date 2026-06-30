@@ -128,3 +128,31 @@ export async function getVideo(kpId: string, difficulty: string): Promise<VideoD
   )
   return { ...raw, narration: raw.narration.map((n) => ({ from: n.frame, text: n.text })) }
 }
+
+/** 8.3 增量：服务端渲染 mp4 触发响应（CC-video-mp4 第二步）。 */
+export interface VideoRenderResult {
+  /** ready=已有 mp4 可直接播放/下载；rendering=后台渲染中（轮询 taskId）；unavailable=无渲染能力，回落实时 Player */
+  status: 'ready' | 'rendering' | 'unavailable'
+  taskId: string | null
+  /** ready 时为 mp4 可访问 URL（/api/v1/media/video/xxx.mp4） */
+  videoUrl: string | null
+}
+
+/** 8.3 增量：触发讲解视频服务端渲染为一体 mp4。命中缓存秒回 ready；无能力回 unavailable（前端降级）。 */
+export function startVideoRender(kpId: string, difficulty: string): Promise<VideoRenderResult> {
+  return apiPost<VideoRenderResult>('/resource/video/render', { kpId, difficulty })
+}
+
+/** 15.2 异步任务状态（轮询）。视频渲染任务 succeeded 时 result = { videoUrl }。 */
+export interface TaskStatus<T = unknown> {
+  taskId: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  progress?: number
+  result: T | null
+  error: { code: number; message: string } | null
+}
+
+/** 15.2 查询异步任务状态。 */
+export function getTaskStatus<T = unknown>(taskId: string): Promise<TaskStatus<T>> {
+  return apiGet<TaskStatus<T>>(`/tasks/${taskId}`)
+}

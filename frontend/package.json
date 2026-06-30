@@ -12,7 +12,10 @@
     "@codesandbox/sandpack-react": "^2.20.0",
     "@gsap/react": "^2.1.2",
     "@react-three/fiber": "^8.18.0",
+    "@remotion/bundler": "^4.0.471",
+    "@remotion/media-utils": "^4.0.471",
     "@remotion/player": "^4.0.471",
+    "@remotion/renderer": "^4.0.471",
     "echarts": "^5.4.0",
     "echarts-for-react": "^3.0.0",
     "framer-motion": "^11.0.0",
@@ -31,6 +34,7 @@
     "remark-math": "^6.0.0",
     "remotion": "^4.0.471",
     "three": "^0.184.0",
+    "webpack": "^5.108.3",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

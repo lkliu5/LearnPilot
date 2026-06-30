@@ -131,6 +131,56 @@
   color: var(--gray-400);
 }
 
+/* ===== 服务端渲染 mp4：原生 <video> 播放 + 下载 + 渲染中轮询态 ===== */
+.video-lecture__mp4 { display: block; aspect-ratio: 16 / 9; }
+
+.video-lecture__download {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-500);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+.video-lecture__download:hover { transform: translateY(-1px); background: var(--primary-600, #1d4ed8); }
+
+.video-lecture__rendering {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(10, 16, 36, 0.78);
+  color: #e2e8f0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  backdrop-filter: blur(4px);
+}
+.video-lecture__rendering-orb {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary-400, #60a5fa);
+  box-shadow: 0 0 10px var(--primary-400, #60a5fa);
+  animation: video-lecture-pulse 1.1s ease-in-out infinite;
+}
+@keyframes video-lecture-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
 @media (max-width: 900px) {
   .video-lecture { grid-template-columns: 1fr; }
 }

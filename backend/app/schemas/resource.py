@@ -23,6 +23,13 @@ class VideoRequest(BaseModel):
     difficulty: str  # 入门|初级|高级（与讲义同档）
 
 
+class VideoRenderRequest(BaseModel):
+    """POST /resource/video/render 请求体（接口文档 8.3 增量，CC-video-mp4 第二步）。"""
+
+    kpId: str
+    difficulty: str  # 入门|初级|高级（与 8.3 同档）
+
+
 class TutorChatRequest(BaseModel):
     """POST /resource/tutor/chat 请求体（接口文档 8.7，B7-a）。"""
 

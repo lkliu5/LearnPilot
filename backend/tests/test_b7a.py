@@ -449,6 +449,42 @@ def test_video_other_kp_and_errors(client, learner_headers):
     assert res.status_code == 400 and res.json()["code"] == 1001
 
 
+# ---- 8.3 增量：服务端渲染 mp4（CC-video-mp4 第二步）-------------------------------
+
+def test_video_render_degrades_when_unavailable(client, learner_headers):
+    """渲染关闭（测试基线 video_render_enabled=False）→ 回 unavailable，前端回落实时 Player+TTS。
+
+    契约 { status, taskId, videoUrl }；降级时 status=unavailable、taskId/videoUrl 均 null。
+    既验证降级纪律（拿不到 mp4 仍可看），也保证测试零网络/零子进程。
+    """
+    res = client.post(
+        "/api/v1/resource/video/render",
+        headers=learner_headers,
+        json={"kpId": "nn", "difficulty": "初级"},
+    )
+    assert res.status_code == 200, res.text
+    data = res.json()["data"]
+    assert set(data.keys()) == {"status", "taskId", "videoUrl"}
+    assert data["status"] == "unavailable"
+    assert data["taskId"] is None and data["videoUrl"] is None
+
+
+def test_video_render_errors(client, learner_headers):
+    """渲染触发同样校验 kp/难度：未知 kp → 1004；非法难度 → 1001。"""
+    res = client.post(
+        "/api/v1/resource/video/render",
+        headers=learner_headers,
+        json={"kpId": "no_such_kp", "difficulty": "初级"},
+    )
+    assert res.status_code == 404 and res.json()["code"] == 1004
+    res = client.post(
+        "/api/v1/resource/video/render",
+        headers=learner_headers,
+        json={"kpId": "nn", "difficulty": "地狱"},
+    )
+    assert res.status_code == 400 and res.json()["code"] == 1001
+
+
 # ---- 8.5 知识图解（issue#7：经 LLMClient 真实生成，mock/deepseek 双模式） --------
 
 def test_diagram_per_topic_via_llm(client, learner_headers):
