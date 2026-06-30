@@ -508,15 +508,37 @@ def _clean_mermaid(raw: str) -> str:
 # 约束：nn/cnn/dl/ml 首行恒为 flowchart（契约测试 test_b7a / test_contract_snapshot 钉死）。
 _DIAGRAM_TEMPLATES: dict[str, str] = {
     "nn": (
+        # 论文级标准示意：多层感知机（输入层→隐藏层→输出层，全连接）+ 前向流 + 反向传播回路。
         "flowchart LR\n"
-        '  X["输入 x"] --> S(["加权求和<br/>z = Σ wᵢxᵢ + b"])\n'
-        '  W["权重 w"] --> S\n'
-        '  B0["偏置 b"] --> S\n'
-        '  S --> A{{"激活函数<br/>a = ReLU(z)"}}\n'
-        '  A --> O["输出 a"]\n'
-        '  O --> L(["损失 L"])\n'
-        '  Y["标签 y"] --> L\n'
-        "  L -. 反向传播<br/>∂L/∂w .-> W\n"
+        '  subgraph IN["输入层 x"]\n'
+        "    direction TB\n"
+        '    I1(("x₁"))\n'
+        '    I2(("x₂"))\n'
+        '    I3(("x₃"))\n'
+        "  end\n"
+        '  subgraph HID["隐藏层<br/>z=Σwᵢxᵢ+b, a=ReLU(z)"]\n'
+        "    direction TB\n"
+        '    H1(("h₁"))\n'
+        '    H2(("h₂"))\n'
+        '    H3(("h₃"))\n'
+        '    H4(("h₄"))\n'
+        "  end\n"
+        '  subgraph OUT["输出层 ŷ"]\n'
+        "    direction TB\n"
+        '    O1(("ŷ₁"))\n'
+        '    O2(("ŷ₂"))\n'
+        "  end\n"
+        "  I1 --> H1 & H2 & H3 & H4\n"
+        "  I2 --> H1 & H2 & H3 & H4\n"
+        "  I3 --> H1 & H2 & H3 & H4\n"
+        "  H1 --> O1 & O2\n"
+        "  H2 --> O1 & O2\n"
+        "  H3 --> O1 & O2\n"
+        "  H4 --> O1 & O2\n"
+        '  L(["损失 L(ŷ,y)"])\n'
+        "  OUT --> L\n"
+        "  L -. 反向传播 ∂L/∂w 逐层回传更新权重 .-> HID\n"
+        "  HID -. .-> IN\n"
     ),
     "ml": (
         "flowchart LR\n"
@@ -1558,14 +1580,19 @@ class LLMClient:
         分类/谱系→mindmap 或 graph TD；模块结构→带 subgraph 的 flowchart），避免千篇一律。
         """
         system = (
-            "你是知识图解专家。根据给定知识点生成一张用于教学的 Mermaid 图，"
+            "你是深度学习/机器学习领域的知识图解专家。根据给定知识点生成一张**论文级标准示意图**"
+            "（即该知识点在教材/论文里那类规范的架构图或流程图），用 Mermaid 画。"
             "只输出 Mermaid 源码本身，不要任何解释文字、不要 ``` 围栏。要求：\n"
-            "1) 按内容结构自选最贴切的图型：流程/计算管线用 `flowchart LR` 或 `flowchart TD`；"
+            "1) 图必须还原该知识点的**真实标准结构**，例如：神经网络→输入层→隐藏层→输出层 + 前向/反向；"
+            "CNN→卷积→ReLU→池化→全连接→Softmax；Transformer→嵌入+位置编码→多头自注意力→前馈→输出；"
+            "梯度下降/训练→前向→损失→反向→参数更新的迭代回路。务必贴合本知识点的标准结构，不要臆造。\n"
+            "2) 按内容自选最贴切的图型：流程/计算管线用 `flowchart LR` 或 `flowchart TD`；"
             "分类/谱系/对比用 `mindmap` 或 `graph TD` 层次图；含多模块的结构用带 `subgraph` 的 flowchart。\n"
-            "2) 第一行必须是所选图型的合法声明（如 `flowchart TD` / `mindmap` / `graph TD`）。\n"
-            "3) 6-12 个节点，体现该知识点的核心机制或构成；节点文字简短（不超过 12 字）"
-            "且紧扣该主题，禁止跑题到其它领域。\n"
-            "4) 只输出 Mermaid 源码。"
+            "3) 第一行必须是所选图型的合法声明（如 `flowchart TD` / `mindmap` / `graph TD`）。\n"
+            "4) 6-14 个节点，体现该知识点的核心机制或构成；节点文字简短（不超过 12 字）"
+            "且严格限定在本知识点的学术含义内——**禁止跑题到其它领域**（如 Transformer 不得画电力变压器、"
+            "CNN 不得画新闻台、微调不得画乐器调音）。\n"
+            "5) 只输出 Mermaid 源码。"
         )
         prompt = f"知识点：{kp_name}\n知识点说明：{description or kp_name}"
         raw = llm_deepseek.chat(prompt, system=system)

@@ -449,20 +449,61 @@ def test_api_maps_llm_failure_to_2001(client, learner_headers, deepseek_llm, mon
 # 修复点：真实模式配图原直接用完整知识点名（「神经网络基础」「CNN架构」），在 Wikimedia
 # Commons File 命名空间常 0 命中 → 几乎只剩 mermaid 兜底。改为「完整名→去后缀核心→标准
 # 英文术语」逐级回落（先具体后宽泛、命中即停、保证贴题），把 6 个核心 KP 命中率 1/6→6/6。
-def test_image_query_candidates_fallback_ladder():
-    from app.core.lecture_media import _image_query_candidates
+def test_image_query_candidates_domain_qualified_ladder():
+    from app.core.lecture_media import _image_query_candidates, _relevance_spec
 
-    # 完整名永远排第一（最精确，命中即用，保证贴题）；去教学性后缀得核心概念，再补标准英文术语
-    assert _image_query_candidates("神经网络基础") == [
-        "神经网络基础",
-        "神经网络",
+    # 命中领域规格 → 域限定英文查询优先（最可靠贴题），其后附完整名 / 去后缀核心兜底。
+    nn_spec = _relevance_spec("神经网络基础")
+    nn = _image_query_candidates("神经网络基础", nn_spec)
+    assert nn[:3] == [
+        "Artificial neural network diagram",
         "Artificial neural network",
+        "Multilayer perceptron",
     ]
-    # 英文知识点名（CNN/Transformer）大小写无关命中别名表
-    assert "卷积神经网络" in _image_query_candidates("CNN架构")
-    assert "Transformer" in _image_query_candidates("Transformer架构")
-    # 去重保序：核心与完整名相同时不重复
-    assert _image_query_candidates("机器学习") == ["机器学习", "Machine learning"]
+    assert nn[-2:] == ["神经网络基础", "神经网络"]  # 完整名 + 去「基础」后缀核心兜底
+
+    # 去重保序：机器学习核心与完整名相同时不重复
+    ml = _image_query_candidates("机器学习", _relevance_spec("机器学习"))
+    assert ml[0] == "Machine learning" and ml[-1] == "机器学习" and ml.count("机器学习") == 1
+
+    # CNN/Transformer 大小写无关命中规格，查询均带领域限定（不再用裸歧义词）
+    assert _relevance_spec("CNN架构") is not None
+    assert _relevance_spec("Transformer架构") is not None
+    assert "Transformer deep learning architecture" in _image_query_candidates(
+        "Transformer架构", _relevance_spec("Transformer架构")
+    )
+
+    # 未命中规格 → 仅完整名 + 去后缀核心
+    misc = _image_query_candidates("区块链原理", _relevance_spec("区块链原理"))
+    assert misc == ["区块链原理", "区块链"]
+
     # 空名 → 空候选（上层据此不插真实图）
-    assert _image_query_candidates("") == []
-    assert _image_query_candidates("   ") == []
+    assert _image_query_candidates("", _relevance_spec("")) == []
+    assert _image_query_candidates("   ", _relevance_spec("   ")) == []
+
+
+def test_image_relevance_gate_rejects_cross_domain():
+    """贴题判定（任务②核心）：歧义跨域图被拒、确定贴题图被收，未知概念仅挡最明确噪声。"""
+    from app.core.lecture_media import _is_on_topic, _relevance_spec
+
+    tf = _relevance_spec("Transformer架构")
+    # 电力变压器 / 变形金刚电影 → 跨域排除词命中 → 判不贴题（不插）
+    assert _is_on_topic({"title": "Power supply transformer 2098", "description": "electric"}, tf) is False
+    assert _is_on_topic({"title": "Transformers One at Lalaport Kadoma", "description": "movie"}, tf) is False
+    # 标准架构图 → 正向词命中且无排除词 → 确定贴题（插）
+    assert _is_on_topic({"title": "The-Transformer-model-architecture.png", "description": ""}, tf) is True
+
+    cnn = _relevance_spec("CNN架构")
+    assert _is_on_topic({"title": "CNN cable news anchor", "description": "television"}, cnn) is False
+    assert _is_on_topic({"title": "Typical Convolutional neural network.png", "description": ""}, cnn) is True
+
+    ft = _relevance_spec("大模型微调技术")
+    assert _is_on_topic({"title": "Guitar tuning pegs", "description": "instrument"}, ft) is False
+    assert _is_on_topic({"title": "LoRA fine-tuning of a language model", "description": ""}, ft) is True
+
+    # 无正向词命中（描述空泛）也判不贴题 → 宁缺毋滥不插
+    assert _is_on_topic({"title": "IMG_2098.jpg", "description": ""}, tf) is False
+
+    # 未命中规格（spec=None）→ 仅挡最明确全局噪声，其余放行（保留非核心知识点配图能力）
+    assert _is_on_topic({"title": "Some chart", "description": "data"}, None) is True
+    assert _is_on_topic({"title": "Optimus Prime autobot", "description": ""}, None) is False

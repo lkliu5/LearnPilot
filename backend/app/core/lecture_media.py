@@ -127,30 +127,100 @@ def _image_block(kp_name: str, description: str, llm: Any) -> str | None:
     return f"![{alt}]({url})\n\n*图片来源：[{_md_escape(source)}]({source_url}){license_suffix}*"
 
 
-# 知识点名 → 配图检索关键词「候选阶梯」。
-# 直接用完整知识点名（如「神经网络基础」「CNN架构」）在 Commons File 命名空间常 0 命中
-# （教学性后缀「基础/架构/原理/技术」拉低标题检索相关性）；故按「先具体后宽泛」逐级回落：
-#   ① 完整名（最精确，命中即用，保证贴题）→ ② 去教学性后缀的核心概念（神经网络/卷积…）
-#   → ③ 该领域的标准英文术语（Commons 英文图源覆盖更全）。
-# 命中即停（宁缺毋滥仍成立：每一级都是真实搜索结果，绝不编造），逐级也天然兼具弱网重试效果。
-# 关键词不附加到同一查询里（避免「附加泛词反而拉低单查询相关性」），而是作为独立候选依次尝试。
+# 知识点名 → 配图检索「候选阶梯」+「贴题判定」。
+# 任务②教训：之前直接用完整中文名 / 裸英文词检索，且对返回结果**不做相关性判定**，
+# 导致歧义跨域图被插入——「Transformer」→ 电力变压器 / 变形金刚电影，「CNN」→ 有线新闻台，
+# 「fine-tuning」→ 乐器调音。改法：
+#   ① 检索词一律带领域限定（deep learning / neural network / machine learning），不再用裸歧义词；
+#   ② 对命中图做「确定贴题」判定——其标题/描述须含该概念的**正向词**、且不含**跨域排除词**，
+#      满足才插；任一候选都判不出贴题图 → 不插（宁缺毋滥）。正/负词大小写无关地匹配 标题+描述。
+# 命中即停（每一级都是真实搜索结果，绝不编造 URL）。
 _QUERY_SUFFIXES = ("基础", "架构", "原理", "技术", "入门", "进阶", "详解", "讲义", "简介", "概述")
-# 按子串命中知识点名 → 追加的标准英文/核心中文候选（精选、贴题，避免歧义图）。
-_CONCEPT_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("神经网络", ("神经网络", "Artificial neural network")),
-    ("卷积", ("卷积神经网络", "Convolutional neural network")),
-    ("cnn", ("卷积神经网络", "Convolutional neural network")),
-    ("transformer", ("Transformer", "Transformer deep learning architecture")),
-    ("注意力", ("Attention mechanism", "Transformer deep learning architecture")),
-    ("机器学习", ("机器学习", "Machine learning")),
-    ("深度学习", ("深度学习", "Deep learning")),
-    ("微调", ("Fine-tuning deep learning", "Transfer learning")),
-    ("梯度下降", ("梯度下降", "Gradient descent")),
+
+# 每条：(命中知识点名的子串 needles, 域限定查询阶梯 queries, 贴题正向词 positive, 跨域排除词 negative)。
+# 子串/正/负词匹配均转小写后做 in 判断（子串匹配，故 "fine-tun" 同时覆盖 fine-tuning/fine-tune）。
+_DOMAIN_RELEVANCE: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] = (
+    (
+        ("transformer", "注意力", "attention", "自注意力"),
+        ("Transformer deep learning architecture", "Transformer neural network model",
+         "Self-attention mechanism diagram"),
+        ("architecture", "attention", "encoder", "decoder", "neural", "deep learning",
+         "machine learning", "self-attention", "model", "embedding", "nlp"),
+        ("electric", "power", "voltage", "substation", "grid", "transmission", "winding",
+         "autobot", "decepticon", "optimus", "movie", "film", "toy", "robot", "lalaport"),
+    ),
+    (
+        ("cnn", "卷积", "convolution"),
+        ("Convolutional neural network", "CNN deep learning architecture",
+         "Convolutional neural network diagram"),
+        ("convolution", "convolutional", "cnn", "neural", "feature map", "pooling",
+         "kernel", "deep learning", "image"),
+        ("cable news", "news network", "television", "broadcast", "anchor", "channel", "logo"),
+    ),
+    (
+        ("神经网络", "neural network", "perceptron", "感知机"),
+        ("Artificial neural network diagram", "Artificial neural network", "Multilayer perceptron"),
+        ("neural", "perceptron", "neuron", "network", "layer", "activation", "deep learning"),
+        ("social network", "road network", "power network", "computer network", "telecom"),
+    ),
+    (
+        ("深度学习", "deep learning"),
+        ("Deep learning", "Deep neural network diagram"),
+        ("deep learning", "deep neural", "neural", "network", "layer"),
+        (),
+    ),
+    (
+        ("机器学习", "machine learning"),
+        ("Machine learning", "Supervised learning diagram", "Machine learning model"),
+        ("machine learning", "learning", "model", "classifier", "regression", "training",
+         "dataset", "algorithm"),
+        (),
+    ),
+    (
+        ("微调", "fine-tun", "finetune", "lora", "迁移学习", "transfer learning"),
+        # 迁移学习概念图优先（Commons 上有清晰的 Transfer Learning 谱系/概念图）；
+        # 「Fine-tuning …」检索回的多是论文结果图（无干净示意图），故置后兜底。
+        ("Transfer learning diagram", "Fine-tuning deep learning", "LoRA low-rank adaptation"),
+        ("fine-tun", "transfer learning", "lora", "pretrain", "pre-train", "language model",
+         "neural", "adaptation", "peft", "machine learning"),
+        ("guitar", "violin", "piano", "instrument", "music", "tuning fork", "engine",
+         "car ", "radio", "antenna"),
+    ),
+    (
+        ("梯度下降", "gradient descent", "梯度"),
+        ("Gradient descent", "Gradient descent optimization"),
+        ("gradient", "descent", "optimization", "loss", "minimum", "convex"),
+        (),
+    ),
+)
+
+# 未命中领域规格时的最小跨域噪声排除（仅挡最明确的无关图，避免过度抑制）。
+_GLOBAL_OFFTOPIC = ("autobot", "decepticon", "optimus", "lalaport", "movie poster")
+
+# 非示意性噪声（即便含正向词也判不贴题）：Commons 上常见的玩梗/周边/极小众应用图——
+# 如「Machine Learning cookies.jpg」「fine-tuning of AI drone racing」。讲义图解已是专业主力，
+# 这类图既不专业也易误导，一律不插（宁缺毋滥），让候选回落到真正的标准示意图或不插。
+_NOISE_OFFTOPIC = (
+    "cookie", "latte", "coffee", "mug", "t-shirt", "tshirt", "sticker", "meme",
+    "cartoon", "drone racing", "keychain", "plush", "logo", "icon",
 )
 
 
-def _image_query_candidates(kp_name: str) -> list[str]:
-    """生成配图检索的候选关键词阶梯（去重保序）：完整名 → 去后缀核心 → 标准术语别名。"""
+def _relevance_spec(kp_name: str):
+    """按子串命中知识点名 → 该领域 (needles, queries, positive, negative) 规格；未命中 → None。"""
+    low = (kp_name or "").lower()
+    for spec in _DOMAIN_RELEVANCE:
+        if any(n.lower() in low for n in spec[0]):
+            return spec
+    return None
+
+
+def _image_query_candidates(kp_name: str, spec) -> list[str]:
+    """配图检索候选阶梯（去重保序）。
+
+    命中领域规格 → 域限定英文查询优先（最可靠、最贴题），其后附完整名 / 去后缀核心兜底；
+    未命中规格 → 仅用完整名 + 去教学性后缀的核心概念。
+    """
     name = (kp_name or "").strip()
     candidates: list[str] = []
 
@@ -159,34 +229,47 @@ def _image_query_candidates(kp_name: str) -> list[str]:
         if q and q not in candidates:
             candidates.append(q)
 
+    if spec is not None:
+        for q in spec[1]:  # 域限定查询优先
+            _add(q)
     _add(name)
-    # 去教学性后缀的核心概念（如「神经网络基础」→「神经网络」、「CNN架构」→「CNN」）
     core = name
     for suf in _QUERY_SUFFIXES:
         if core.endswith(suf) and len(core) > len(suf):
             core = core[: -len(suf)]
     _add(core)
-    # 领域别名（按子串命中知识点名，大小写无关）
-    low = name.lower()
-    for needle, aliases in _CONCEPT_ALIASES:
-        if needle.lower() in low:
-            for a in aliases:
-                _add(a)
     return candidates
 
 
+def _is_on_topic(hit: dict[str, Any], spec) -> bool:
+    """判定一张命中图是否「确定贴题」。
+
+    命中领域规格：标题+描述须含至少一个正向词、且不含任何跨域排除词；
+    未命中规格：仅挡最明确的全局跨域噪声（宽松，保留非核心知识点的配图能力）。
+    """
+    text = f"{hit.get('title') or ''} {hit.get('description') or ''}".lower()
+    if spec is None:
+        return not any(bad in text for bad in _GLOBAL_OFFTOPIC)
+    _needles, _queries, positive, negative = spec
+    if any(neg in text for neg in negative) or any(n in text for n in _NOISE_OFFTOPIC):
+        return False
+    return any(pos in text for pos in positive)
+
+
 def _search_real_image(kp_name: str, description: str) -> dict[str, Any] | None:
-    """经可插拔图片搜索 Provider 取一张真实配图；URL 必须为搜索返回的真实 http(s) 链接。
+    """经可插拔图片搜索 Provider 取一张**确定贴题**的真实配图；URL 必须为搜索返回的真实 http(s) 链接。
 
     URL 一律取自图源结果（防幻觉，绝不由 LLM 编造）；返回 ``source`` / ``source_url`` 用于来源标注。
-    按「完整名→核心概念→标准英文术语」候选阶梯逐级检索，命中即停（先具体后宽泛，保证贴题）。
+    按域限定查询阶梯逐级检索，对每张命中图做贴题判定（正向词命中且无跨域排除词），命中即停；
+    所有候选都判不出贴题图 → 返回 None（宁缺毋滥，上层只用图解，不插不相关真实图）。
     """
     from app.services import image_search
 
     provider = image_search.get_provider()
     if not getattr(provider, "online", False):
         return None  # 无图源能力 → 不插真实图
-    candidates = _image_query_candidates(kp_name)
+    spec = _relevance_spec(kp_name)
+    candidates = _image_query_candidates(kp_name, spec)
     if not candidates:
         return None
     for query in candidates:
@@ -198,17 +281,23 @@ def _search_real_image(kp_name: str, description: str) -> dict[str, Any] | None:
         for h in hits or []:
             url = str((h or {}).get("url") or "").strip()
             # 防幻觉二次校验：仅接受真实 http(s) URL（链接来自 Provider，非 LLM 编造）
-            if url.startswith("http://") or url.startswith("https://"):
-                if query != candidates[0]:
-                    logger.info("讲义配图：完整名未命中，回落候选「%s」命中", query)
-                return {
-                    "url": url,
-                    "source": (h or {}).get("source") or _domain(url),
-                    "source_url": (h or {}).get("source_url") or "",
-                    "title": (h or {}).get("title") or "",
-                    "description": (h or {}).get("description") or "",
-                    "license": (h or {}).get("license") or "",
-                }
+            if not (url.startswith("http://") or url.startswith("https://")):
+                continue
+            # 贴题判定：不确定贴题就跳过（宁缺毋滥），避免插入歧义跨域图（电力变压器/新闻台等）
+            if not _is_on_topic(h or {}, spec):
+                logger.info("讲义配图：命中图判为不贴题，跳过（query=%s，title=%s）",
+                            query, (h or {}).get("title"))
+                continue
+            if query != candidates[0]:
+                logger.info("讲义配图：首选查询未得贴题图，回落候选「%s」命中", query)
+            return {
+                "url": url,
+                "source": (h or {}).get("source") or _domain(url),
+                "source_url": (h or {}).get("source_url") or "",
+                "title": (h or {}).get("title") or "",
+                "description": (h or {}).get("description") or "",
+                "license": (h or {}).get("license") or "",
+            }
     return None
 
 
