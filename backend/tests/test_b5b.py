@@ -443,3 +443,26 @@ def test_api_maps_llm_failure_to_2001(client, learner_headers, deepseek_llm, mon
     body = res.json()
     assert body["code"] == 2001
     assert "traceId" in body
+
+
+# ── 讲义配图关键词「候选阶梯」单测（缓存重生成修复：纯函数、零网络） ────────────────
+# 修复点：真实模式配图原直接用完整知识点名（「神经网络基础」「CNN架构」），在 Wikimedia
+# Commons File 命名空间常 0 命中 → 几乎只剩 mermaid 兜底。改为「完整名→去后缀核心→标准
+# 英文术语」逐级回落（先具体后宽泛、命中即停、保证贴题），把 6 个核心 KP 命中率 1/6→6/6。
+def test_image_query_candidates_fallback_ladder():
+    from app.core.lecture_media import _image_query_candidates
+
+    # 完整名永远排第一（最精确，命中即用，保证贴题）；去教学性后缀得核心概念，再补标准英文术语
+    assert _image_query_candidates("神经网络基础") == [
+        "神经网络基础",
+        "神经网络",
+        "Artificial neural network",
+    ]
+    # 英文知识点名（CNN/Transformer）大小写无关命中别名表
+    assert "卷积神经网络" in _image_query_candidates("CNN架构")
+    assert "Transformer" in _image_query_candidates("Transformer架构")
+    # 去重保序：核心与完整名相同时不重复
+    assert _image_query_candidates("机器学习") == ["机器学习", "Machine learning"]
+    # 空名 → 空候选（上层据此不插真实图）
+    assert _image_query_candidates("") == []
+    assert _image_query_candidates("   ") == []

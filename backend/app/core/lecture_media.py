@@ -127,37 +127,88 @@ def _image_block(kp_name: str, description: str, llm: Any) -> str | None:
     return f"![{alt}]({url})\n\n*图片来源：[{_md_escape(source)}]({source_url}){license_suffix}*"
 
 
+# 知识点名 → 配图检索关键词「候选阶梯」。
+# 直接用完整知识点名（如「神经网络基础」「CNN架构」）在 Commons File 命名空间常 0 命中
+# （教学性后缀「基础/架构/原理/技术」拉低标题检索相关性）；故按「先具体后宽泛」逐级回落：
+#   ① 完整名（最精确，命中即用，保证贴题）→ ② 去教学性后缀的核心概念（神经网络/卷积…）
+#   → ③ 该领域的标准英文术语（Commons 英文图源覆盖更全）。
+# 命中即停（宁缺毋滥仍成立：每一级都是真实搜索结果，绝不编造），逐级也天然兼具弱网重试效果。
+# 关键词不附加到同一查询里（避免「附加泛词反而拉低单查询相关性」），而是作为独立候选依次尝试。
+_QUERY_SUFFIXES = ("基础", "架构", "原理", "技术", "入门", "进阶", "详解", "讲义", "简介", "概述")
+# 按子串命中知识点名 → 追加的标准英文/核心中文候选（精选、贴题，避免歧义图）。
+_CONCEPT_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("神经网络", ("神经网络", "Artificial neural network")),
+    ("卷积", ("卷积神经网络", "Convolutional neural network")),
+    ("cnn", ("卷积神经网络", "Convolutional neural network")),
+    ("transformer", ("Transformer", "Transformer deep learning architecture")),
+    ("注意力", ("Attention mechanism", "Transformer deep learning architecture")),
+    ("机器学习", ("机器学习", "Machine learning")),
+    ("深度学习", ("深度学习", "Deep learning")),
+    ("微调", ("Fine-tuning deep learning", "Transfer learning")),
+    ("梯度下降", ("梯度下降", "Gradient descent")),
+)
+
+
+def _image_query_candidates(kp_name: str) -> list[str]:
+    """生成配图检索的候选关键词阶梯（去重保序）：完整名 → 去后缀核心 → 标准术语别名。"""
+    name = (kp_name or "").strip()
+    candidates: list[str] = []
+
+    def _add(q: str) -> None:
+        q = (q or "").strip()
+        if q and q not in candidates:
+            candidates.append(q)
+
+    _add(name)
+    # 去教学性后缀的核心概念（如「神经网络基础」→「神经网络」、「CNN架构」→「CNN」）
+    core = name
+    for suf in _QUERY_SUFFIXES:
+        if core.endswith(suf) and len(core) > len(suf):
+            core = core[: -len(suf)]
+    _add(core)
+    # 领域别名（按子串命中知识点名，大小写无关）
+    low = name.lower()
+    for needle, aliases in _CONCEPT_ALIASES:
+        if needle.lower() in low:
+            for a in aliases:
+                _add(a)
+    return candidates
+
+
 def _search_real_image(kp_name: str, description: str) -> dict[str, Any] | None:
     """经可插拔图片搜索 Provider 取一张真实配图；URL 必须为搜索返回的真实 http(s) 链接。
 
     URL 一律取自图源结果（防幻觉，绝不由 LLM 编造）；返回 ``source`` / ``source_url`` 用于来源标注。
+    按「完整名→核心概念→标准英文术语」候选阶梯逐级检索，命中即停（先具体后宽泛，保证贴题）。
     """
     from app.services import image_search
 
     provider = image_search.get_provider()
     if not getattr(provider, "online", False):
         return None  # 无图源能力 → 不插真实图
-    # 关键词直接用知识点名（免版权图源按相关性排序；附加英文/泛词反而拉低 Commons 命中相关性）
-    query = (kp_name or "").strip()
-    if not query:
+    candidates = _image_query_candidates(kp_name)
+    if not candidates:
         return None
-    try:
-        hits = provider.search_images(query, max_results=settings.image_search_max_results)
-    except Exception as exc:  # noqa: BLE001 搜索失败不致命 → 不插图
-        logger.warning("讲义配图搜索失败，跳过配图：%s", exc)
-        return None
-    for h in hits or []:
-        url = str((h or {}).get("url") or "").strip()
-        # 防幻觉二次校验：仅接受真实 http(s) URL（链接来自 Provider，非 LLM 编造）
-        if url.startswith("http://") or url.startswith("https://"):
-            return {
-                "url": url,
-                "source": (h or {}).get("source") or _domain(url),
-                "source_url": (h or {}).get("source_url") or "",
-                "title": (h or {}).get("title") or "",
-                "description": (h or {}).get("description") or "",
-                "license": (h or {}).get("license") or "",
-            }
+    for query in candidates:
+        try:
+            hits = provider.search_images(query, max_results=settings.image_search_max_results)
+        except Exception as exc:  # noqa: BLE001 搜索失败不致命 → 试下一个候选 / 不插图
+            logger.warning("讲义配图搜索失败（query=%s），跳过该候选：%s", query, exc)
+            continue
+        for h in hits or []:
+            url = str((h or {}).get("url") or "").strip()
+            # 防幻觉二次校验：仅接受真实 http(s) URL（链接来自 Provider，非 LLM 编造）
+            if url.startswith("http://") or url.startswith("https://"):
+                if query != candidates[0]:
+                    logger.info("讲义配图：完整名未命中，回落候选「%s」命中", query)
+                return {
+                    "url": url,
+                    "source": (h or {}).get("source") or _domain(url),
+                    "source_url": (h or {}).get("source_url") or "",
+                    "title": (h or {}).get("title") or "",
+                    "description": (h or {}).get("description") or "",
+                    "license": (h or {}).get("license") or "",
+                }
     return None
 
 
