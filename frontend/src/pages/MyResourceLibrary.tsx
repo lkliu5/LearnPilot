@@ -21,6 +21,8 @@ const KIND_ICON: Record<ResourceKind, string> = {
   diagram: '📊',
   mindmap: '🧠',
   code: '💻',
+  quiz: '📝',
+  flashcard: '🃏',
 }
 const KIND_ACCENT: Record<ResourceKind, string> = {
   lecture: '#5b7f6e',
@@ -28,9 +30,11 @@ const KIND_ACCENT: Record<ResourceKind, string> = {
   diagram: '#c58940',
   mindmap: '#7c5cc4',
   code: '#5a6472',
+  quiz: '#c2557a',
+  flashcard: '#2f9e8f',
 }
 
-/* 形态筛选顺序（含「全部」） */
+/* 形态筛选顺序（含「全部」；quiz/flashcard 为文档学习产出形态） */
 const KIND_FILTERS: { key: ResourceKind | ''; label: string }[] = [
   { key: '', label: '全部' },
   { key: 'lecture', label: '讲义' },
@@ -38,6 +42,8 @@ const KIND_FILTERS: { key: ResourceKind | ''; label: string }[] = [
   { key: 'diagram', label: '图解' },
   { key: 'mindmap', label: '导图' },
   { key: 'code', label: '代码' },
+  { key: 'quiz', label: '练习题' },
+  { key: 'flashcard', label: '闪卡' },
 ]
 
 /* 时间快捷筛选 → 起始时间（ISO）。'' = 不限 */
@@ -74,13 +80,16 @@ function relTime(iso: string): string {
   return new Date(t).toLocaleDateString('zh-CN')
 }
 
-/* 形态 → 学习资源页落点 Tab（「在学习页打开」用） */
+/* 形态 → 学习资源页落点 Tab（「在学习页打开」用，仅内置课程 kp 资源）。
+   文档学习特有的 quiz/flashcard 在学习资源页无对应 Tab，回落 lecture（文档资源改跳文档学习页，见 openInLearning）。 */
 const KIND_TO_TAB: Record<ResourceKind, string> = {
   lecture: 'lecture',
   video: 'video',
   diagram: 'diagram',
   mindmap: 'mindmap',
   code: 'code',
+  quiz: 'lecture',
+  flashcard: 'lecture',
 }
 
 export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
@@ -129,10 +138,14 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
     return m
   }, [records])
 
-  /* 「在学习页打开」：设置资源页落点（知识点 + 浏览模式 + 落点 Tab）后跳转 */
+  /* 「在学习页打开」：文档学习资源 → 跳文档学习页；内置课程资源 → 设置资源页落点后跳学习资源页 */
   const openInLearning = (r: ResourceHistoryItem) => {
-    setResourceNav(r.kpId, 'browse', KIND_TO_TAB[r.kind])
     setPreview(null)
+    if (r.source === 'document') {
+      onNavigate?.('document-learning')
+      return
+    }
+    setResourceNav(r.kpId, 'browse', KIND_TO_TAB[r.kind])
     onNavigate?.('learning-resource')
   }
 

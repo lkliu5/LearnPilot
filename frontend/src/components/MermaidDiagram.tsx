@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import { downloadSvg, downloadSvgAsPng } from '../utils/resourceExport'
+import { sanitizeMermaid } from '../utils/mermaidSanitize'
 
 mermaid.initialize({
   startOnLoad: false,
@@ -30,8 +31,9 @@ export default function MermaidDiagram({ chart, downloadName }: { chart: string;
     let cancelled = false
     setReady(false)
     const id = `mmd-${idSeq++}`
+    // 渲染前清洗节点标签特殊字符（数学公式 / <、>、() 、[] 等），避免 Parse error 白屏；出错仍走下方兜底 UI
     mermaid
-      .render(id, chart)
+      .render(id, sanitizeMermaid(chart))
       .then(({ svg }) => {
         if (!cancelled && ref.current) {
           ref.current.innerHTML = svg

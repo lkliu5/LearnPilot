@@ -81,7 +81,8 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
   /** docId → 已生成产物集合（切换文档即切换视图）。 */
   const [bags, setBags] = useState<Record<string, ArtifactBag>>({})
   const [activeKind, setActiveKind] = useState<Kind | null>(null)
-  const [genKind, setGenKind] = useState<Kind | null>(null)
+  /** 正在生成中的形态集合：支持多形态并行生成，互不锁死（生成中的卡片各自 loading，其余可用）。 */
+  const [genKinds, setGenKinds] = useState<Set<Kind>>(() => new Set())
   const [genErr, setGenErr] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string>('初级')
 
@@ -180,7 +181,8 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
   /* ---------------- 生成 ---------------- */
 
   const runGenerate = async (kind: Kind, opts?: { diff?: string; regen?: boolean }) => {
-    if (!selectedId || genKind) return
+    // 仅拦截「同一形态重复触发」，不同形态可并行生成（不再一处生成锁死全部）
+    if (!selectedId || genKinds.has(kind)) return
     const doc = docs.find((d) => d.id === selectedId)
     if (!doc) return
     if (doc.status !== 'indexed') {
@@ -193,7 +195,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       return
     }
     setGenErr(null)
-    setGenKind(kind)
+    setGenKinds((prev) => new Set(prev).add(kind))
     const diff = opts?.diff ?? difficulty
     try {
       let data: ArtifactBag[Kind]
@@ -209,13 +211,17 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       console.error('[doclearn] 生成失败', e)
       setGenErr(`「${KIND_META.find((k) => k.id === kind)?.label}」生成失败，请稍后重试。`)
     } finally {
-      setGenKind(null)
+      setGenKinds((prev) => {
+        const next = new Set(prev)
+        next.delete(kind)
+        return next
+      })
     }
   }
 
   /* 讲义难度切换 → 按新难度重生成讲义 */
   const changeLectureLevel = (lv: string) => {
-    if (lv === (bag.lecture?.difficulty ?? difficulty) || genKind) return
+    if (lv === (bag.lecture?.difficulty ?? difficulty) || genKinds.has('lecture')) return
     setDifficulty(lv)
     void runGenerate('lecture', { diff: lv, regen: true })
   }
@@ -248,7 +254,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                     key={lv}
                     className={`level-switch__btn ${(bag.lecture?.difficulty ?? difficulty) === lv ? 'level-switch__btn--active' : ''}`}
                     onClick={() => changeLectureLevel(lv)}
-                    disabled={genKind === 'lecture'}
+                    disabled={genKinds.has('lecture')}
                   >
                     {lv}
                   </button>
@@ -476,14 +482,15 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                 <div className="doclearn-actions__grid">
                   {KIND_META.map((k) => {
                     const done = !!bag[k.id]
-                    const busy = genKind === k.id
+                    const busy = genKinds.has(k.id)
                     const active = activeKind === k.id
                     return (
                       <button
                         key={k.id}
                         className={`doclearn-act ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''}`}
                         onClick={() => runGenerate(k.id)}
-                        disabled={!!genKind || selectedDoc.status !== 'indexed'}
+                        // 只禁用「正在生成该形态」的卡片；其余卡片始终可点（并行/排队生成，不锁死）
+                        disabled={busy || selectedDoc.status !== 'indexed'}
                         title={done ? '查看已生成内容' : `基于文档生成${k.label}`}
                       >
                         <span className="doclearn-act__icon">{busy ? <span className="doclearn-drop__spinner" /> : k.icon}</span>
@@ -497,7 +504,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                             title="重新生成"
                             onClick={(e) => {
                               e.stopPropagation()
-                              if (!genKind) void runGenerate(k.id, { regen: true })
+                              if (!genKinds.has(k.id)) void runGenerate(k.id, { regen: true })
                             }}
                           >
                             ↻
