@@ -161,6 +161,22 @@ const icons = {
       <path d="M15.5 14.6c3 .15 5 2.3 5 5.4" stroke="url(#icon-slate)" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
     </svg>
   ),
+  /* 文档学习：上传的文档 + 高亮生成射线（基于文档生成多模态资料） */
+  docLearn: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-doc" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#7dd3fc" />
+          <stop offset="1" stopColor="#4f8fbf" />
+        </linearGradient>
+      </defs>
+      <path d="M6 3h7l5 5v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="url(#icon-doc)" opacity="0.85" />
+      <path d="M13 3v5h5" stroke="#fff" strokeWidth="1.2" opacity="0.7" />
+      <path d="M8.5 12.5l2 2 4-4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.95" />
+      <circle cx="18.5" cy="17.5" r="3.2" fill="#fff" opacity="0.9" />
+      <path d="M18.5 15.8v1.7l1.1.7" stroke="url(#icon-doc)" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  ),
   /* 我的资源库：分层资产盒（多形态资源归档） */
   myResources: (
     <svg viewBox="0 0 24 24" fill="none">
@@ -199,6 +215,7 @@ const mainlineItems: MenuItem[] = [
 /** 总览与工具（无先后顺序）*/
 const toolItems: MenuItem[] = [
   { id: 'dashboard', icon: icons.dashboard, label: '学情概览', description: '首页 · 学习总览' },
+  { id: 'document-learning', icon: icons.docLearn, label: '文档学习', description: '传文档 · 生成多模态资料' },
   { id: 'my-resources', icon: icons.myResources, label: '我的资源库', description: '生成资产 · 查看下载' },
   { id: 'workflow', icon: icons.workflow, label: 'Agent工作流', description: 'AI协同可视化' },
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
