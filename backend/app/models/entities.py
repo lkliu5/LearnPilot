@@ -301,6 +301,40 @@ class LearningNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class GenerationLog(Base):
+    """用户资源生成历史埋点（「我的资源库」数据层）。
+
+    每当用户生成/获取一类学习资源（讲义/视频/图解/思维导图/代码），追加一条**带
+    user_id 归属**的记录——区别于无用户归属的 ResourceCache 全局缓存（后者按
+    (kp_id,difficulty,kind) 唯一、供全体复用，无 user_id）。本表回答「这个用户
+    为哪些知识点、在什么难度下、生成过哪些形态的资源」，驱动「我的资源库」横向资产视图。
+
+    埋点是**追加式旁路**，不改既有生成逻辑：生成成功后调 generation_log.record() 追加。
+    去重口径：同一 (user_id,kp_id,kind,difficulty) 视为同一份资产，重复生成/再次获取
+    仅**刷新 created_at（最近生成时间）**（唯一约束 + upsert），避免反复浏览刷成历史噪声。
+    kind 存**归一化基类**（lecture/video/diagram/mindmap/code），剥离 ResourceCache 里
+    的 @provider / #tier 后缀，保证一种资产一行、与 provider/画像档无关。
+    **无外键耦合**（user_id/kp_id 仅作隔离/分组键），不改既有表结构（契约「新增追加」）。
+    """
+
+    __tablename__ = "generation_logs"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "kp_id", "kind", "difficulty", name="uq_genlog_user_kp_kind_diff"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # lecture|video|diagram|mindmap|code
+    difficulty: Mapped[str] = mapped_column(String(16), default="")  # 图解/导图/代码无难度→""
+    title: Mapped[str] = mapped_column(String(256), default="")  # 展示标题（知识点名 · 形态）
+    # 定位/查看引用（`kind:kp_id:difficulty`）；前端亦可由 kpId+kind+difficulty 复原查看/下载
+    resource_ref: Mapped[str] = mapped_column(String(512), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
 class QuizAttempt(Base):
     """测验作答历史埋点（C-fix 批3：学习过程评估行为数据层）。
 

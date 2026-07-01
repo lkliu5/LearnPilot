@@ -33,6 +33,7 @@ from app.schemas.resource import (
     VideoRenderRequest,
     VideoRequest,
 )
+from app.services import generation_log as generation_log_service
 from app.services import resource as resource_service
 from app.services import resource_search as resource_search_service
 from app.services import tutor as tutor_service
@@ -81,6 +82,8 @@ async def diagram(
         data = resource_service.diagram(db, kp_id)
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
+    # 「我的资源库」埋点（旁路追加，不改生成逻辑）：图解无难度档 → difficulty=""
+    generation_log_service.record(db, user.id, kp_id, "diagram", "")
     return success(data)
 
 
@@ -135,6 +138,8 @@ async def generate_lecture(
         return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
     except LLMGenerationError as exc:
         return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
+    # 「我的资源库」埋点（旁路追加，不改生成逻辑）
+    generation_log_service.record(db, user.id, body.kpId, "lecture", body.difficulty)
     return success(data)
 
 
@@ -151,6 +156,8 @@ async def generate_video(
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
         return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+    # 「我的资源库」埋点（旁路追加，不改生成逻辑）
+    generation_log_service.record(db, user.id, body.kpId, "video", body.difficulty)
     return success(data)
 
 

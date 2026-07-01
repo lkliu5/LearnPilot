@@ -38,7 +38,10 @@ export default function VideoLecture({
   title: propTitle,
   scenes: propScenes,
   difficulty = '初级',
-}: { title?: string; scenes?: LectureScene[]; difficulty?: string } = {}) {
+  kpId: propKpId,
+}: { title?: string; scenes?: LectureScene[]; difficulty?: string; kpId?: string } = {}) {
+  /* 知识点：显式传入（如「我的资源库」预览指定 kp）优先，否则取资源页粘性 kpId（原行为不变）。 */
+  const resolvedKpId = propKpId ?? getResourceKpId()
   const playerRef = useRef<PlayerRef>(null)
   const [seg, setSeg] = useState(0)
   const [narration, setNarration] = useState(true)
@@ -62,7 +65,7 @@ export default function VideoLecture({
   useEffect(() => {
     if (controlled || !USE_REAL_API) return
     // 难度跟随当前实际选择（与讲义/缓存键 (kp_id, difficulty, kind) 一致；切档自动重取）
-    getVideo(getResourceKpId(), difficulty)
+    getVideo(resolvedKpId, difficulty)
       .then((d) => {
         if (d.scenes?.length) {
           setFetchedScenes(d.scenes.map((s) => ({ title: s.title, points: s.points, narration: s.narration })))
@@ -70,7 +73,7 @@ export default function VideoLecture({
         }
       })
       .catch((e) => console.error('[video] 加载分镜脚本失败，使用本地默认脚本', e))
-  }, [controlled, difficulty])
+  }, [controlled, difficulty, resolvedKpId])
 
   /* 服务端渲染 mp4（增强项）：拿到一体 mp4（画面+旁白已烧录）→ 用原生 <video> 播放/下载；
      渲染中显示轮询态；无渲染能力 / 失败 / 超时 / mock / 受控生成 → 保持下方实时 Player+TTS 兜底，
@@ -87,7 +90,7 @@ export default function VideoLecture({
     setMp4Url(null)
     setRendering(false)
     setRenderProgress(0)
-    const kp = getResourceKpId()
+    const kp = resolvedKpId
     const poll = (taskId: string, tries: number) => {
       timer = window.setTimeout(() => {
         getTaskStatus<{ videoUrl: string }>(taskId)
@@ -127,7 +130,7 @@ export default function VideoLecture({
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [controlled, difficulty])
+  }, [controlled, difficulty, resolvedKpId])
 
   const scenes = controlled ? propScenes! : fetchedScenes
   const title = controlled ? propTitle || DEFAULT_TITLE : fetchedTitle

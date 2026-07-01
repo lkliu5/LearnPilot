@@ -1,4 +1,5 @@
 import { Sandpack } from '@codesandbox/sandpack-react'
+import { downloadCodeFile } from '../utils/resourceExport'
 
 /* 可运行的 JS 神经元示例（Sandpack 在浏览器内运行 web 代码）*/
 const neuronJs = `// 单个神经元的前向传播：加权求和 → 加偏置 → ReLU 激活
@@ -38,21 +39,43 @@ const htmlIndex = `<!DOCTYPE html>
 <body><div id="app"></div><script src="index.js"></script></body>
 </html>`
 
-/** 可运行代码沙箱：学习者直接跑/改神经网络代码 */
-export default function CodeSandbox() {
+/** 沙箱内的代码文件清单（真实文件名 → 内容），下载与运行复用同一份内容。 */
+const FILES: { name: string; code: string }[] = [
+  { name: 'index.js', code: neuronJs },
+  { name: 'index.html', code: htmlIndex },
+]
+
+/**
+ * 可运行代码沙箱：学习者直接跑/改神经网络代码。
+ * baseName 决定下载文件名前缀（如「代码-知识点」→「代码-知识点-index.js」）。
+ */
+export default function CodeSandbox({ baseName = '代码实操-神经元示例' }: { baseName?: string }) {
   return (
-    <Sandpack
-      template="static"
-      theme="auto"
-      files={{
-        '/index.js': neuronJs,
-        '/index.html': htmlIndex,
-      }}
-      options={{
-        showLineNumbers: true,
-        showTabs: true,
-        editorHeight: 420,
-      }}
-    />
+    <div className="resource-export-block">
+      <div className="lecture-export">
+        <span className="lecture-export__label">下载代码：</span>
+        {FILES.map((f) => (
+          <button
+            key={f.name}
+            type="button"
+            className="lecture-export__btn"
+            onClick={() => downloadCodeFile(f.code, `${baseName}-${f.name}`)}
+            title={`下载 ${f.name}（当前沙箱内容，${f.code.length} 字符）`}
+          >
+            <span aria-hidden="true">⬇</span> {f.name}
+          </button>
+        ))}
+      </div>
+      <Sandpack
+        template="static"
+        theme="auto"
+        files={Object.fromEntries(FILES.map((f) => [`/${f.name}`, f.code]))}
+        options={{
+          showLineNumbers: true,
+          showTabs: true,
+          editorHeight: 420,
+        }}
+      />
+    </div>
   )
 }

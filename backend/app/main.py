@@ -30,6 +30,7 @@ from app.api.v1 import (
     profile,
     quiz,
     resource,
+    resource_history,
     tasks,
     tts,
     workflow,
@@ -84,6 +85,7 @@ app.include_router(tasks.router, prefix=settings.api_prefix)
 # B2-b：Mastery & Journey / Resource / Quiz
 app.include_router(mastery.router, prefix=settings.api_prefix)
 app.include_router(resource.router, prefix=settings.api_prefix)
+app.include_router(resource_history.router, prefix=settings.api_prefix)
 app.include_router(quiz.router, prefix=settings.api_prefix)
 # B3：管理端知识库 RAG 四件套
 app.include_router(admin_kb.router, prefix=settings.api_prefix)

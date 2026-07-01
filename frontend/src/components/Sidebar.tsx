@@ -161,6 +161,21 @@ const icons = {
       <path d="M15.5 14.6c3 .15 5 2.3 5 5.4" stroke="url(#icon-slate)" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
     </svg>
   ),
+  /* 我的资源库：分层资产盒（多形态资源归档） */
+  myResources: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-amber" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#fcd68a" />
+          <stop offset="1" stopColor="#c58940" />
+        </linearGradient>
+      </defs>
+      <rect x="3.5" y="4" width="17" height="5" rx="1.6" fill="url(#icon-amber)" opacity="0.9" />
+      <rect x="4.8" y="9.6" width="14.4" height="4.4" rx="1.4" fill="url(#icon-amber)" opacity="0.6" />
+      <rect x="4.8" y="14.6" width="14.4" height="4.4" rx="1.4" fill="url(#icon-amber)" opacity="0.4" />
+      <line x1="10" y1="6.5" x2="14" y2="6.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity="0.85" />
+    </svg>
+  ),
 }
 
 interface MenuItem {
@@ -184,6 +199,7 @@ const mainlineItems: MenuItem[] = [
 /** 总览与工具（无先后顺序）*/
 const toolItems: MenuItem[] = [
   { id: 'dashboard', icon: icons.dashboard, label: '学情概览', description: '首页 · 学习总览' },
+  { id: 'my-resources', icon: icons.myResources, label: '我的资源库', description: '生成资产 · 查看下载' },
   { id: 'workflow', icon: icons.workflow, label: 'Agent工作流', description: 'AI协同可视化' },
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
 ]

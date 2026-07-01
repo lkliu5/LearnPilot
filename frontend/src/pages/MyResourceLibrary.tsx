@@ -1,0 +1,328 @@
+import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
+import PageHeader from '../components/PageHeader'
+import { RevealGroup, RevealItem } from '../components/Reveal'
+import ResourceLibraryPreview from '../components/ResourceLibraryPreview'
+import { setResourceNav } from '../services/resourceNav'
+import {
+  getResourceHistory,
+  HISTORY_KPS,
+  KIND_LABEL,
+  type ResourceHistoryItem,
+  type ResourceKind,
+} from '../services/resourceHistory'
+import type { PageType } from '../App'
+import './MyResourceLibrary.css'
+
+/* 形态 → 图标 / 主题色（与学习资源页插画色系一致） */
+const KIND_ICON: Record<ResourceKind, string> = {
+  lecture: '📖',
+  video: '🎬',
+  diagram: '📊',
+  mindmap: '🧠',
+  code: '💻',
+}
+const KIND_ACCENT: Record<ResourceKind, string> = {
+  lecture: '#5b7f6e',
+  video: '#3f6cc4',
+  diagram: '#c58940',
+  mindmap: '#7c5cc4',
+  code: '#5a6472',
+}
+
+/* 形态筛选顺序（含「全部」） */
+const KIND_FILTERS: { key: ResourceKind | ''; label: string }[] = [
+  { key: '', label: '全部' },
+  { key: 'lecture', label: '讲义' },
+  { key: 'video', label: '视频' },
+  { key: 'diagram', label: '图解' },
+  { key: 'mindmap', label: '导图' },
+  { key: 'code', label: '代码' },
+]
+
+/* 时间快捷筛选 → 起始时间（ISO）。'' = 不限 */
+type TimeKey = '' | 'today' | '7d' | '30d'
+const TIME_FILTERS: { key: TimeKey; label: string }[] = [
+  { key: '', label: '全部时间' },
+  { key: 'today', label: '今天' },
+  { key: '7d', label: '近 7 天' },
+  { key: '30d', label: '近 30 天' },
+]
+function timeToStart(key: TimeKey): string | undefined {
+  if (!key) return undefined
+  const now = new Date()
+  if (key === 'today') {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    return d.toISOString()
+  }
+  const days = key === '7d' ? 7 : 30
+  return new Date(now.getTime() - days * 86400_000).toISOString()
+}
+
+/** 相对时间：刚刚 / N 分钟前 / N 小时前 / N 天前 / 具体日期 */
+function relTime(iso: string): string {
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return ''
+  const diff = Date.now() - t
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return '刚刚'
+  if (min < 60) return `${min} 分钟前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} 小时前`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day} 天前`
+  return new Date(t).toLocaleDateString('zh-CN')
+}
+
+/* 形态 → 学习资源页落点 Tab（「在学习页打开」用） */
+const KIND_TO_TAB: Record<ResourceKind, string> = {
+  lecture: 'lecture',
+  video: 'video',
+  diagram: 'diagram',
+  mindmap: 'mindmap',
+  code: 'code',
+}
+
+export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
+  const [kindFilter, setKindFilter] = useState<ResourceKind | ''>('')
+  const [kpFilter, setKpFilter] = useState<string>('')
+  const [timeFilter, setTimeFilter] = useState<TimeKey>('')
+  const [records, setRecords] = useState<ResourceHistoryItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [preview, setPreview] = useState<ResourceHistoryItem | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError(false)
+    getResourceHistory({
+      pageSize: 100,
+      kind: kindFilter || undefined,
+      kpId: kpFilter || undefined,
+      startTime: timeToStart(timeFilter),
+    })
+      .then((res) => {
+        if (!alive) return
+        setRecords(res.items)
+        setTotal(res.total)
+      })
+      .catch((e) => {
+        console.error('[resource-library] 加载生成历史失败', e)
+        if (alive) setError(true)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [kindFilter, kpFilter, timeFilter])
+
+  const hasFilter = !!(kindFilter || kpFilter || timeFilter)
+
+  /* 各形态计数（当前筛选结果内），用于概览小结 */
+  const kindCounts = useMemo(() => {
+    const m: Partial<Record<ResourceKind, number>> = {}
+    for (const r of records) m[r.kind] = (m[r.kind] ?? 0) + 1
+    return m
+  }, [records])
+
+  /* 「在学习页打开」：设置资源页落点（知识点 + 浏览模式 + 落点 Tab）后跳转 */
+  const openInLearning = (r: ResourceHistoryItem) => {
+    setResourceNav(r.kpId, 'browse', KIND_TO_TAB[r.kind])
+    setPreview(null)
+    onNavigate?.('learning-resource')
+  }
+
+  return (
+    <div className="reslib-page">
+      <PageHeader
+        title="我的资源库"
+        highlight="资源库"
+        subtitle="你生成过的全部学习资产 · 讲义 / 视频 / 图解 / 思维导图 / 代码 · 可查看与下载"
+        badges={[
+          { label: '资产总数', value: total },
+          { label: '当前展示', value: records.length },
+        ]}
+      />
+
+      {/* 筛选区：形态 chips + 知识点下拉 + 时间快捷 */}
+      <RevealGroup>
+        <RevealItem className="reslib-filters">
+          <div className="reslib-filters__row">
+            <span className="reslib-filters__label">类型</span>
+            <div className="reslib-chips">
+              {KIND_FILTERS.map((f) => (
+                <button
+                  key={f.key || 'all'}
+                  type="button"
+                  className={`reslib-chip ${kindFilter === f.key ? 'reslib-chip--active' : ''}`}
+                  onClick={() => setKindFilter(f.key)}
+                >
+                  {f.key ? `${KIND_ICON[f.key]} ` : ''}
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="reslib-filters__row">
+            <span className="reslib-filters__label">知识点</span>
+            <select
+              className="reslib-select"
+              value={kpFilter}
+              onChange={(e) => setKpFilter(e.target.value)}
+            >
+              <option value="">全部知识点</option>
+              {HISTORY_KPS.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.name}
+                </option>
+              ))}
+            </select>
+
+            <span className="reslib-filters__label reslib-filters__label--gap">时间</span>
+            <div className="reslib-chips">
+              {TIME_FILTERS.map((f) => (
+                <button
+                  key={f.key || 'all-time'}
+                  type="button"
+                  className={`reslib-chip ${timeFilter === f.key ? 'reslib-chip--active' : ''}`}
+                  onClick={() => setTimeFilter(f.key)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {hasFilter && (
+              <button
+                type="button"
+                className="reslib-clear"
+                onClick={() => {
+                  setKindFilter('')
+                  setKpFilter('')
+                  setTimeFilter('')
+                }}
+              >
+                清除筛选
+              </button>
+            )}
+          </div>
+        </RevealItem>
+
+        {/* 内容区：加载 / 错误 / 空态 / 资产网格 */}
+        {loading ? (
+          <RevealItem className="reslib-state">
+            <div className="reslib-state__spinner" />
+            <p className="reslib-state__text">正在载入你的资源库…</p>
+          </RevealItem>
+        ) : error ? (
+          <RevealItem className="reslib-state">
+            <div className="reslib-state__icon">😵</div>
+            <p className="reslib-state__text">加载失败，请稍后重试。</p>
+          </RevealItem>
+        ) : records.length === 0 ? (
+          <RevealItem className="reslib-state reslib-empty">
+            <div className="reslib-state__icon">🗂️</div>
+            <h3 className="reslib-empty__title">{hasFilter ? '没有符合筛选条件的资源' : '资源库还是空的'}</h3>
+            <p className="reslib-state__text">
+              {hasFilter
+                ? '换个类型 / 知识点 / 时间试试，或清除筛选查看全部。'
+                : '去「学习资源」生成讲义、视频、图解、思维导图或代码，生成的资产会自动收进这里。'}
+            </p>
+            {hasFilter ? (
+              <button
+                type="button"
+                className="reslib-empty__cta"
+                onClick={() => {
+                  setKindFilter('')
+                  setKpFilter('')
+                  setTimeFilter('')
+                }}
+              >
+                清除筛选
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="reslib-empty__cta"
+                onClick={() => onNavigate?.('learning-resource')}
+              >
+                去生成学习资源 →
+              </button>
+            )}
+          </RevealItem>
+        ) : (
+          <>
+            {/* 形态小结 */}
+            <RevealItem className="reslib-summary">
+              {KIND_FILTERS.filter((f) => f.key).map((f) => (
+                <span key={f.key} className="reslib-summary__item">
+                  <span aria-hidden="true">{KIND_ICON[f.key as ResourceKind]}</span>
+                  {KIND_LABEL[f.key as ResourceKind]}
+                  <strong>{kindCounts[f.key as ResourceKind] ?? 0}</strong>
+                </span>
+              ))}
+            </RevealItem>
+
+            {/* 资产网格 */}
+            <RevealItem className="reslib-grid">
+              {records.map((r) => (
+                <article
+                  key={r.id}
+                  className="reslib-card"
+                  style={{ ['--kind-accent' as string]: KIND_ACCENT[r.kind] }}
+                >
+                  <button
+                    type="button"
+                    className="reslib-card__main"
+                    onClick={() => setPreview(r)}
+                    title="查看该资源"
+                  >
+                    <span className="reslib-card__icon" style={{ background: `${KIND_ACCENT[r.kind]}1a` }}>
+                      {KIND_ICON[r.kind]}
+                    </span>
+                    <span className="reslib-card__body">
+                      <span className="reslib-card__kind">{KIND_LABEL[r.kind]}</span>
+                      <span className="reslib-card__kp">{r.kpName}</span>
+                      <span className="reslib-card__metaline">
+                        {r.difficulty && <span className="reslib-card__diff">{r.difficulty}</span>}
+                        <span className="reslib-card__time">{relTime(r.createdAt)}</span>
+                      </span>
+                    </span>
+                  </button>
+                  <div className="reslib-card__actions">
+                    <button type="button" className="reslib-card__btn" onClick={() => setPreview(r)}>
+                      查看
+                    </button>
+                    <button
+                      type="button"
+                      className="reslib-card__btn reslib-card__btn--primary"
+                      onClick={() => setPreview(r)}
+                      title="在预览中下载（讲义 md/pdf · 视频 mp4 · 图解/导图 svg/png · 代码文件）"
+                    >
+                      下载
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </RevealItem>
+          </>
+        )}
+      </RevealGroup>
+
+      <AnimatePresence>
+        {preview && (
+          <ResourceLibraryPreview
+            record={preview}
+            onClose={() => setPreview(null)}
+            onOpenInLearning={openInLearning}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}

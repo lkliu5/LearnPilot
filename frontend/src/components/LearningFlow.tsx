@@ -261,7 +261,7 @@ export default function LearningFlow({
                     <Suspense fallback={<Loading />}>
                       <div className="resource-modal-hint">「{kpName}」知识脉络图（可缩放/拖拽）：</div>
                       {diagramChart ? (
-                        <MermaidDiagram chart={diagramChart} />
+                        <MermaidDiagram chart={diagramChart} downloadName={`图解-${kpName}`} />
                       ) : (
                         <div className="resource-loading">知识图解生成中…</div>
                       )}
@@ -296,7 +296,7 @@ export default function LearningFlow({
               <div className="flow__practice">
                 <Suspense fallback={<Loading />}>
                   <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完代码即时看结果：</div>
-                  <CodeSandbox />
+                  <CodeSandbox baseName={`代码-${kpName}`} />
                 </Suspense>
                 <label className="flow__seen">
                   <input

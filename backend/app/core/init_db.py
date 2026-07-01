@@ -32,6 +32,7 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models.entities import (  # noqa: F401  确保所有表在 create_all 前注册
     ExternalResource,
+    GenerationLog,
     JobSnapshot,
     Journey,
     KnowledgePoint,

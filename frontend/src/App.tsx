@@ -8,6 +8,7 @@ import ProfileBuilder from './pages/ProfileBuilder'
 import LearningPath from './pages/LearningPath'
 import AgentWorkflow from './pages/AgentWorkflow'
 import LearningResource from './pages/LearningResource'
+import MyResourceLibrary from './pages/MyResourceLibrary'
 import KnowledgeGraph from './pages/KnowledgeGraph'
 import AdminKB from './pages/admin/AdminKB'
 import AdminPrompts from './pages/admin/AdminPrompts'
@@ -25,6 +26,7 @@ export type PageType =
   | 'profile'
   | 'learning-path'
   | 'learning-resource'
+  | 'my-resources'
   | 'workflow'
   | 'knowledge-graph'
   | 'admin-kb'
@@ -139,6 +141,8 @@ function App() {
         return <LearningPath onNavigate={navigate} />
       case 'learning-resource':
         return <LearningResource onNavigate={navigate} />
+      case 'my-resources':
+        return <MyResourceLibrary onNavigate={navigate} />
       case 'workflow':
         return <AgentWorkflow onNavigate={navigate} />
       case 'knowledge-graph':

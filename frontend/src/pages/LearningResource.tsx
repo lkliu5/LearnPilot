@@ -20,6 +20,7 @@ import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData
 import { fetchRecommendations } from '../services/tutorResource'
 import { StatusChip, type ItemStatus } from '../components/genStatus'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
+import { logResourceGeneration } from '../services/resourceHistory'
 import '../components/TutorResourcePanel.css'
 import type { ReviewRef } from '../services/learningFlow'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
@@ -574,6 +575,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           // 思维导图由讲义 markdown 实时结构化得到 → 复用既有讲义生成接口
           const d = await getLecture(kpId, level)
           applyLecture(level, d)
+          // 讲义由后端 /resource/lecture 旁路埋点；思维导图无独立后端生成接口 → 前端补埋（「我的资源库」）
+          if (t === 'mindmap') await logResourceGeneration({ kpId, kind: 'mindmap' })
           break
         }
         case 'video':
@@ -590,7 +593,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           break
         }
         case 'code':
-          break // 代码实操为浏览器内可运行示例（CodeSandbox），无单独生成接口，直接就绪
+          // 代码实操为浏览器内可运行示例（CodeSandbox），无单独生成接口，直接就绪；前端补埋（「我的资源库」）
+          await logResourceGeneration({ kpId, kind: 'code' })
+          break
       }
       return
     }
@@ -909,7 +914,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">AI 已将讲义结构化为知识脉络图，可缩放/拖拽：</div>
             {activeMindmap ? (
-              <MindMap markdown={activeMindmap} />
+              <MindMap markdown={activeMindmap} downloadName={`思维导图-${kpName}`} />
             ) : (
               <div className="resource-loading">「{kpName}」的讲义生成后将自动结构化为思维导图…</div>
             )}
@@ -919,7 +924,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         return (
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完左侧代码即时看结果：</div>
-            <CodeSandbox />
+            <CodeSandbox baseName={`代码-${kpName}`} />
           </Suspense>
         )
       case 'diagram':
@@ -929,7 +934,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             {USE_REAL_API && !diagramChart ? (
               <div className="resource-loading">「{kpName}」的知识图解生成中，请稍候…</div>
             ) : (
-              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mockRes.diagram} />
+              <MermaidDiagram chart={USE_REAL_API ? diagramChart : mockRes.diagram} downloadName={`图解-${kpName}`} />
             )}
           </Suspense>
         )
