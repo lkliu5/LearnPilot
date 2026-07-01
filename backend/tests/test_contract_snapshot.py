@@ -34,7 +34,7 @@ DIMENSIONS = ["机器学习基础", "神经网络", "深度学习", "注意力�
 KP_IDS = {"ml", "nn", "dl", "cnn", "transformer", "finetune"}
 KP_STATUS = {"learning", "pending-check", "passed"}
 PATH_DIFFICULTIES = {"入门", "初级", "中级", "高级", "精通"}
-LECTURE_DIFFICULTIES = {"入门", "初级", "高级"}
+LECTURE_DIFFICULTIES = {"入门", "初级", "中级", "高级", "精通"}
 LESSON_STATUS = {"completed", "in_progress", "pending"}
 SOURCE_KINDS = {"resume", "ocr", "text", "manual"}
 MATERIAL_KINDS = {"doc", "image", "text"}
@@ -411,9 +411,9 @@ def test_17_lecture(client, learner):
     # B10：workflowId 标识产出该份讲义的工作流 trace（直出 mock 为 null，
     # 工作流回写后为字符串）；供前端「查看生成过程」回放
     assert data["workflowId"] is None or isinstance(data["workflowId"], str)
-    # 难度档非法 → 1001（资源页三档：入门|初级|高级）
+    # 难度档非法 → 1001（资源页五档：入门|初级|中级|高级|精通；"地狱" 不在档内）
     _data(client.post(f"{API}/resource/lecture", headers=learner,
-                      json={"kpId": "nn", "difficulty": "中级"}),
+                      json={"kpId": "nn", "difficulty": "地狱"}),
           code=1001, status=400)
 
 

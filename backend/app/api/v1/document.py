@@ -8,6 +8,7 @@
 - GET    /document/list                  当前用户文档列表
 - GET    /document/{docId}               文档详情（含解析文本预览）
 - DELETE /document/{docId}               删除文档 + 专属向量集合
+- POST   /document/generate/overview     基于文档生成文档概览（NotebookLM 式速读）
 - POST   /document/generate/lecture      基于文档生成讲义
 - POST   /document/generate/video        基于文档生成视频分镜
 - POST   /document/generate/diagram      基于文档生成 Mermaid 图解
@@ -29,6 +30,7 @@ from app.schemas.document import (
     DocFlashcardRequest,
     DocLectureRequest,
     DocMindmapRequest,
+    DocOverviewRequest,
     DocQuizRequest,
     DocVideoRequest,
 )
@@ -108,6 +110,16 @@ def _guarded_generate(fn, *args):
         return fail(code=1001, message="文档尚未完成解析入库，请稍后重试", status_code=400)
     except gen.InvalidDifficulty:
         return fail(code=1001, message="难度档非法", status_code=400)
+
+
+@router.post("/document/generate/overview")
+async def gen_overview(
+    body: DocOverviewRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """基于文档生成「文档概览」（NotebookLM 式速读：是什么/讲了什么/结构概况/关键点）。"""
+    return _guarded_generate(gen.generate_overview, db, user.id, body.documentId)
 
 
 @router.post("/document/generate/lecture")

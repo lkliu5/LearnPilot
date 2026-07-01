@@ -84,9 +84,9 @@ def _lecture(client, learner, kp_id: str, difficulty: str) -> dict:
 # ---- ① 入参 difficulty 校验（11.1，B10） ---------------------------------------
 
 def test_execute_difficulty_invalid(client, learner):
-    """难度档非法（路径难度档「中级」不在讲义三档内）→ 1001。"""
+    """难度档非法（「地狱」不在讲义五档 入门|初级|中级|高级|精通 内）→ 1001。"""
     _data(client.post(f"{API}/workflow/execute", headers=learner,
-                      json={"kpId": "nn", "difficulty": "中级"}),
+                      json={"kpId": "nn", "difficulty": "地狱"}),
           code=1001, status=400)
 
 

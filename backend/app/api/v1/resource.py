@@ -135,7 +135,7 @@ async def generate_lecture(
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
-        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+        return fail(code=1001, message="难度档非法，应为 入门|初级|中级|高级|精通", status_code=400)
     except LLMGenerationError as exc:
         return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     # 「我的资源库」埋点（旁路追加，不改生成逻辑）
@@ -155,7 +155,7 @@ async def generate_video(
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
-        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+        return fail(code=1001, message="难度档非法，应为 入门|初级|中级|高级|精通", status_code=400)
     # 「我的资源库」埋点（旁路追加，不改生成逻辑）
     generation_log_service.record(db, user.id, body.kpId, "video", body.difficulty)
     return success(data)
@@ -181,7 +181,7 @@ async def render_video(
     except resource_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     except resource_service.InvalidDifficulty:
-        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+        return fail(code=1001, message="难度档非法，应为 入门|初级|中级|高级|精通", status_code=400)
     return success(data)
 
 

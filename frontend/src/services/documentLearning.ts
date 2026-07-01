@@ -83,6 +83,14 @@ export interface FlashcardResult {
   cards: FlashcardCard[]
   sources: SourceRef[]
 }
+/** 文档概览（NotebookLM 式速读）：是什么 / 讲了什么 / 结构概况 / 关键点。 */
+export interface OverviewResult {
+  summary: string
+  about: string
+  structure: string
+  keyPoints: string[]
+  sources: SourceRef[]
+}
 
 /* ================================================================== *
  *  mock：内存文档表 + 从正文派生的确定性假产物（无后端时全链路可跑）
@@ -175,6 +183,18 @@ function buildMockDiagram(doc: DocumentItem): DiagramResult {
     `  E --> F`,
   ].join('\n')
   return { mermaid, sources: mockSources(doc) }
+}
+
+function buildMockOverview(doc: DocumentItem): OverviewResult {
+  const s = keySentences(mockContent[doc.id] ?? '', 6)
+  const topic = s[0].slice(0, 24).replace(/[，,。.；;：:\s]+$/, '')
+  return {
+    summary: `《${doc.title}》是一篇围绕「${topic}」展开的资料。`,
+    about: s.slice(0, 2).join('').slice(0, 180),
+    structure: `全文自「${s[0].slice(0, 14)}」切入，逐步展开到「${s[s.length - 1].slice(0, 14)}」，共梳理约 ${s.length} 个要点。`,
+    keyPoints: s.slice(0, 5),
+    sources: mockSources(doc),
+  }
 }
 
 function buildMockMindmap(doc: DocumentItem): MindmapResult {
@@ -323,6 +343,26 @@ export async function waitIndexed(
 }
 
 /* -------- 20.5 ~ 20.7 六类内容生成（均基于 documentId，溯源自该文档） -------- */
+
+/** 文档概览（选中文档即自动生成展示）：内容取自该文档，联调走后端、离线走 mock。 */
+export async function generateOverview(docId: string): Promise<OverviewResult> {
+  if (USE_REAL_API) {
+    const d = await apiPost<{
+      overview: { summary: string; about: string; structure: string; keyPoints: string[] }
+      sources: RawSource[]
+    }>('/document/generate/overview', { documentId: docId })
+    const o = d.overview ?? { summary: '', about: '', structure: '', keyPoints: [] }
+    return {
+      summary: o.summary ?? '',
+      about: o.about ?? '',
+      structure: o.structure ?? '',
+      keyPoints: Array.isArray(o.keyPoints) ? o.keyPoints : [],
+      sources: toSourceRefs(d.sources),
+    }
+  }
+  await mockDelay()
+  return buildMockOverview(await getDocument(docId))
+}
 
 export async function generateLecture(docId: string, difficulty = '初级'): Promise<LectureResult> {
   if (USE_REAL_API) {

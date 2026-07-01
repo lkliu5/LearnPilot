@@ -47,7 +47,7 @@ async def cornell_cues(
     except learning_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)
     except learning_service.InvalidDifficulty:
-        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+        return fail(code=1001, message="难度档非法，应为 入门|初级|中级|高级|精通", status_code=400)
     except LLMGenerationError as exc:
         return fail(code=2001, message=f"LLM/Agent 生成失败：{exc}", status_code=500)
     return success(data)

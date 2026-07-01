@@ -174,7 +174,13 @@ A = relu(Z)
 > **小结**：掌握向量化前向 + 链式反向 + 初始化/优化/正则三件套，即可手写一个可训练的 MLP。下一步建议「深度学习原理 / CNN」。`,
 }
 
-const LEVELS = ['入门', '初级', '高级'] as const
+const LEVELS = ['入门', '初级', '中级', '高级', '精通'] as const
+
+/* 纯 mock 离线兜底：五档难度 → 本地三档讲义内容映射（中级并入初级、精通并入高级）。
+   联调（USE_REAL_API=true，默认）下五档均由后端按对应 depth 实时生成，不走此映射。 */
+const MOCK_LECTURE_LEVEL: Record<(typeof LEVELS)[number], '入门' | '初级' | '高级'> = {
+  入门: '入门', 初级: '初级', 中级: '初级', 高级: '高级', 精通: '高级',
+}
 
 /* 分阶测试（mock 兜底）：10 题——单选/多选/判断客观题 + 末尾 1 道简答题，
    与后端种子题库 nn 逐字对齐（联调走 GET /quiz/nn 真实题库）。简答题 options 为空、
@@ -650,7 +656,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   useEffect(() => () => regenSocketRef.current?.close(), [])
 
   /* 当前展示的讲义内容：联调取后端缓存，mock 取本地三档常量 */
-  const activeLecture = USE_REAL_API ? lectureMap[level] ?? '' : mockRes.lectureByLevel[level]
+  const activeLecture = USE_REAL_API
+    ? lectureMap[level] ?? ''
+    : mockRes.lectureByLevel[MOCK_LECTURE_LEVEL[level]]
 
   /* 思维导图：联调由当前讲义 markdown 实时结构化（标题大纲，与"从讲义结构化得到"的
      设计一致；后端 8.4 导图接口未实现，讲义已按 kpId 请求故大纲随 kpId 变化）；

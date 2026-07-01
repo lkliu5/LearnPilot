@@ -19,8 +19,12 @@ from __future__ import annotations
 
 from typing import Any
 
-# 难度档 → 基线深度（直出 / 无画像信号时用）
-_DIFFICULTY_DEPTH: dict[str, int] = {"入门": 0, "初级": 1, "高级": 2}
+# 难度档 → 基线深度（直出 / 无画像信号时用）。五档递进，各档 depth 互不相同 →
+# 中级/精通与相邻档产出深度可区分（入门 0 / 初级 1 / 中级 2 / 高级 3 / 精通 4）。
+_DIFFICULTY_DEPTH: dict[str, int] = {"入门": 0, "初级": 1, "中级": 2, "高级": 3, "精通": 4}
+
+_DEPTH_MIN = 0
+_DEPTH_MAX = 4
 
 
 def difficulty_depth(difficulty: str) -> int:
@@ -29,18 +33,20 @@ def difficulty_depth(difficulty: str) -> int:
 
 
 def resolve_depth(difficulty: str, tier: str | None) -> int:
-    """合成最终 depth：画像 tier 优先（个性化主控），否则按难度基线。
+    """合成最终 depth：以难度档基线为主，画像 tier 做 ±1 微调（个性化不抹平五档区分）。
 
-    - tier="advanced"（能力强）→ depth 2；
-    - tier="beginner"（零基础）→ depth 0；
+    - tier="advanced"（能力强）→ 基线 +1（封顶 4）；
+    - tier="beginner"（零基础）→ 基线 -1（保底 0）；
     - 其余（basic / None）→ 难度基线。
-    这样「同一知识点、同一难度」对能力强 / 零基础两位用户产出深度不同的讲义。
+    这样「同一知识点、同一难度」对能力强 / 零基础两位用户产出深度不同的讲义，
+    而显式选定的五档之间仍保持递进区分（不再被 tier 拉平到固定两档）。
     """
+    base = difficulty_depth(difficulty)
     if tier == "advanced":
-        return 2
+        return min(base + 1, _DEPTH_MAX)
     if tier == "beginner":
-        return 0
-    return difficulty_depth(difficulty)
+        return max(base - 1, _DEPTH_MIN)
+    return base
 
 
 # ---- 6 个核心知识点的知识原子（领域事实，公式经核对） ------------------------------
@@ -532,7 +538,9 @@ def compose_lecture(
     atom = _resolve_atom(name) or _generic_atom(name, description)
     desc = (description or "").strip()
 
-    depth_label = {0: "零基础友好", 1: "标准进阶", 2: "深入精研"}[depth]
+    depth_label = {
+        0: "零基础友好", 1: "标准进阶", 2: "进阶巩固", 3: "深入精研", 4: "融会贯通"
+    }[depth]
     persona = {
         "advanced": "已识别你**基础较好**，已加入公式推导、底层原理与对比延伸。",
         "beginner": "已识别你**零基础起步**，多用类比、拆细步骤、先直觉后公式。",
@@ -558,10 +566,11 @@ def compose_lecture(
     if atom.get("formulas"):
         core.append("**关键公式：**")
         core.extend(atom["formulas"])
-    if depth == 2 and atom.get("derivation"):
+    # 递进披露：中级起补公式推导；高级起再补底层原理（保证「中级 ⊂ 高级」深度有别）。
+    if depth >= 2 and atom.get("derivation"):
         core.append("### 公式推导（进阶）")
         core.append(atom["derivation"])
-    if depth == 2 and atom.get("deepdive"):
+    if depth >= 3 and atom.get("deepdive"):
         core.append("### 底层原理 · 为什么这样设计")
         core.append(atom["deepdive"])
     parts.append(_join(core))
@@ -589,17 +598,30 @@ def compose_lecture(
     takeaways = atom.get("takeaways") or []
     if takeaways:
         summary.append("\n".join(f"- {t}" for t in takeaways))
-    if depth == 2 and atom.get("extension"):
+    if depth >= 3 and atom.get("extension"):
         ext = atom["extension"]
         ext = ext[0] if isinstance(ext, tuple) else ext
         summary.append(f"**对比延伸：** {ext}")
     next_hint = {
         0: "> 建立直觉后，可切到「初级 / 高级」版本看更完整的推导与实现，或进入「测验」巩固。",
         1: "> 完成本节后建议进入「测验」巩固，或切到「高级版」深入推导与工程细节。",
-        2: "> 掌握形式化与底层原理后，结合「测验」检验理解深度，并横向对照相邻知识点。",
+        2: "> 已掌握核心推导，可切到「高级 / 精通」补底层原理与对比延伸，或进入「测验」巩固。",
+        3: "> 掌握形式化与底层原理后，结合「测验」检验理解深度，并横向对照相邻知识点。",
+        4: "> 已达精通视角：尝试脱离讲义从零推导并复现实现，再横向对照相邻知识点建立体系。",
     }[depth]
     summary.append(next_hint)
     parts.append(_join(summary))
+
+    # 七、专精拓展（仅精通档 depth=4）：在高级之上再加「贯通推导 + 专精自测」，
+    # 使精通与高级产出深度明确有别；内容为通用治学框架，不臆造具体领域事实（防幻觉）。
+    if depth >= 4:
+        parts.append(_join([
+            "## 七、专精 · 融会贯通",
+            "**贯通推导：** 回到核心公式，逐项说清每一步的动机、假设与适用边界，"
+            "而不仅套用结论；再想清楚换一种设计会付出什么代价。",
+            "**专精自测：** 脱离本讲义，从定义出发独立复现关键推导与最小实现，"
+            "并能讲清每个设计选择的取舍与替代方案，最后与相邻知识点串成体系——能讲清即达精通。",
+        ]))
 
     # 覆盖率兜底：未收录知识点把核心概念清单显式列出（覆盖率契约）
     if not _resolve_atom(name) and desc:

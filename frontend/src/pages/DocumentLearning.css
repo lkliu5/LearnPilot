@@ -459,3 +459,67 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ===================== 文档概览（NotebookLM 式速读） ===================== */
+.doclearn-overview {
+  margin-bottom: var(--space-md);
+  padding: 16px 18px;
+  border-radius: var(--radius-lg, 16px);
+  background: linear-gradient(180deg, rgba(22, 163, 74, 0.06), rgba(22, 163, 74, 0.02));
+  border: 1px solid var(--success-100, rgba(22, 163, 74, 0.18));
+}
+.doclearn-overview__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.doclearn-overview__icon {
+  font-size: 18px;
+}
+.doclearn-overview__title {
+  font-size: var(--text-md, 15px);
+  font-weight: 700;
+  color: var(--text-strong, #1e293b);
+}
+.doclearn-overview__tag {
+  font-size: var(--text-xs, 12px);
+  color: var(--success-600, #16a34a);
+  background: var(--success-50, rgba(22, 163, 74, 0.08));
+  border: 1px solid var(--success-100, rgba(22, 163, 74, 0.18));
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+}
+.doclearn-overview__summary {
+  margin: 0 0 8px;
+  font-size: var(--text-md, 15px);
+  font-weight: 600;
+  color: var(--text-strong, #1e293b);
+  line-height: 1.6;
+}
+.doclearn-overview__about,
+.doclearn-overview__structure {
+  margin: 0 0 8px;
+  font-size: var(--text-sm, 13.5px);
+  color: var(--text-body, #475569);
+  line-height: 1.7;
+}
+.doclearn-overview__keys {
+  margin-top: 10px;
+}
+.doclearn-overview__keys-label {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 700;
+  color: var(--success-600, #16a34a);
+}
+.doclearn-overview__keys ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.doclearn-overview__keys li {
+  font-size: var(--text-sm, 13.5px);
+  color: var(--text-body, #475569);
+  line-height: 1.7;
+}

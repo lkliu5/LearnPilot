@@ -54,8 +54,9 @@ ABILITY_DIMENSIONS: list[str] = [
 # mock 基线能力值（接口文档 4.1/4.4 示例：85/72/68/45/30/20）
 _MOCK_BASELINE: list[int] = [85, 72, 68, 45, 30, 20]
 
-# 讲义资源页难度档（接口文档 8.2 备注：入门|初级|高级，与路径难度档不同）
-LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "高级"]
+# 讲义资源页难度档：入门|初级|中级|高级|精通（五档，与文档学习/路径难度档对齐）。
+# 每档对应 lecture_content 的一个递进 depth（0–4），中级/精通与相邻档产出深度可区分。
+LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "中级", "高级", "精通"]
 
 # 学习路径难度阶梯（接口文档 2.3 Lesson.difficulty）：规划 Agent 按画像基础上下浮动
 PATH_DIFFICULTIES: list[str] = ["入门", "初级", "中级", "高级", "精通"]
@@ -1688,6 +1689,70 @@ class LLMClient:
             raise LLMGenerationError("闪卡输出无法解析为契约 JSON")
         return cards[:count]
 
+    # ---- 文档学习：文档概览（NotebookLM 式速读，复用双模 + 内容安全 + 防幻觉） ----
+    def generate_overview(self, source_title: str, contexts: list[str]) -> dict[str, Any]:
+        """文档概览：这篇文档是什么、讲了什么、核心结构概况、关键点。
+
+        返回 {summary, about, structure, keyPoints:[...]}。contexts 为该文档检索命中的
+        切片（知识源，防幻觉——只据文档产出，不引入外部知识）。
+        - mock：确定性——按文档要点句合成概览，无随机、无网络；
+        - deepseek：真实生成 + 契约清洗；解析失败回落确定性 mock（概览始终可用）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return self._mock_overview(source_title, contexts)
+        try:
+            return self._deepseek_overview(source_title, contexts)
+        except LLMGenerationError as exc:
+            logger.warning("文档概览真实生成失败，回落确定性 mock：%s", exc)
+            return self._mock_overview(source_title, contexts)
+
+    @staticmethod
+    def _mock_overview(source_title: str, contexts: list[str]) -> dict[str, Any]:
+        """确定性文档概览：全部取材自文档要点句（严格来自文档、不臆造）。"""
+        sentences = _doc_key_sentences(contexts, max_n=8)
+        if not sentences:
+            return {
+                "summary": f"《{source_title}》暂未解析到可用于生成概览的正文内容。",
+                "about": "请确认文档为可抽取文本的格式（PDF / TXT / Markdown / DOCX）后重试。",
+                "structure": "—",
+                "keyPoints": [],
+            }
+        topic = sentences[0][:24].rstrip("，,。.；;：: ")
+        return {
+            "summary": f"《{source_title}》是一篇围绕「{topic}」展开的资料。",
+            "about": "".join(sentences[:2])[:180],
+            "structure": (
+                f"全文自「{sentences[0][:14]}」切入，逐步展开到「{sentences[-1][:14]}」，"
+                f"共梳理约 {len(sentences)} 个要点。"
+            ),
+            "keyPoints": sentences[:5],
+        }
+
+    def _deepseek_overview(self, source_title: str, contexts: list[str]) -> dict[str, Any]:
+        system = (
+            "你是资料速读专家。仅依据给定文档片段，产出一份「文档概览」，帮助读者快速判断"
+            "这篇文档是什么、讲了什么、核心内容/结构概况与关键点。"
+            "严格只用文档片段中的信息，禁止编造文档之外的事实。"
+            '仅输出 JSON：{"summary":"一句话这篇文档是什么","about":"讲了什么（2-3句）",'
+            '"structure":"核心内容/结构概况","keyPoints":["关键点1","关键点2"]}。'
+        )
+        joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
+        prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
+        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        if not isinstance(data, dict) or not str(data.get("summary") or "").strip():
+            raise LLMGenerationError("文档概览输出无法解析为契约 JSON")
+        kp = data.get("keyPoints")
+        key_points = (
+            [str(x).strip() for x in kp if str(x).strip()] if isinstance(kp, list) else []
+        )
+        return {
+            "summary": str(data.get("summary") or "").strip(),
+            "about": str(data.get("about") or "").strip(),
+            "structure": str(data.get("structure") or "").strip(),
+            "keyPoints": key_points[:8],
+        }
+
     def generate_doc_quiz(
         self,
         source_title: str,
@@ -2814,6 +2879,7 @@ _GUARDED_METHODS: tuple[str, ...] = (
     "generate_diagram",      # 8.5 知识图解
     "generate_flashcards",   # 20.7 文档学习·闪卡
     "generate_doc_quiz",     # 20.6 文档学习·练习题
+    "generate_overview",     # 20.8 文档学习·文档概览（NotebookLM 式速读）
     "generate_reinforcement",  # 9.2 错题强化
     "tutor_chat",            # 8.7 苏格拉底（JSON）
     "tutor_suggestions",     # 15.4 苏格拉底快捷建议

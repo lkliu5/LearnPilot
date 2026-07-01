@@ -38,7 +38,7 @@ class WorkflowExecuteRequest(BaseModel):
 
     targetJobId: str | None = None
     kpId: str | None = None
-    difficulty: str | None = None  # 入门|初级|高级（B10：产物回写讲义缓存的难度档）
+    difficulty: str | None = None  # 入门|初级|中级|高级|精通（B10：产物回写讲义缓存的难度档）
 
 
 @router.post("/workflow/execute")
@@ -57,7 +57,7 @@ async def execute_workflow(
         return fail(code=1004, message="知识点不存在", status_code=404)
     difficulty = body.difficulty or _DEFAULT_DIFFICULTY
     if difficulty not in LECTURE_DIFFICULTIES:
-        return fail(code=1001, message="难度档非法，应为 入门|初级|高级", status_code=400)
+        return fail(code=1001, message="难度档非法，应为 入门|初级|中级|高级|精通", status_code=400)
     target_job = _DEFAULT_TARGET_JOB
     if body.targetJobId:
         job = db.get(JobSnapshot, body.targetJobId)

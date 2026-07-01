@@ -19,6 +19,7 @@ import {
   generateFlashcards,
   generateLecture,
   generateMindmap,
+  generateOverview,
   generateQuiz,
   generateVideo,
   listDocuments,
@@ -29,6 +30,7 @@ import {
   type FlashcardResult,
   type LectureResult,
   type MindmapResult,
+  type OverviewResult,
   type QuizResult,
   type VideoResult,
 } from '../services/documentLearning'
@@ -86,6 +88,10 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
   const [genErr, setGenErr] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string>('初级')
 
+  /** docId → 文档概览（选中即自动生成，展示在产出区顶部，先看概览再决定生成什么）。 */
+  const [overviews, setOverviews] = useState<Record<string, OverviewResult>>({})
+  const [overviewBusy, setOverviewBusy] = useState<Set<string>>(() => new Set())
+
   const lectureRef = useRef<HTMLDivElement>(null)
 
   /* 挂载：拉取我的文档列表 */
@@ -114,6 +120,26 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
     setGenErr(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
+
+  /* 选中文档就绪即自动生成「文档概览」（NotebookLM 式速读）；已生成 / 生成中不重复拉取。 */
+  useEffect(() => {
+    if (!selectedId) return
+    const doc = docs.find((d) => d.id === selectedId)
+    if (!doc || doc.status !== 'indexed') return
+    if (overviews[selectedId] || overviewBusy.has(selectedId)) return
+    setOverviewBusy((prev) => new Set(prev).add(selectedId))
+    generateOverview(selectedId)
+      .then((o) => setOverviews((prev) => ({ ...prev, [selectedId]: o })))
+      .catch((e) => console.error('[doclearn] 文档概览生成失败', e))
+      .finally(() =>
+        setOverviewBusy((prev) => {
+          const next = new Set(prev)
+          next.delete(selectedId)
+          return next
+        })
+      )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, docs])
 
   /* ---------------- 上传 ---------------- */
 
@@ -469,6 +495,47 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
             </div>
           ) : (
             <>
+              {/* 文档概览（选中文档即自动展示：是什么 / 讲了什么 / 结构概况 / 关键点） */}
+              {selectedDoc.status === 'indexed' &&
+                (overviews[selectedId!] || overviewBusy.has(selectedId!)) && (
+                  <div className="doclearn-overview">
+                    <div className="doclearn-overview__head">
+                      <span className="doclearn-overview__icon">🧭</span>
+                      <span className="doclearn-overview__title">文档概览</span>
+                      <span className="doclearn-overview__tag">AI 速读 · 内容溯源自本文档</span>
+                      {overviewBusy.has(selectedId!) && !overviews[selectedId!] && (
+                        <span className="doclearn-drop__spinner" />
+                      )}
+                    </div>
+                    {overviews[selectedId!] ? (
+                      <>
+                        <p className="doclearn-overview__summary">{overviews[selectedId!].summary}</p>
+                        {overviews[selectedId!].about && (
+                          <p className="doclearn-overview__about">{overviews[selectedId!].about}</p>
+                        )}
+                        {overviews[selectedId!].structure && (
+                          <p className="doclearn-overview__structure">
+                            <b>核心结构概况：</b>
+                            {overviews[selectedId!].structure}
+                          </p>
+                        )}
+                        {overviews[selectedId!].keyPoints.length > 0 && (
+                          <div className="doclearn-overview__keys">
+                            <span className="doclearn-overview__keys-label">关键点</span>
+                            <ul>
+                              {overviews[selectedId!].keyPoints.map((k, i) => (
+                                <li key={i}>{k}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="doclearn-overview__summary">正在通读文档、生成概览…</p>
+                    )}
+                  </div>
+                )}
+
               {/* 生成操作区 */}
               <div className="doclearn-actions">
                 <div className="doclearn-actions__head">

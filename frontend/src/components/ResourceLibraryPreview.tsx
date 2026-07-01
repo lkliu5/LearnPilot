@@ -146,9 +146,13 @@ export default function ResourceLibraryPreview({
     async function load() {
       try {
         if (kind === 'lecture') {
+          // 纯 mock 离线兜底：五档 → 本地三档（中级并入初级、精通并入高级）；联调走后端五档。
+          const mockLevel = ({ 入门: '入门', 初级: '初级', 中级: '初级', 高级: '高级', 精通: '高级' } as const)[
+            difficulty as '入门' | '初级' | '中级' | '高级' | '精通'
+          ] ?? '初级'
           const md = USE_REAL_API
             ? (await getLecture(kpId, difficulty)).markdown
-            : mock?.lectureByLevel?.[difficulty as '入门' | '初级' | '高级'] ?? ''
+            : mock?.lectureByLevel?.[mockLevel] ?? ''
           if (alive) setLecture(md)
         } else if (kind === 'mindmap') {
           const md = USE_REAL_API

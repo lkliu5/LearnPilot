@@ -11,6 +11,31 @@ import 'katex/dist/katex.min.css'
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
 
 /**
+ * 数学公式定界符归一化：把 LaTeX 原生定界符统一成 remark-math 认得的 `$`/`$$`。
+ *
+ * 根因：真实 / 缓存讲义（如后端知识原子、DeepSeek 产出）常用 `\( … \)`、`\[ … \]`
+ * 定界数学，而 remark-math 只解析 `$ … $` 与 `$$ … $$` → 未归一化时公式以裸 LaTeX
+ * 源码（`\sigma`、`\frac`…）显示。本函数在进 react-markdown 前做一次幂等转换：
+ *   - 行内 `\( … \)` → `$ … $`；
+ *   - 块级 `\[ … \]`（可跨行，含 `\begin{}…\end{}`）→ 独立成段的 `$$ … $$`。
+ * 代码围栏 ```…``` 与行内 `code` 段整体跳过（其中的反斜杠是字面量，不能改写）。
+ * 内容本就用 `$`/`$$`（无 `\(`、`\[`）时提前返回，零改动、不影响既有讲义。
+ */
+function normalizeMathDelimiters(src: string): string {
+  if (!src || (!src.includes('\\(') && !src.includes('\\['))) return src
+  // 按代码块 / 行内代码切分：奇数段为代码（原样保留），偶数段做定界符转换。
+  return src
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((seg, i) => {
+      if (i % 2 === 1) return seg
+      return seg
+        .replace(/\\\[([\s\S]+?)\\\]/g, (_m, inner) => `\n\n$$${String(inner).trim()}$$\n\n`)
+        .replace(/\\\(([\s\S]+?)\\\)/g, (_m, inner) => `$${String(inner).trim()}$`)
+    })
+    .join('')
+}
+
+/**
  * 讲义配图：图片渲染 + 来源标注（来源走紧随其后的 Markdown 段落）+ 裂图兜底。
  * 加载失败时优雅隐藏破图、显示占位（不显示浏览器默认破图标）。
  */
@@ -42,6 +67,7 @@ function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
  * - 图片走 MarkdownImage（来源标注 + 裂图兜底）；urlTransform 放行自包含 data:image 占位图。
  */
 export default function MarkdownRenderer({ content }: { content: string }) {
+  const normalized = normalizeMathDelimiters(content)
   return (
     <div className="markdown-body">
       <ReactMarkdown
@@ -90,7 +116,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           ),
         }}
       >
-        {content}
+        {normalized}
       </ReactMarkdown>
     </div>
   )

@@ -18,6 +18,10 @@ class DocVideoRequest(BaseModel):
     difficulty: str = "初级"
 
 
+class DocOverviewRequest(BaseModel):
+    documentId: str = Field(..., min_length=1)
+
+
 class DocDiagramRequest(BaseModel):
     documentId: str = Field(..., min_length=1)
 

@@ -142,6 +142,20 @@ def generate_lecture(
     return payload
 
 
+# ---- 文档概览（NotebookLM 式速读，复用 LLMClient.generate_overview，文档内容驱动） ----
+def generate_overview(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
+    """基于文档生成「文档概览」：这篇文档是什么、讲了什么、结构概况与关键点。
+
+    走文档专属向量集合检索（隔离内置库），内容严格来自文档（防幻觉）；LLMClient 双模 + mock 兜底、
+    经内容安全钝化。概览为「选中文档即自动展示」的速读入口，不计入资源库产物（不落 generation_log）。
+    """
+    doc = document_store.require_document(db, user_id, doc_id)
+    _require_ready(doc)
+    chunks = _retrieve(doc, f"{doc.title} 概览 简介 主要内容 结构")
+    overview = get_llm().generate_overview(doc.title, _contexts(chunks))
+    return {"docId": doc_id, "overview": overview, "sources": _sources(doc, chunks)}
+
+
 # ---- 图解（复用 LLMClient.generate_diagram，文档内容驱动） ------------------
 def generate_diagram(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
     doc = document_store.require_document(db, user_id, doc_id)
