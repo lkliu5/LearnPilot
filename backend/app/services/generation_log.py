@@ -31,6 +31,17 @@ KIND_LABELS: dict[str, str] = {
 }
 ALLOWED_KINDS = set(KIND_LABELS)
 
+# 文档学习平行链路的形态白名单（比内置课程多「闪卡/练习题」两类；仅 record_document 用）
+DOC_KIND_LABELS: dict[str, str] = {
+    "lecture": "文档讲义",
+    "video": "文档视频",
+    "diagram": "文档图解",
+    "mindmap": "文档导图",
+    "quiz": "文档练习题",
+    "flashcard": "文档闪卡",
+}
+DOC_ALLOWED_KINDS = set(DOC_KIND_LABELS)
+
 
 def normalize_kind(kind: str) -> str:
     """剥离 ResourceCache 的 provider/tier 后缀，取基类（lecture@deepseek#advanced→lecture）。"""
@@ -104,6 +115,69 @@ def record(
         logger.warning("[generation_log] 埋点失败（已忽略）：%s", exc)
 
 
+def record_document(
+    db: Session,
+    user_id: str,
+    doc_id: str,
+    doc_title: str,
+    kind: str,
+    *,
+    difficulty: str = "",
+    title: str | None = None,
+) -> None:
+    """文档学习资源埋点（追加式 upsert，与内置课程 record() 平行、互不影响）。
+
+    写入同一 GenerationLog 表但带 source="document" + doc_id/doc_title 来源标识，
+    进「我的资源库」。去重口径：同一 (user_id, kp_id=doc_id, kind, difficulty)——
+    kp_id 复用为 doc_id（不同文档不同 id → 不与内置课程行冲突）。**任何异常都吞掉**。
+    """
+    if not user_id or not doc_id:
+        return
+    base_kind = (kind or "").strip()
+    if base_kind not in DOC_ALLOWED_KINDS:
+        return
+    diff = difficulty or ""
+    ttl = title or f"{doc_title} · {DOC_KIND_LABELS.get(base_kind, base_kind)}"
+    try:
+        row = (
+            db.query(GenerationLog)
+            .filter(
+                GenerationLog.user_id == user_id,
+                GenerationLog.kp_id == doc_id,
+                GenerationLog.kind == base_kind,
+                GenerationLog.difficulty == diff,
+                GenerationLog.source == "document",
+            )
+            .one_or_none()
+        )
+        now = datetime.now(timezone.utc)
+        ref = f"document:{doc_id}:{base_kind}:{diff}"
+        if row is not None:
+            row.created_at = now
+            row.title = ttl
+            row.resource_ref = ref
+            row.doc_title = doc_title
+        else:
+            db.add(
+                GenerationLog(
+                    user_id=user_id,
+                    kp_id=doc_id,
+                    kind=base_kind,
+                    difficulty=diff,
+                    title=ttl,
+                    resource_ref=ref,
+                    source="document",
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    created_at=now,
+                )
+            )
+        db.commit()
+    except Exception as exc:  # noqa: BLE001  埋点旁路：失败仅告警，不外抛
+        db.rollback()
+        logger.warning("[generation_log] 文档埋点失败（已忽略）：%s", exc)
+
+
 def _iso_utc(dt: datetime | None) -> str | None:
     """把落库的（naive）UTC 时间显式标注为 UTC 再 isoformat，避免前端按本地时区误解出现时差。"""
     if dt is None:
@@ -142,17 +216,23 @@ def list_history(
     kp_id: str | None = None,
     start_time: str | None = None,
     end_time: str | None = None,
+    source: str | None = None,
 ) -> dict[str, Any]:
-    """分页列出当前用户的资源生成历史（按生成时间倒序），附知识点名。
+    """分页列出当前用户的资源生成历史（按生成时间倒序），附知识点名/文档来源标识。
 
-    过滤：kind（五类基类）/ kpId / 时间区间 [startTime, endTime]。返回契约字段 camelCase。
+    过滤：kind / kpId / 时间区间 [startTime, endTime] / source（builtin|document，缺省不限）。
+    返回契约字段 camelCase；新增 source/docId/docTitle（内置课程行 source="builtin"）。
     """
     q = db.query(GenerationLog).filter(GenerationLog.user_id == user_id)
     base_kind = normalize_kind(kind) if kind else None
-    if base_kind in ALLOWED_KINDS:
+    if base_kind in ALLOWED_KINDS or base_kind in DOC_ALLOWED_KINDS:
         q = q.filter(GenerationLog.kind == base_kind)
     if kp_id:
         q = q.filter(GenerationLog.kp_id == kp_id)
+    if source == "document":
+        q = q.filter(GenerationLog.source == "document")
+    elif source == "builtin":
+        q = q.filter((GenerationLog.source.is_(None)) | (GenerationLog.source != "document"))
     start = _parse_time(start_time)
     end = _parse_time(end_time)
     if start is not None:
@@ -171,17 +251,23 @@ def list_history(
     )
     # 一次取全部知识点名映射，避免逐行查库
     names = {kp.id: kp.name for kp in db.query(KnowledgePoint).all()}
-    items = [
-        {
-            "id": r.id,
-            "kpId": r.kp_id,
-            "kpName": names.get(r.kp_id, r.kp_id),
-            "kind": r.kind,
-            "difficulty": r.difficulty,
-            "title": r.title,
-            "resourceRef": r.resource_ref,
-            "createdAt": _iso_utc(r.created_at),
-        }
-        for r in rows
-    ]
+    items = []
+    for r in rows:
+        is_doc = r.source == "document"
+        items.append(
+            {
+                "id": r.id,
+                "kpId": r.kp_id,
+                # 文档行用文档标题作展示名（kp_id=doc_id 不在知识点表中）；内置行取知识点名
+                "kpName": (r.doc_title or r.kp_id) if is_doc else names.get(r.kp_id, r.kp_id),
+                "kind": r.kind,
+                "difficulty": r.difficulty,
+                "title": r.title,
+                "resourceRef": r.resource_ref,
+                "source": "document" if is_doc else "builtin",
+                "docId": r.doc_id,
+                "docTitle": r.doc_title,
+                "createdAt": _iso_utc(r.created_at),
+            }
+        )
     return {"items": items, "total": total, "page": page, "pageSize": page_size}

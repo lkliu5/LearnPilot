@@ -333,6 +333,38 @@ class GenerationLog(Base):
     # 定位/查看引用（`kind:kp_id:difficulty`）；前端亦可由 kpId+kind+difficulty 复原查看/下载
     resource_ref: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    # 「文档学习」平行链路埋点（新增，向后兼容）：内置课程资源 source=NULL/"builtin"，
+    # 文档学习资源 source="document" + doc_id/doc_title 携带文档来源标识；用于「我的资源库」
+    # 区分展示与筛选。built-in 既有行三列均为 NULL，behavior 不变。
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # builtin|document
+    doc_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 文档来源 id
+    doc_title: Mapped[str | None] = mapped_column(String(256), nullable=True)  # 文档标题（展示）
+
+
+class Document(Base):
+    """用户上传文档（「文档学习」平行链路，users.id 隔离键，无外键耦合）。
+
+    与内置知识库 KnowledgeDocument（14.1，管理端、无 user 归属）**完全分开**——本表
+    是学习者上传的私有文档，每篇绑定一个**专属向量集合** collection（Chroma 命名空间
+    隔离），与内置课程知识库 kb_chunks 互不污染。解析后的纯文本存 content（供无向量
+    降级/摘要复用）；status 状态机 pending|indexing|indexed|failed（异步入库回填）。
+    """
+
+    __tablename__ = "documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # udoc_xxx
+    user_id: Mapped[str] = mapped_column(String(64), index=True)  # 无 FK（隔离键）
+    title: Mapped[str] = mapped_column(String(256))
+    filename: Mapped[str] = mapped_column(String(256))
+    file_type: Mapped[str] = mapped_column(String(16), default="")  # pdf|md|txt|docx
+    size: Mapped[int] = mapped_column(Integer, default=0)  # 字节
+    # 该文档专属向量集合名（Chroma collection / 降级库命名空间）——隔离核心。
+    collection: Mapped[str] = mapped_column(String(64), default="")
+    content: Mapped[str] = mapped_column(Text, default="")  # 解析后的纯文本（摘要/降级用）
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|indexing|indexed|failed
+    chunks: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String(256), nullable=True)  # 失败原因
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 
 class QuizAttempt(Base):

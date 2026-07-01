@@ -661,6 +661,28 @@ def _point_coverage(point: str, answer: str) -> float:
     return len(pb & _char_bigrams(answer)) / len(pb)
 
 
+_DOC_SENT_SPLIT = re.compile(r"(?<=[。！？!?；;\n])")
+
+
+def _doc_key_sentences(contexts: list[str], *, max_n: int, min_chars: int = 8) -> list[str]:
+    """从文档检索切片中抽取要点句（确定性、去重、限长）——供文档闪卡/练习题 mock 兜底。
+
+    只用文档内容（防幻觉：不引入外部知识），按出现顺序取前 max_n 条有效句子。
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for ctx in contexts or []:
+        for raw in _DOC_SENT_SPLIT.split(ctx or ""):
+            sent = raw.strip()
+            if len(sent) < min_chars or sent in seen:
+                continue
+            seen.add(sent)
+            out.append(sent[:120])
+            if len(out) >= max_n:
+                return out
+    return out
+
+
 def audit_practice(practice: dict[str, Any]) -> list[str]:
     """critic 审核：练习题（QuizQuestion 结构）答案自洽性校验，返回问题清单。
 
@@ -1597,6 +1619,157 @@ class LLMClient:
         prompt = f"知识点：{kp_name}\n知识点说明：{description or kp_name}"
         raw = llm_deepseek.chat(prompt, system=system)
         return _clean_mermaid(raw)
+
+    # ---- 文档学习：闪卡 + 文档练习题（平行链路，复用 LLMClient mock/real 双模 + 内容安全） ----
+    def generate_flashcards(
+        self,
+        source_title: str,
+        contexts: list[str],
+        *,
+        count: int = 8,
+    ) -> dict[str, Any]:
+        """从文档内容抽「正面问题 / 背面答案」闪卡集（接口文档 20.7）。返回 {cards:[{front,back}]}。
+
+        contexts：该文档检索命中的切片内容（知识源，防幻觉——只据文档产出，不引入外部知识）。
+        - mock：确定性——按文档要点句逐条转「问/答」卡，无随机、无网络；
+        - deepseek：真实生成 + 契约清洗；解析失败回落确定性 mock（闪卡始终可用）。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return {"cards": self._mock_flashcards(source_title, contexts, count)}
+        try:
+            return {"cards": self._deepseek_flashcards(source_title, contexts, count)}
+        except LLMGenerationError as exc:
+            logger.warning("闪卡真实生成失败，回落确定性 mock：%s", exc)
+            return {"cards": self._mock_flashcards(source_title, contexts, count)}
+
+    @staticmethod
+    def _mock_flashcards(
+        source_title: str, contexts: list[str], count: int
+    ) -> list[dict[str, str]]:
+        """确定性闪卡：取文档要点句，正面设问、背面即该句原文（内容严格来自文档）。"""
+        sentences = _doc_key_sentences(contexts, max_n=count)
+        cards: list[dict[str, str]] = []
+        for i, sent in enumerate(sentences, start=1):
+            topic = sent[:14].rstrip("，,。.；;：: ") or f"要点 {i}"
+            cards.append(
+                {
+                    "front": f"关于「{topic}」，《{source_title}》是怎么讲的？",
+                    "back": sent,
+                }
+            )
+        if not cards:  # 文档无可用文本 → 单张兜底卡（不臆造内容）
+            cards.append(
+                {
+                    "front": f"《{source_title}》的核心内容是什么？",
+                    "back": "该文档暂未解析到可用于生成闪卡的正文内容，请检查文档是否为纯文本可抽取格式。",
+                }
+            )
+        return cards
+
+    def _deepseek_flashcards(
+        self, source_title: str, contexts: list[str], count: int
+    ) -> list[dict[str, str]]:
+        system = (
+            "你是学习卡片设计专家。仅依据给定的文档片段，抽取要点做成正/背面记忆闪卡。"
+            "严格只用文档片段中的信息，禁止编造文档之外的事实。"
+            f'仅输出 JSON：{{"cards": [{{"front": "正面问题", "back": "背面答案"}}]}}，'
+            f"卡片数不超过 {count} 张，front 是一个针对要点的简短问题，back 是简明答案。"
+        )
+        joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
+        prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
+        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        raw_cards = data.get("cards") if isinstance(data, dict) else None
+        cards: list[dict[str, str]] = []
+        for c in raw_cards or []:
+            if isinstance(c, dict) and str(c.get("front") or "").strip() and str(c.get("back") or "").strip():
+                cards.append({"front": str(c["front"]).strip(), "back": str(c["back"]).strip()})
+        if not cards:
+            raise LLMGenerationError("闪卡输出无法解析为契约 JSON")
+        return cards[:count]
+
+    def generate_doc_quiz(
+        self,
+        source_title: str,
+        contexts: list[str],
+        *,
+        count: int = 5,
+    ) -> dict[str, Any]:
+        """从文档内容出练习题（接口文档 20.6）。返回 {questions:[QuizQuestion 契约结构]}。
+
+        - mock：确定性——按文档要点句出判断题（true/false，答案自洽），内容来自文档；
+        - deepseek：真实生成 + audit_practice 自洽审核；不自洽/解析失败回落确定性 mock。
+        """
+        self._ensure_supported()
+        if self.is_mock:
+            return {"questions": self._mock_doc_quiz(source_title, contexts, count)}
+        try:
+            return {"questions": self._deepseek_doc_quiz(source_title, contexts, count)}
+        except LLMGenerationError as exc:
+            logger.warning("文档练习题真实生成失败，回落确定性 mock：%s", exc)
+            return {"questions": self._mock_doc_quiz(source_title, contexts, count)}
+
+    @staticmethod
+    def _mock_doc_quiz(
+        source_title: str, contexts: list[str], count: int
+    ) -> list[dict[str, Any]]:
+        """确定性判断题：取文档要点句，命题「以下说法是否符合文档」，答案恒 true（内容来自文档）。"""
+        sentences = _doc_key_sentences(contexts, max_n=count)
+        questions: list[dict[str, Any]] = []
+        for i, sent in enumerate(sentences, start=1):
+            questions.append(
+                {
+                    "question_id": f"docq_{i}",
+                    "question_type": "boolean",
+                    "question_text": f"根据《{source_title}》，以下说法是否正确：{sent}",
+                    "options": [
+                        {"option_id": "true", "option_text": "正确"},
+                        {"option_id": "false", "option_text": "错误"},
+                    ],
+                    "correct_answer": "true",
+                    "explanation": f"该表述取自文档原文要点：{sent}",
+                }
+            )
+        return questions
+
+    def _deepseek_doc_quiz(
+        self, source_title: str, contexts: list[str], count: int
+    ) -> list[dict[str, Any]]:
+        system = (
+            "你是命题专家。仅依据给定文档片段出练习题，严格只考文档中出现的知识，禁止编造。"
+            f'仅输出 JSON：{{"questions": [{{"question_id": "docq_1", '
+            '"question_type": "single|multiple|boolean", "question_text": "...", '
+            '"options": [{"option_id": "a", "option_text": "..."}], '
+            '"correct_answer": "option_id（multiple 为数组；boolean 用 true/false）", '
+            '"explanation": "..."}]}。'
+            f"题数不超过 {count}；correct_answer 必须取自 options 的 option_id；explanation 非空。"
+        )
+        joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
+        prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
+        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        raw = data.get("questions") if isinstance(data, dict) else None
+        questions: list[dict[str, Any]] = []
+        for idx, q in enumerate(raw or [], start=1):
+            if not isinstance(q, dict):
+                continue
+            options = [
+                {"option_id": str(o.get("option_id")), "option_text": str(o.get("option_text") or "")}
+                for o in (q.get("options") or [])
+                if isinstance(o, dict) and o.get("option_id")
+            ]
+            cleaned = {
+                "question_id": str(q.get("question_id") or f"docq_{idx}"),
+                "question_type": q.get("question_type"),
+                "question_text": str(q.get("question_text") or ""),
+                "options": options,
+                "correct_answer": q.get("correct_answer"),
+                "explanation": str(q.get("explanation") or ""),
+            }
+            if not audit_practice(cleaned):  # 仅收自洽题（防幻觉/防错题）
+                questions.append(cleaned)
+        if not questions:
+            raise LLMGenerationError("文档练习题输出无自洽题（审核未通过）")
+        return questions[:count]
 
     # ---- 错题强化（接口文档 9.2，B6） --------------------------------------
     def generate_reinforcement(
@@ -2639,6 +2812,8 @@ _GUARDED_METHODS: tuple[str, ...] = (
     "generate_lecture",      # 8.2 讲义（mock 直出）
     "generate_video_script",  # 8.3 视频脚本
     "generate_diagram",      # 8.5 知识图解
+    "generate_flashcards",   # 20.7 文档学习·闪卡
+    "generate_doc_quiz",     # 20.6 文档学习·练习题
     "generate_reinforcement",  # 9.2 错题强化
     "tutor_chat",            # 8.7 苏格拉底（JSON）
     "tutor_suggestions",     # 15.4 苏格拉底快捷建议

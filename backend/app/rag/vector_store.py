@@ -32,11 +32,26 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
-class _NumpyStore:
-    """降级内存向量库：JSON 持久化 + 余弦检索。"""
+def _safe_collection(name: str) -> str:
+    """把任意集合名收敛为 Chroma 合法名（3-63 位、[a-zA-Z0-9._-]、首尾字母数字）。"""
+    import re
 
-    def __init__(self, path: str) -> None:
-        self._path = os.path.join(path, "fallback_store.json")
+    n = re.sub(r"[^a-zA-Z0-9._-]", "_", name or "")[:63]
+    if len(n) < 3:
+        n = (n + "___")[:3]
+    return n
+
+
+class _NumpyStore:
+    """降级内存向量库：JSON 持久化 + 余弦检索。
+
+    collection 命名空间隔离：每个集合独立 JSON 文件（fallback_store[__<collection>].json），
+    保证「文档专属集合」与内置 kb_chunks 互不污染（Chroma 不可用时的降级路径同样隔离）。
+    """
+
+    def __init__(self, path: str, collection: str = _COLLECTION) -> None:
+        suffix = "" if collection == _COLLECTION else f"__{_safe_collection(collection)}"
+        self._path = os.path.join(path, f"fallback_store{suffix}.json")
         os.makedirs(path, exist_ok=True)
         self._items: dict[str, dict] = {}
         self._lock = threading.Lock()
@@ -107,14 +122,16 @@ class _NumpyStore:
 class _ChromaStore:
     """Chroma 持久化集合封装。"""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, collection: str = _COLLECTION) -> None:
         import chromadb
 
         os.makedirs(path, exist_ok=True)
+        self._name = _safe_collection(collection)
         self._client = chromadb.PersistentClient(path=path)
-        # 余弦空间；嵌入由本层显式提供（不使用 chroma 内置 embedding function）
+        # 余弦空间；嵌入由本层显式提供（不使用 chroma 内置 embedding function）。
+        # 文档学习传入专属 collection 名 → 与内置 kb_chunks 物理隔离、互不污染。
         self._col = self._client.get_or_create_collection(
-            name=_COLLECTION, metadata={"hnsw:space": "cosine"}
+            name=self._name, metadata={"hnsw:space": "cosine"}
         )
 
     def add(self, ids, embeddings, documents, metadatas) -> None:
@@ -173,7 +190,7 @@ _store_lock = threading.Lock()
 
 
 def get_vector_store():
-    """返回向量库单例：优先 Chroma，失败降级 numpy 库。"""
+    """返回向量库单例：优先 Chroma，失败降级 numpy 库（内置知识库 kb_chunks 集合）。"""
     global _store
     if _store is not None:
         return _store
@@ -190,3 +207,38 @@ def get_vector_store():
             )
             _store = _NumpyStore(path)
         return _store
+
+
+# ---- 命名集合工厂（「文档学习」专属向量集合隔离，与内置 kb_chunks 分开） ----------
+# 每次返回一个绑定到指定 collection 的**新实例**（非单例）——文档专属集合读写量小、
+# 按需实例化即可；与内置库共用 chroma_dir 但集合名不同，物理隔离、互不污染。
+def get_collection_store(collection: str):
+    """返回绑定到指定 collection 的向量库（优先 Chroma，失败降级 numpy 命名空间库）。"""
+    path = settings.chroma_dir
+    try:
+        return _ChromaStore(path, collection=collection)
+    except Exception as exc:  # noqa: BLE001 chromadb 不可用 → 降级（同样按集合隔离）
+        logger.warning(
+            "Chroma 命名集合 %s 初始化失败，降级为内存余弦向量库：%s", collection, exc
+        )
+        return _NumpyStore(path, collection=collection)
+
+
+def drop_collection(collection: str) -> None:
+    """删除指定 collection 的全部向量（文档删除时清理其专属集合）。降级库删对应 JSON。"""
+    path = settings.chroma_dir
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=path)
+        client.delete_collection(name=_safe_collection(collection))
+        return
+    except Exception as exc:  # noqa: BLE001 Chroma 不可用或集合不存在 → 尝试降级库清理
+        logger.info("drop_collection(%s) Chroma 路径跳过（%s），尝试降级库清理", collection, exc)
+    suffix = f"__{_safe_collection(collection)}"
+    fpath = os.path.join(path, f"fallback_store{suffix}.json")
+    try:
+        if os.path.exists(fpath):
+            os.remove(fpath)
+    except OSError:
+        pass

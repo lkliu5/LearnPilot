@@ -21,6 +21,7 @@ from app.api.v1 import (
     admin_users,
     auth,
     dashboard,
+    document,
     health,
     job_market,
     knowledge_graph,
@@ -104,6 +105,8 @@ app.include_router(workflow.router, prefix=settings.api_prefix)
 app.include_router(learning.router, prefix=settings.api_prefix)
 # TTS：语音合成（edge-tts 神经语音，接口文档 8.9；新增 /tts/* 接口 45）
 app.include_router(tts.router, prefix=settings.api_prefix)
+# 文档学习：上传文档 → 专属向量集合 → 基于文档生成讲义/视频/图解/导图/练习题/闪卡（接口文档第 20 章）
+app.include_router(document.router, prefix=settings.api_prefix)
 
 # 讲解视频 mp4 静态产物（CC-video-mp4 第二步）：挂在 api_prefix 下复用前端 /api 代理，
 # videoUrl=/api/v1/media/video/<file>.mp4 可直接 <video> 播放 / 下载。目录入 .gitignore。

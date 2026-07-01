@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models.entities import (  # noqa: F401  确保所有表在 create_all 前注册
+    Document,
     ExternalResource,
     GenerationLog,
     JobSnapshot,
@@ -536,12 +537,32 @@ def _migrate_mastery_score() -> None:
             conn.execute(text("ALTER TABLE mastery ADD COLUMN score_source VARCHAR(16)"))
 
 
+def _migrate_genlog_source() -> None:
+    """文档学习轻量迁移：既有开发库 generation_logs 表缺 source/doc_id/doc_title 列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。
+    既有内置课程行三列默认 NULL（= builtin，behavior 不变）；文档学习行写 "document"。
+    """
+    inspector = inspect(engine)
+    if "generation_logs" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("generation_logs")}
+    with engine.begin() as conn:
+        if "source" not in columns:
+            conn.execute(text("ALTER TABLE generation_logs ADD COLUMN source VARCHAR(16)"))
+        if "doc_id" not in columns:
+            conn.execute(text("ALTER TABLE generation_logs ADD COLUMN doc_id VARCHAR(64)"))
+        if "doc_title" not in columns:
+            conn.execute(text("ALTER TABLE generation_logs ADD COLUMN doc_title VARCHAR(256)"))
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
     _migrate_b9()
     _migrate_path_plan()
     _migrate_mastery_score()
+    _migrate_genlog_source()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

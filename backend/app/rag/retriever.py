@@ -14,10 +14,11 @@ BM25 语料来自向量库当前全量 chunk，**每次检索按库内容计数�
 from __future__ import annotations
 
 import re
+from typing import Callable
 
 from app.core.config import settings
 from app.rag.embeddings import get_embedder
-from app.rag.vector_store import get_vector_store
+from app.rag.vector_store import get_collection_store, get_vector_store
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+|[一-鿿]")
 
@@ -28,12 +29,17 @@ def _tokenize(text: str) -> list[str]:
 
 
 class HybridRetriever:
-    """BM25 + 向量 RRF 混合检索。"""
+    """BM25 + 向量 RRF 混合检索。
 
-    def __init__(self) -> None:
+    store_getter 可注入（默认内置库 kb_chunks 单例）：「文档学习」传入指向文档专属
+    集合的 getter，即可在**隔离集合**上做同样的混合检索，不污染内置知识库。
+    """
+
+    def __init__(self, store_getter: Callable[[], object] | None = None) -> None:
         self.dense_weight = settings.rrf_dense_weight
         self.sparse_weight = settings.rrf_sparse_weight
         self.rrf_k = settings.rrf_k
+        self._store_getter = store_getter or get_vector_store
         # BM25 缓存：(库计数, 索引, 语料元数据)
         self._bm25 = None
         self._bm25_count = -1
@@ -41,7 +47,7 @@ class HybridRetriever:
 
     # ---- BM25 索引（惰性、按库计数失效重建） -----------------------------
     def _ensure_bm25(self) -> None:
-        store = get_vector_store()
+        store = self._store_getter()
         count = store.count()
         if self._bm25 is not None and count == self._bm25_count:
             return
@@ -76,7 +82,7 @@ class HybridRetriever:
 
     def _dense_search(self, query: str, k: int) -> list[dict]:
         vec = get_embedder().embed_query(query)
-        results = get_vector_store().query(vec, k)
+        results = self._store_getter().query(vec, k)
         for r in results:
             r["vectorScore"] = r.pop("score")
         return results
@@ -126,3 +132,11 @@ def get_retriever() -> HybridRetriever:
     if _retriever is None:
         _retriever = HybridRetriever()
     return _retriever
+
+
+def get_document_retriever(collection: str) -> HybridRetriever:
+    """「文档学习」专属检索器：在文档专属向量集合上做混合检索（隔离内置库）。
+
+    每次新建实例（各自 BM25 缓存，绑定各自集合）——文档检索低频、集合小，无需缓存单例。
+    """
+    return HybridRetriever(store_getter=lambda: get_collection_store(collection))
