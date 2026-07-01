@@ -16,16 +16,18 @@ export type ResourceMode = 'flow' | 'browse'
 
 let kpId: string = CURRENT_KP_ID
 let entryTab: string | null = null
-let entryMode: ResourceMode = 'flow'
+/** 进入意图：一次性。null=无显式意图（侧边栏 / 知识图谱直达）→ 资源页落「资源总览 hub」。 */
+let entryMode: ResourceMode | null = null
 
 /**
- * 导航去资源页前调用：指定目标知识点 + 进入模式 +（可选）落点 Tab。未知 kpId 回退默认。
+ * 导航去资源页前调用：指定目标知识点 +（可选）进入意图 +（可选）落点 Tab。未知 kpId 回退默认。
  * - 「开始学习」→ mode='flow'（有序流，从当前未完成步接着学）
- * - 「查看资源」→ mode='browse'（自由浏览 8-tab 中枢，可带落点 Tab）
+ * - 「查看资源」→ mode='browse'（自由浏览资源中枢，可带落点 Tab）
+ * - 省略 mode（如知识图谱点节点）→ 无显式意图，资源页落「资源总览」首屏。
  */
-export function setResourceNav(nextKpId: string, mode: ResourceMode = 'flow', nextEntryTab?: string): void {
+export function setResourceNav(nextKpId: string, mode?: ResourceMode, nextEntryTab?: string): void {
   kpId = kpById(nextKpId) ? nextKpId : CURRENT_KP_ID
-  entryMode = mode
+  entryMode = mode ?? null
   entryTab = nextEntryTab ?? null
 }
 
@@ -34,9 +36,15 @@ export function getResourceKpId(): string {
   return kpId
 }
 
-/** 资源页进入模式（粘性；侧边栏直达时沿用上次值，默认 flow）。 */
-export function getResourceMode(): ResourceMode {
-  return entryMode
+/**
+ * 资源页进入意图（一次性：读后即清，与 entryTab 同口径）。
+ * 返回 'flow'/'browse' 表示来源页有明确意图（直达对应视图）；null 表示无意图（落「资源总览」）。
+ * 清空延后到微任务：StrictMode（dev）同步双调用初始化器时两次读到同值，真实后续导航读到 null。
+ */
+export function consumeResourceMode(): ResourceMode | null {
+  const m = entryMode
+  if (m !== null) queueMicrotask(() => { entryMode = null })
+  return m
 }
 
 /** 资源页落点 Tab（一次性：读取后清空）。

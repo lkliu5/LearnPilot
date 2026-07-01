@@ -7,8 +7,9 @@ export interface SourceRef {
   confidence: number
 }
 
-/* 模拟 RAG 检索 + 审核 Agent 给出的溯源来源（体现防幻觉/可信）*/
-const defaultSources: SourceRef[] = [
+/* 模拟 RAG 检索 + 审核 Agent 给出的溯源来源（体现防幻觉/可信）；
+   导出供资源页状态条「RAG 引用数」在 mock 模式取真实条数（与讲义溯源实际列出的来源一致）。*/
+export const defaultSources: SourceRef[] = [
   { title: '《深度学习》 Goodfellow, Bengio, Courville', type: '教材', confidence: 98 },
   { title: 'arXiv:1706.03762 — Attention Is All You Need', type: '论文', confidence: 95 },
   { title: 'CS231n: Neural Networks（Stanford）', type: '课程', confidence: 94 },

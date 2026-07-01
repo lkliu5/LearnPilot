@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import QuizRenderer, { type QuizQuestion, type QuizGrade, type ShortAnswerGrade } from '../components/QuizRenderer'
-import SourceTrace, { type SourceRef } from '../components/SourceTrace'
+import SourceTrace, { defaultSources, type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import LearningFlow from '../components/LearningFlow'
@@ -22,9 +22,9 @@ import { StatusChip, type ItemStatus } from '../components/genStatus'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import { logResourceGeneration } from '../services/resourceHistory'
 import '../components/TutorResourcePanel.css'
-import type { ReviewRef } from '../services/learningFlow'
+import { getSteps, type ReviewRef } from '../services/learningFlow'
 import { executeWorkflow, connectWorkflowSocket } from '../services/workflow'
-import { consumeResourceEntryTab, getResourceKpId, getResourceMode, type ResourceMode } from '../services/resourceNav'
+import { consumeResourceEntryTab, consumeResourceMode, getResourceKpId } from '../services/resourceNav'
 import { setWorkflowReplay } from '../services/workflowNav'
 import type { PageType } from '../App'
 import './LearningResource.css'
@@ -430,6 +430,12 @@ const RESOURCE_CARDS: { id: ResourceIllustrationType; title: string; desc: strin
   { id: 'code', title: '代码实操', desc: '浏览器内可运行的示例，改完即时看结果，加深实践应用。' },
 ]
 
+/* hub 首屏「核心资源速览」六类卡（5 张插画卡 + 资源推荐）；每张「立即查看」= 按需生成后打开。 */
+const HUB_CARDS: { id: GenType; title: string; desc: string }[] = [
+  ...RESOURCE_CARDS,
+  { id: 'external', title: '资源推荐', desc: 'AI 联网聚合的优质外部资源（视频/课程/论文/文档），可直接打开。' },
+]
+
 const ALL_TAB_IDS = Object.keys(RESOURCE_META)
 const isTab = (v: string | null): v is Tab => !!v && ALL_TAB_IDS.includes(v)
 
@@ -482,14 +488,23 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     mindmap: mindmapMarkdown,
     diagram: mermaidChart,
   }
-  /* 进入模式：「开始学习」→ flow（费曼+康奈尔有序流）；「查看资源」→ browse（8-tab 中枢）*/
-  const [mode, setMode] = useState<ResourceMode>(() => getResourceMode())
+  /* 进入意图 + 落点 Tab 一次性消费（同一挂载内只读一次，供 view/openId 初值共享）。 */
+  const initialMode = useMemo(() => consumeResourceMode(), [])
+  const initialTab = useMemo(() => consumeResourceEntryTab(), [])
+
+  /* 三视图：
+     - hub    资源总览首屏（两大操作卡 + 状态条 + 六类速览 + 阶段测试条）——瘦身、核心操作优先
+     - flow   有序学习（费曼+康奈尔有序流，内容同原「有序学习」模式，功能不变）
+     - browse 资源中枢（选择性逐项生成 + 卡片网格，内容同原「资源中枢」模式，功能不变）
+     进入意图：「开始学习」→flow、「查看资源」→browse（可带落点）；无意图（侧栏/图谱直达）→hub。 */
+  const [view, setView] = useState<'hub' | 'flow' | 'browse'>(() => {
+    if (initialMode === 'flow') return 'flow'
+    if (initialMode === 'browse' || isTab(initialTab)) return 'browse'
+    return 'hub'
+  })
   /* 资源详情过场：openId=当前打开的内容（null=只显示卡片网格）。
      落点：路径页「查看资源」带的落点 Tab 会直接展开对应内容；无显式落点则停在网格。 */
-  const [openId, setOpenId] = useState<Tab | null>(() => {
-    const t = consumeResourceEntryTab()
-    return isTab(t) ? t : null
-  })
+  const [openId, setOpenId] = useState<Tab | null>(isTab(initialTab) ? initialTab : null)
 
   /* 费曼缺口「回看」：切到资源中枢，直接展开对应资源详情 */
   const REVIEW_KIND_TO_TAB: Record<string, Tab> = {
@@ -502,7 +517,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     external: 'external',
   }
   const handleReview = (ref: ReviewRef) => {
-    setMode('browse')
+    setView('browse')
     setOpenId(REVIEW_KIND_TO_TAB[ref.kind] ?? 'lecture')
   }
   const [level, setLevel] = useState<(typeof LEVELS)[number]>('初级')
@@ -521,6 +536,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const [genRunning, setGenRunning] = useState(false)
   const [genStatus, setGenStatus] = useState<Partial<Record<GenType, ItemStatus>>>({})
   const [recoCount, setRecoCount] = useState<number | null>(null)
+  /* 批量「选择性生成」是否已发起（仅 runGeneration 置位）。锁定规则只认它，
+     使 hub 首屏「立即查看」的单项按需生成不会误锁资源中枢里其它未生成卡片。 */
+  const [genBatchStarted, setGenBatchStarted] = useState(false)
+  /* 有序学习「上次学习进度」：6 步过程完成数（getSteps，mock/联调同源，非写死）。 */
+  const [stepProg, setStepProg] = useState<{ done: number; total: number }>({ done: 0, total: 6 })
 
   const toggleGen = (t: GenType) =>
     setGenPicked((prev) => {
@@ -529,10 +549,10 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       return next
     })
 
-  /* 生成派生态：未开始生成 → 卡片全部可浏览（不回归既有落点/回看入口）；
-     开始后未完成项锁定，完成项解锁；进度仅按勾选项统计。 */
-  const genStarted = Object.keys(genStatus).length > 0
-  const genLocked = (t: GenType) => genStarted && genStatus[t] !== 'done'
+  /* 生成派生态：未发起批量生成 → 卡片全部可浏览（不回归既有落点/回看入口）；
+     发起批量后未完成项锁定，完成项解锁；进度仅按勾选项统计。
+     注意锁定只认 genBatchStarted（批量），单项「立即查看」按需生成不触发锁定。 */
+  const genLocked = (t: GenType) => genBatchStarted && genStatus[t] !== 'done'
   const genChosen = GEN_OPTIONS.filter((o) => genPicked.has(o.type))
   const genTotal = genChosen.length
   const genDone = genChosen.filter((o) => genStatus[o.type] === 'done' || genStatus[o.type] === 'error').length
@@ -620,6 +640,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     if (!genPicked.size || genRunning) return
     const chosen = GEN_OPTIONS.filter((o) => genPicked.has(o.type)).map((o) => o.type)
     setGenRunning(true)
+    setGenBatchStarted(true)
     setGenStatus(Object.fromEntries(GEN_OPTIONS.map((o) => [o.type, 'pending'])) as Record<GenType, ItemStatus>)
     if (genPicked.has('external')) setRecoCount(null)
     for (const t of chosen) {
@@ -634,6 +655,15 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     }
     setGenRunning(false)
   }
+
+  /* 有序学习「上次学习进度」：拉取 6 步过程完成数（mock/联调同源，随知识点变化，非写死）。 */
+  useEffect(() => {
+    let cancelled = false
+    getSteps(kpId)
+      .then((s) => { if (!cancelled) setStepProg({ done: s.completedCount, total: s.total }) })
+      .catch((e) => console.error('[resource] 加载学习进度失败', e))
+    return () => { cancelled = true }
+  }, [kpId, view])
 
   /* 联调初始化：拉取后端测验题 + 当前难度讲义 + 刷新掌握度（mock 模式跳过）*/
   useEffect(() => {
@@ -790,15 +820,36 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
 
   /* ---------- 资源详情过场：打开 / 关闭 + Esc + 焦点管理 + 滚动锁 ---------- */
   const ILLUSTRATED = new Set<Tab>(['lecture', 'video', 'mindmap', 'diagram', 'code', 'external'])
-  const openCard = (id: Tab) => {
-    // 选择性生成开启后：未生成完成的资源卡锁定，不可打开（quiz/tutor 不受逐项生成约束）
-    if (id !== 'quiz' && id !== 'tutor' && genLocked(id)) return
+  /* 实际打开某内容详情（含检验前置 + 卡住信号埋点）。不做锁定判断，供 openCard/viewResource 复用。 */
+  const doOpen = (id: Tab) => {
     // 进入「分阶测试」沿用既有检验前置：未掌握时置 pending-check（passed 不回退）
     if (id === 'quiz' && kpStatus === 'learning') goCheck(kpId)
     setOpenId(id)
     // B-3 卡住信号：同一讲解类内容反复打开（第 3 次）→ 视为「反复看同一点」的卡顿
     const n = (openCountsRef.current[id] = (openCountsRef.current[id] ?? 0) + 1)
     if (n >= 3 && (id === 'lecture' || id === 'diagram' || id === 'video')) reportStuck(kpId, 2)
+  }
+  const openCard = (id: Tab) => {
+    // 选择性（批量）生成开启后：未生成完成的资源卡锁定，不可打开（quiz/tutor 不受逐项生成约束）
+    if (id !== 'quiz' && id !== 'tutor' && genLocked(id)) return
+    doOpen(id)
+  }
+  /* hub 首屏「立即查看」= 按需生成单项（只生成点的那一项，不强制预生成其它），完成即打开。
+     已生成则直接打开；生成中重复点忽略。复用既有单类型生成 generateOne（契约不变）。 */
+  const viewResource = async (t: GenType) => {
+    const tab = t as Tab
+    const st = genStatus[t]
+    if (st === 'done') { doOpen(tab); return }
+    if (st === 'running') return
+    setGenStatus((prev) => ({ ...prev, [t]: 'running' }))
+    try {
+      await generateOne(t)
+      setGenStatus((prev) => ({ ...prev, [t]: 'done' }))
+      doOpen(tab)
+    } catch (e) {
+      console.error(`[resource] 立即查看·按需生成「${t}」失败`, e)
+      setGenStatus((prev) => ({ ...prev, [t]: 'error' }))
+    }
   }
   const closeCard = () => setOpenId(null)
 
@@ -975,23 +1026,22 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     }
   }
 
+  /* hub 首屏派生展示值（全部接真实态，非写死）：
+     - flowPct   有序学习进度%（6 步过程完成占比）
+     - genDoneCount 已按需/批量生成完成的资源类数
+     - ragCount  RAG 引用文档数（联调取当前讲义真实溯源条数；mock 取讲义溯源实际列出条数） */
+  const flowPct = stepProg.total ? Math.round((stepProg.done / stepProg.total) * 100) : 0
+  const genDoneCount = GEN_OPTIONS.filter((o) => genStatus[o.type] === 'done').length
+  const ragCount = USE_REAL_API ? lectureSources[level]?.length ?? null : defaultSources.length
+
   return (
     <div className="resource-page">
-      {/* 统一标题区：锚条 + 高亮 + 状态徽章组 */}
+      {/* 统一标题区：一句话说明 + 右上「已校验·幻觉率<5%」可信度徽章（可点查看机制）。
+          原来的只读状态徽章组下沉到瘦身「状态信息条」，标题区不再占大块。 */}
       <PageHeader
         title="个性化学习资源"
         highlight="学习资源"
         subtitle="AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 讲义按难度自适应生成"
-        badges={[
-          { label: '当前知识点', value: kpName },
-          {
-            label: '状态',
-            value: STATUS_LABEL[kpStatus],
-            tone: kpStatus === 'passed' ? 'safe' : kpStatus === 'pending-check' ? 'accent' : 'default',
-          },
-          { label: '讲义难度', value: level, tone: 'accent' },
-          { label: 'RAG 引用文档', value: 12 },
-        ]}
         actions={
           <button
             type="button"
@@ -1017,26 +1067,124 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         </div>
       )}
 
-      {/* 模式切换：有序学习流（费曼+康奈尔） ↔ 资源中枢（8-tab 自由浏览） */}
-      <div className="flow-mode">
-        <button
-          type="button"
-          className={`flow-mode__btn ${mode === 'flow' ? 'flow-mode__btn--active' : ''}`}
-          onClick={() => setMode('flow')}
-        >
-          🧭 有序学习
-        </button>
-        <button
-          type="button"
-          className={`flow-mode__btn ${mode === 'browse' ? 'flow-mode__btn--active' : ''}`}
-          onClick={() => setMode('browse')}
-        >
-          🗂 资源中枢
-        </button>
-      </div>
+      {/* ===== hub 资源总览首屏：两大操作卡 + 瘦身状态条 + 六类速览 + 阶段测试条（核心操作优先） ===== */}
+      {view === 'hub' && (
+        <RevealGroup className="res-hub">
+          {/* 主操作区：两个大卡片并列，首屏突出、无需滚动即可操作 */}
+          <RevealItem className="res-hero-grid">
+            <button type="button" className="res-hero res-hero--flow" onClick={() => setView('flow')}>
+              <span className="res-hero__tag">推荐</span>
+              <span className="res-hero__icon" aria-hidden="true">🧭</span>
+              <span className="res-hero__title">有序学习</span>
+              <span className="res-hero__desc">费曼讲解 + 康奈尔笔记，按最优顺序把「{kpName}」一步步学透。</span>
+              <span className="res-hero__foot">
+                <span className="res-hero__prog">
+                  <span className="res-hero__prog-bar">
+                    <span className="res-hero__prog-fill" style={{ width: `${flowPct}%` }} />
+                  </span>
+                  <span className="res-hero__prog-text">
+                    {flowPct > 0 ? `上次学到 ${stepProg.done}/${stepProg.total} 步 · ${flowPct}%` : '尚未开始 · 从第 1 步开始'}
+                  </span>
+                </span>
+                <span className="res-hero__cta">继续学习 →</span>
+              </span>
+            </button>
 
-      {mode === 'flow' && (
+            <button type="button" className="res-hero res-hero--browse" onClick={() => setView('browse')}>
+              <span className="res-hero__icon" aria-hidden="true">🗂</span>
+              <span className="res-hero__title">资源中枢</span>
+              <span className="res-hero__desc">按需生成 6 类多模态资源，讲义 / 视频 / 导图 / 图解 / 代码 / 推荐自由浏览。</span>
+              <span className="res-hero__foot">
+                <span className="res-hero__stat">
+                  <b>{HUB_CARDS.length}</b> 类资源可用{genDoneCount > 0 ? ` · 已生成 ${genDoneCount}` : ''}
+                </span>
+                <span className="res-hero__cta">进入资源库 →</span>
+              </span>
+            </button>
+          </RevealItem>
+
+          {/* 状态信息条（瘦身）：只读状态压成一行紧凑信息条，小尺寸、不占主视觉 */}
+          <RevealItem className="res-statusbar">
+            <span className="res-statusbar__item">
+              <b className="res-statusbar__v">{kpName}</b>
+              <i className="res-statusbar__k">当前知识点</i>
+            </span>
+            <span className={`res-statusbar__item res-statusbar__item--${kpStatus}`}>
+              <b className="res-statusbar__v">{STATUS_LABEL[kpStatus]}</b>
+              <i className="res-statusbar__k">状态</i>
+            </span>
+            <span className="res-statusbar__item">
+              <b className="res-statusbar__v">{level}</b>
+              <i className="res-statusbar__k">讲义难度</i>
+            </span>
+            <span className="res-statusbar__item">
+              <b className="res-statusbar__v">{ragCount ?? '…'}</b>
+              <i className="res-statusbar__k">RAG 引用</i>
+            </span>
+            <span className="res-statusbar__item res-statusbar__item--safe">
+              <b className="res-statusbar__v">&lt;5%</b>
+              <i className="res-statusbar__k">幻觉率</i>
+            </span>
+          </RevealItem>
+
+          {/* 核心资源速览：六类资源卡片网格，每个「立即查看」= 按需生成后打开（未点的不生成） */}
+          <RevealItem className="res-hub-head">
+            <span className="res-hub-head__title">核心资源速览</span>
+            <span className="res-hub-head__sub">点「立即查看」按需生成对应资源，未点的不生成</span>
+          </RevealItem>
+          <RevealItem className="rescard-grid">
+            {HUB_CARDS.map((c) => {
+              const st = genStatus[c.id]
+              const busy = st === 'running'
+              return (
+                <motion.button
+                  key={c.id}
+                  type="button"
+                  className="rescard"
+                  onClick={() => void viewResource(c.id)}
+                  disabled={busy}
+                  whileHover={busy ? undefined : { y: -5 }}
+                  whileTap={busy ? undefined : { scale: 0.98 }}
+                >
+                  <span className="rescard__illu" style={{ background: RESOURCE_META[c.id].theme }}>
+                    <ResourceIllustration type={c.id} />
+                  </span>
+                  <span className="rescard__meta">
+                    <span className="rescard__title">
+                      {c.title}
+                      {st && <StatusChip status={st} />}
+                    </span>
+                    <span className="rescard__desc">
+                      {c.id === 'external' && recoCount != null
+                        ? `AI 已联网聚合 ${recoCount} 条优质外部资源，可打开学习。`
+                        : c.desc}
+                    </span>
+                    <span className="rescard__cta">
+                      {busy ? '生成中…' : st === 'done' ? '查看 →' : '立即查看 →'}
+                    </span>
+                  </span>
+                </motion.button>
+              )
+            })}
+          </RevealItem>
+
+          {/* 底部：阶段测试说明条（走完各资源后在有序学习末尾解锁、点亮「已掌握」推进进度） */}
+          <RevealItem className="browse-hint">
+            <span className="browse-hint__icon">🏁</span>
+            <span className="browse-hint__text">
+              阶段测试在「<button type="button" className="browse-hint__link" onClick={() => setView('flow')}>🧭 有序学习</button>」流程末尾——
+              走完视频 / 讲义 / 图解 / 笔记 / 费曼 / 实操后自动解锁，通过即点亮「已掌握」并推进进度。
+            </span>
+          </RevealItem>
+        </RevealGroup>
+      )}
+
+      {/* ===== flow 有序学习：内容/功能与原「有序学习」一致；顶部加「返回资源总览」 ===== */}
+      {view === 'flow' && (
         <RevealGroup>
+          <RevealItem>
+            <button type="button" className="res-back" onClick={() => setView('hub')}>← 资源总览</button>
+          </RevealItem>
           <RevealItem className="resource-card">
             <LearningFlow
               kpId={kpId}
@@ -1055,8 +1203,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         </RevealGroup>
       )}
 
-      {mode === 'browse' && (
+      {/* ===== browse 资源中枢：内容/功能与原「资源中枢」一致；顶部加「返回资源总览」 ===== */}
+      {view === 'browse' && (
         <RevealGroup>
+          <RevealItem>
+            <button type="button" className="res-back" onClick={() => setView('hub')}>← 资源总览</button>
+          </RevealItem>
           {/* 选择性逐项生成面板（复用会话二 TutorResourcePanel 的勾选/进度/状态 UI 与样式）*/}
           <RevealItem className="rescard-genpanel">
             <div className="trp trp--embed">
@@ -1090,12 +1242,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               <button className="trp__gen" disabled={!genPicked.size || genRunning} onClick={() => void runGeneration()}>
                 {genRunning
                   ? `正在逐项生成…（${genDone}/${genTotal}）`
-                  : genStarted
+                  : genBatchStarted
                     ? `重新生成所选（${genPicked.size}）`
                     : `生成所选（${genPicked.size}）`}
               </button>
 
-              {genStarted && (
+              {genBatchStarted && (
                 <div
                   className="trp__progress"
                   role="progressbar"
@@ -1188,7 +1340,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           <RevealItem className="browse-hint">
             <span className="browse-hint__icon">🏁</span>
             <span className="browse-hint__text">
-              阶段测试在「<button type="button" className="browse-hint__link" onClick={() => setMode('flow')}>🧭 有序学习</button>」流程末尾——
+              阶段测试在「<button type="button" className="browse-hint__link" onClick={() => setView('flow')}>🧭 有序学习</button>」流程末尾——
               走完视频 / 讲义 / 图解 / 笔记 / 费曼 / 实操后自动解锁，通过即点亮「已掌握」并推进进度。
             </span>
           </RevealItem>
@@ -1215,7 +1367,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
 
       {/* 资源详情过场：layoutId 共享元素「长大」成详情头部，内容淡入；× / Esc / 点遮罩关闭 */}
       <AnimatePresence>
-        {mode === 'browse' && openId && (
+        {openId && (
           <motion.div
             className="rescard-overlay"
             initial={{ opacity: 0 }}
