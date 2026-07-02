@@ -3,14 +3,14 @@
 覆盖接口文档 9.1 / 9.2：
 - get_questions：GET /quiz/{kpId} → { questions: QuizQuestion[] }（种子题，含
   correct_answer/explanation，契约 2.5 要求一并返回）。
-- submit：POST /quiz/{kpId}/submit → 判分；score≥60 → passed，并联动掌握度
+- submit：POST /quiz/{kpId}/submit → 判分；score≥70 → passed，并联动掌握度
   置 passed（7.3），返回 wrong[] 与 masteryUpdated。
 - reinforce：POST /reinforce → 错题 → 薄弱点定位 → recap + 针对性练习
   （LLMClient 双模式：mock 确定性 / deepseek 真实生成；critic 审核练习题
   答案自洽后才返回，mock 产物同样过审保证口径统一）。
 
 判分口径与前端 QuizRenderer 一致：single/boolean 直接比较，multiple 需集合相等
-（顺序无关）。score = 答对数 / 总题数 × 100（四舍五入），passed = score ≥ 60。
+（顺序无关）。score = 答对数 / 总题数 × 100（四舍五入），passed = score ≥ 70。
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from app.models.entities import KnowledgePoint, QuizAttempt, QuizQuestion
 from app.schemas.resource import QuizAnswerItem
 from app.services import mastery as mastery_service
 
-PASS_SCORE = 60
+PASS_SCORE = 70
 
 
 class UnknownKnowledgePoint(Exception):
@@ -94,7 +94,7 @@ def submit(
     综合得分口径：客观题（single/multiple/boolean）每题等权，答对计 1；简答题
     （short_answer）经 LLMClient.score_short_answer 给 0-100 分后按等权一题折算
     （score/100）。综合分 = (客观答对数 + Σ简答分/100) / 总题数 × 100（四舍五入）。
-    综合 ≥ 60 → passed，并联动掌握度置 passed（7.3）。简答评分明细随回包返回
+    综合 ≥ 70 → passed，并联动掌握度置 passed（7.3）。简答评分明细随回包返回
     （additive：shortAnswers[]），前端展示 AI 评分/点评。
     """
     if db.get(KnowledgePoint, kp_id) is None:

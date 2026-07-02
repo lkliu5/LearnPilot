@@ -370,7 +370,7 @@ const gradeQuizLocally = (
   }
   const total = qs.length
   const score = total ? Math.round(((objectiveCorrect + shortSum / 100) / total) * 100) : 0
-  return { score, passed: score >= 60, shortAnswers }
+  return { score, passed: score >= 70, shortAnswers }
 }
 
 /* 思维导图大纲（由生成 Agent 从讲义结构化得到）*/
@@ -1082,10 +1082,10 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         return (
           <>
             <div className="resource-modal-hint">
-              通过即点亮「已掌握」并推进进度（答对 ≥ 60% 判定通过）。
+              通过即点亮「已掌握」并推进进度（综合 ≥ 70 分判定通过）。
             </div>
             {questions.length > 0 ? (
-              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} grade={quizGrade} />
+              <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} grade={quizGrade} passMark={70} />
             ) : (
               <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
             )}
@@ -1269,6 +1269,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               diagramChart={USE_REAL_API ? diagramChart : mockRes.diagram}
               questions={questions}
               kpStatus={kpStatus}
+              quizGrade={quizGrade}
               onQuizResult={handleQuizResult}
               onGoCheck={() => goCheck(kpId)}
               onReview={handleReview}

@@ -358,9 +358,14 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       case 'quiz':
         return (
           <>
-            <div className="resource-modal-hint">基于文档生成的练习题，作答后即时判分与解析：</div>
+            <div className="resource-modal-hint">基于文档生成的练习题，作答后即时判分与解析（通过线 70 分）：</div>
             {bag.quiz && bag.quiz.questions.length > 0 ? (
-              <QuizRenderer questions={bag.quiz.questions} />
+              <QuizRenderer
+                questions={bag.quiz.questions}
+                autoGrade
+                passMark={70}
+                onRestudy={() => void runGenerate('lecture')}
+              />
             ) : (
               <div className="resource-loading">正在基于文档生成练习题…</div>
             )}

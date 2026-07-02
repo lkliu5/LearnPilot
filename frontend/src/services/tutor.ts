@@ -138,7 +138,11 @@ export async function streamInstantReply(
     if (!control.cancelled) opts.onDelta(d)
   }
 
-  if (USE_REAL_API) {
+  // 文档上下文（kpId 形如 `doc:<id>`）：8.7 苏格拉底 chat 仅认知识点，直接走本地话术，
+  // 避免对 /resource/tutor/chat 发起必然 404 的请求（针对性资源生成走文档专属链路）。
+  const isDocContext = !!opts.kpId && opts.kpId.startsWith('doc:')
+
+  if (USE_REAL_API && !isDocContext) {
     let started = false
     // 超时看门狗：整体上限 + 「首字节/长时间无新增量」空闲上限，超时即中止底层 fetch，
     // 避免后端 SSE 挂起导致回答永久停在「正在思考…」（即时辅导卡死）。

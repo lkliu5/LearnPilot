@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from './MarkdownRenderer'
-import QuizRenderer, { type QuizQuestion } from './QuizRenderer'
+import QuizRenderer, { type QuizQuestion, type QuizGrade } from './QuizRenderer'
 import WeakPointReinforce from './WeakPointReinforce'
 import CornellNotes from './CornellNotes'
 import FeynmanTutor from './FeynmanTutor'
@@ -58,6 +58,8 @@ interface LearningFlowProps {
   diagramChart: string
   questions: QuizQuestion[]
   kpStatus: KPStatus
+  /** 阶段测试综合判分结果（父级提交后回填 → 传给 QuizRenderer 展示得分/是否通过）。 */
+  quizGrade?: QuizGrade | null
   /** 复用父级判分/掌握度逻辑（mock 本地判分 / 联调 9.1 提交后刷新掌握度）。 */
   onQuizResult: (wrong: QuizQuestion[], submitted?: boolean, answers?: Record<string, string | string[]>) => void
   /** 进入「检验」前置 pending-check（仅首次，passed 不回退）。 */
@@ -78,6 +80,7 @@ export default function LearningFlow({
   diagramChart,
   questions,
   kpStatus,
+  quizGrade,
   onQuizResult,
   onGoCheck,
   onReview,
@@ -86,10 +89,18 @@ export default function LearningFlow({
   const [cues, setCues] = useState<CornellCues | null>(null)
   const [progress, setProgress] = useState<StepProgress | null>(null)
   const [phaseIdx, setPhaseIdx] = useState(0)
+  const stepperRef = useRef<HTMLDivElement>(null)
   const [inputTab, setInputTab] = useState<StepKey>('video')
   const flowLectureRef = useRef<HTMLDivElement>(null)
   const [wrongQs, setWrongQs] = useState<QuizQuestion[]>([])
   const [bootstrapped, setBootstrapped] = useState(false)
+
+  /* 未通过阶段测试 → 「重新学习」：回到第一段学习内容（输入）并滚动到顶部，引导重新过一遍。 */
+  const restudy = () => {
+    setPhaseIdx(0)
+    setInputTab('video')
+    requestAnimationFrame(() => stepperRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   /* 载入 18.1 线索 + 18.3 进度；首次定位到「当前未完成步」所在阶段 */
   useEffect(() => {
@@ -196,7 +207,7 @@ export default function LearningFlow({
   return (
     <div className="flow">
       {/* ===== 步骤条（stepper）：当前节点高亮，已完成打勾 ===== */}
-      <div className="flow__stepper">
+      <div className="flow__stepper" ref={stepperRef}>
         {PHASES.map((p, i) => {
           const done = phaseDone(i)
           const active = i === phaseIdx
@@ -332,11 +343,23 @@ export default function LearningFlow({
             )}
 
             {phase.key === 'feynman' && (
-              <FeynmanTutor
-                kpId={kpId}
-                onReview={onReview}
-                onComplete={() => !steps.feynman && toggleStep('feynman', true)}
-              />
+              <div className="flow__feynman">
+                <FeynmanTutor
+                  kpId={kpId}
+                  onReview={onReview}
+                  onComplete={() => !steps.feynman && toggleStep('feynman', true)}
+                />
+                {/* 手动完成：费曼「讲得够充分」的自动判定较严，易卡住导致无法解锁阶段测试；
+                    这里补一个与「我看过 X 了」同款的手动确认，点击即标记完成、推进进度。 */}
+                <label className="flow__seen">
+                  <input
+                    type="checkbox"
+                    checked={!!steps.feynman}
+                    onChange={(e) => toggleStep('feynman', e.target.checked)}
+                  />
+                  我已完成费曼讲解
+                </label>
+              </div>
             )}
 
             {phase.key === 'practice' && (
@@ -389,7 +412,7 @@ export default function LearningFlow({
             <span className="gate__kicker">独立检验 · GATE</span>
             <h3 className="gate__title">阶段测试</h3>
             <p className="gate__sub">
-              过程 6 步是「学」，这里是「检」——只有<strong>通过测试（≥60 分）</strong>才会点亮「已掌握」并推进学习路径进度。
+              过程 6 步是「学」，这里是「检」——只有<strong>通过测试（≥70 分）</strong>才会点亮「已掌握」并推进学习路径进度。
             </p>
           </div>
           <span className={`gate__mastery gate__mastery--${kpStatus}`}>
@@ -425,7 +448,13 @@ export default function LearningFlow({
             <div className="gate__quiz-tip" onClick={onGoCheck}>
               准备好了就作答，提交后自动判分。
             </div>
-            <QuizRenderer questions={questions} onSubmitResult={handleQuiz} />
+            <QuizRenderer
+              questions={questions}
+              onSubmitResult={handleQuiz}
+              grade={quizGrade}
+              passMark={70}
+              onRestudy={restudy}
+            />
             {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
           </>
         ) : (

@@ -390,6 +390,38 @@
 
 .quiz-result--perfect .quiz-result__score { color: var(--success-600); }
 
+/* 未通过：红色警示态（与通过的绿色态区分，得分/判定一目了然） */
+.quiz-result--fail {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.12), rgba(255, 255, 255, 0.6));
+  border-color: rgba(248, 113, 113, 0.5);
+}
+.quiz-result--fail .quiz-result__score { color: #dc2626; }
+
+.quiz-result__body { display: flex; flex-direction: column; gap: 4px; }
+.quiz-result__verdict { font-size: 1rem; font-weight: 800; color: var(--gray-800); }
+.quiz-result--perfect .quiz-result__verdict { color: var(--success-700); }
+.quiz-result--fail .quiz-result__verdict { color: #dc2626; }
+
+.quiz-result__actions { display: flex; gap: var(--space-sm); margin-top: 6px; }
+.quiz-result__next,
+.quiz-result__restudy {
+  padding: 7px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+}
+.quiz-result__next { background: var(--success-500); color: #fff; }
+.quiz-result__next:hover { background: var(--success-600); }
+.quiz-result__restudy {
+  background: color-mix(in srgb, #dc2626 8%, var(--surface));
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #dc2626;
+}
+.quiz-result__restudy:hover { background: color-mix(in srgb, #dc2626 16%, var(--surface)); }
+
 .quiz-result__label { font-size: 0.9rem; color: var(--gray-700); font-weight: 600; }
 
 .quiz-question {

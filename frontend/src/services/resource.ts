@@ -39,7 +39,7 @@ export interface QuizSubmitResult {
   masteryUpdated: { id: string; status: string } | null
 }
 
-/** 9.1 提交作答并判分。≥60 后端联动掌握度置 passed。 */
+/** 9.1 提交作答并判分。≥70 后端联动掌握度置 passed。 */
 export function submitQuiz(
   kpId: string,
   answers: Record<string, string | string[]>

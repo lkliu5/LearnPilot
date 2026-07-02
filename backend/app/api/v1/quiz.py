@@ -2,7 +2,7 @@
 
 接口 23/24/25：
 - GET  /quiz/{kpId}         获取测验题 { questions: QuizQuestion[] }
-- POST /quiz/{kpId}/submit  提交作答，判分 ≥60 → passed 并联动掌握度
+- POST /quiz/{kpId}/submit  提交作答，判分 ≥70 → passed 并联动掌握度
 - POST /reinforce           错题强化生成（薄弱点 + recap + 针对性练习）
 
 均需登录。知识点不存在 → 1004；强化生成失败/审核不通过 → 2001。
@@ -44,7 +44,7 @@ async def submit_quiz(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """提交作答并判分（接口文档 9.1）。≥60 联动掌握度置 passed。"""
+    """提交作答并判分（接口文档 9.1）。≥70 联动掌握度置 passed。"""
     try:
         data = quiz_service.submit(db, user.id, kp_id, body.answers)
     except quiz_service.UnknownKnowledgePoint:

@@ -6,9 +6,26 @@
  */
 import { USE_REAL_API, apiPost } from './api'
 import { aggregateExternalResources } from './resource'
+import { generateDiagram, generateLecture, generateVideo } from './documentLearning'
 import type { ExternalResource } from '../components/ResourceAggregator'
 
 export type RemedialType = 'diagram' | 'example' | 'video' | 'lecture'
+
+/**
+ * 文档辅导上下文标识：DocumentLearning 把当前文档写进 tutorContext.kpId，形如 `doc:<docId>`
+ * （未选中文档时为无冒号的占位 `doc-learning`）。此处解出真实文档 id，用于把「即时辅导」
+ * 的资源生成切到「基于该文档（文档专属向量集合）」的 /document/generate/* 链路。
+ */
+const DOC_CTX_PREFIX = 'doc:'
+export function docIdOf(kpId: string): string | null {
+  if (!kpId || !kpId.startsWith(DOC_CTX_PREFIX)) return null
+  const id = kpId.slice(DOC_CTX_PREFIX.length).trim()
+  return id || null
+}
+/** 文档上下文可复用的资源形态（一一映射到 /document/generate/*：图解 / 讲义 / 视频）。 */
+const DOC_TYPES: RemedialType[] = ['diagram', 'lecture', 'video']
+/** 文档场景生成时讲义/视频复用的难度档（辅导聚焦补缺，固定初级）。 */
+const DOC_REMEDIAL_DIFFICULTY = '初级'
 
 export interface RemedialSuggestion {
   id: string
@@ -67,8 +84,8 @@ const identifyProblem = (question: string, kpName: string): string => {
   for (const [re, point] of KEYWORD_POINTS) if (re.test(question || '')) return point
   return `${kpName}的核心概念`
 }
-const buildSuggestions = (point: string): RemedialSuggestion[] =>
-  ORDER.map((t) => ({
+const buildSuggestions = (point: string, types: RemedialType[] = ORDER): RemedialSuggestion[] =>
+  types.map((t) => ({
     id: `r-${t}`,
     type: t,
     title: TYPE_META[t].title.replace('{point}', point),
@@ -81,6 +98,13 @@ export async function suggestResources(
   question: string,
   kpName = '当前知识点'
 ): Promise<RemedialSuggestResult> {
+  // 文档上下文：辅导资源要基于「当前文档」生成，而非内置知识点。/resource/tutor/suggest
+  // 只认知识点（kp_id 非法 → 1004），故此处本地识别问题点 + 给出文档可复用的资源清单
+  // （图解 / 讲义 / 视频），实际生成在 generateResources 里走 /document/generate/*。
+  if (docIdOf(kpId)) {
+    const point = identifyProblem(question, kpName)
+    return { kpId, kpName, problemPoint: point, suggestions: buildSuggestions(point, DOC_TYPES) }
+  }
   if (USE_REAL_API) {
     return apiPost<RemedialSuggestResult>('/resource/tutor/suggest', { kpId, question })
   }
@@ -105,6 +129,35 @@ function mockContent(type: RemedialType, kpName: string, point: string): Remedia
   }
 }
 
+/** 文档上下文：把勾选类型逐项接到文档生成能力（/document/generate/*），并归一到 RemedialResource。
+ *  这些接口基于该文档的专属向量集合生成、严格溯源，且后端旁路自动写入「我的资源库」。 */
+async function generateDocResource(
+  docId: string,
+  type: RemedialType,
+  point: string
+): Promise<RemedialResource | null> {
+  if (type === 'diagram') {
+    const d = await generateDiagram(docId)
+    return { type: 'diagram', title: `文档图解 · ${point}`, mermaid: d.mermaid }
+  }
+  if (type === 'lecture') {
+    const d = await generateLecture(docId, DOC_REMEDIAL_DIFFICULTY)
+    return { type: 'lecture', title: `文档讲义 · ${point}`, markdown: d.markdown }
+  }
+  if (type === 'video') {
+    const d = await generateVideo(docId, DOC_REMEDIAL_DIFFICULTY)
+    // 文档视频分镜（LectureScene）补 frame 铺帧位归一到 VideoScene（播放组件按 title/points/narration 渲染）。
+    const scenes: VideoScene[] = d.scenes.map((s, i) => ({
+      frame: i * 180,
+      title: s.title,
+      points: s.points,
+      narration: s.narration,
+    }))
+    return { type: 'video', title: d.title || `文档视频讲解 · ${point}`, scenes }
+  }
+  return null
+}
+
 /** 8.8 按需生成勾选的针对性资源。mock 模式：图解/视频走静态占位，例题/讲义本地合成。 */
 export async function generateResources(
   kpId: string,
@@ -112,6 +165,18 @@ export async function generateResources(
   types: RemedialType[],
   kpName = '当前知识点'
 ): Promise<RemedialGenerateResult> {
+  // 文档上下文：基于当前文档生成针对性资源（复用文档学习既有 /document/generate/* 能力）。
+  const docId = docIdOf(kpId)
+  if (docId) {
+    const point = (problemPoint || '').trim() || `${kpName}的核心概念`
+    const chosen = DOC_TYPES.filter((t) => types.includes(t))
+    const results: RemedialResource[] = []
+    for (const t of chosen) {
+      const item = await generateDocResource(docId, t, point)
+      if (item) results.push(item)
+    }
+    return { kpId, problemPoint: point, results }
+  }
   if (USE_REAL_API) {
     return apiPost<RemedialGenerateResult>('/resource/tutor/generate', { kpId, problemPoint, types })
   }
@@ -149,6 +214,9 @@ export async function fetchRecommendations(
   problemPoint: string,
   kpName = '当前知识点'
 ): Promise<ExternalResource[]> {
+  // 文档上下文：外部资源聚合（8.6）以知识点为参数，不适用于文档 id，改用围绕问题点的
+  // 确定性精选兜底（结构同 ExternalResource，可直接打开）。
+  if (docIdOf(kpId)) return mockRecommendations(kpName, problemPoint)
   if (USE_REAL_API) {
     const res = await aggregateExternalResources(kpId, { weakPoints: [problemPoint] })
     return res.items
