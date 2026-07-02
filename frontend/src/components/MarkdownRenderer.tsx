@@ -39,6 +39,19 @@ function normalizeMathDelimiters(src: string): string {
 }
 
 /**
+ * 去除 HTML 注释（如后端产出的 `<!-- media:enriched -->` 埋点标记）——react-markdown 未接
+ * rehype-raw，这类注释会被当字面文本显示。代码围栏 ```…``` 与行内 `code` 内的 `<!-- -->`
+ * 是字面量，跳过不动；内容无 `<!--` 时提前返回，零改动。
+ */
+function stripHtmlComments(src: string): string {
+  if (!src || !src.includes('<!--')) return src
+  return src
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/<!--[\s\S]*?-->/g, '')))
+    .join('')
+}
+
+/**
  * 讲义配图：图片渲染 + 来源标注（来源走紧随其后的 Markdown 段落）+ 裂图兜底。
  * 加载失败时优雅隐藏破图、显示占位（不显示浏览器默认破图标）。
  */
@@ -79,7 +92,8 @@ export default function MarkdownRenderer({
   content: string
   sources?: SourceRef[]
 }) {
-  const withCites = sources?.length ? weaveCitations(content, sources).content : content
+  const base = stripHtmlComments(content)
+  const withCites = sources?.length ? weaveCitations(base, sources).content : base
   const normalized = normalizeMathDelimiters(withCites)
   return (
     <div className="markdown-body">
