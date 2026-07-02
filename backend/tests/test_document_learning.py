@@ -213,6 +213,96 @@ def test_builtin_course_not_affected(client, learner):
     assert any(i["kpName"] == "神经网络基础" for i in nn_rows)
 
 
+# ---- 6. 多文档统一生成（合并检索范围，来源体现来自多篇） -------------------
+def test_multi_doc_unified_generation(client, learner, md_doc, pdf_doc):
+    """documentIds 传两篇 → 统一生成，来源标注同时含两篇文档标题（内容确来自 2 个文档）。"""
+    data = _data(
+        client.post(
+            "/api/v1/document/generate/lecture",
+            headers=learner,
+            json={"documentId": md_doc, "documentIds": [md_doc, pdf_doc], "difficulty": "初级"},
+        )
+    )
+    assert data["docId"] == md_doc  # 主文档
+    assert set(data["docIds"]) == {md_doc, pdf_doc}
+    titles = " ".join(s["title"] for s in data["sources"])
+    # 来源同时出现两篇文档（证明合并检索范围，而非只用其一）
+    assert "泽塔" in titles and "卡帕" in titles
+    assert all(s["type"] == "文档" for s in data["sources"])
+
+
+def test_multi_doc_mindmap_lists_both(client, learner, md_doc, pdf_doc):
+    """多篇思维导图以各文档标题为二级节点（体现来自多篇）。"""
+    data = _data(
+        client.post(
+            "/api/v1/document/generate/mindmap",
+            headers=learner,
+            json={"documentId": md_doc, "documentIds": [md_doc, pdf_doc]},
+        )
+    )
+    assert "泽塔" in data["markdown"] and "卡帕" in data["markdown"]
+
+
+# ---- 7. 和文档对话（严格基于文档 + 溯源 + 流式） ---------------------------
+def test_doc_chat_json_grounded_with_sources(client, learner, md_doc):
+    """非流式问答：答案取自文档（含独有 token）、带溯源 sources、行内 [n] 标注。"""
+    data = _data(
+        client.post(
+            "/api/v1/document/chat",
+            headers=learner,
+            json={"documentId": md_doc, "message": "这篇文档的核心定理是什么？"},
+        )
+    )
+    assert data["sessionId"]
+    assert data["reply"].strip()
+    assert "ZetaVec" in data["reply"] or "泽塔" in data["reply"]  # 严格基于文档
+    assert "[1]" in data["reply"]  # 行内溯源标注
+    assert data["sources"] and all(s["type"] == "文档" for s in data["sources"])
+
+
+def test_doc_chat_multi_doc_json(client, learner, md_doc, pdf_doc):
+    """多篇统一问答：溯源覆盖两篇文档。"""
+    data = _data(
+        client.post(
+            "/api/v1/document/chat",
+            headers=learner,
+            json={
+                "documentId": md_doc,
+                "documentIds": [md_doc, pdf_doc],
+                "message": "这两篇资料分别讲了什么？",
+            },
+        )
+    )
+    titles = " ".join(s["title"] for s in data["sources"])
+    assert "泽塔" in titles and "卡帕" in titles
+
+
+def test_doc_chat_sse_stream(client, learner, md_doc):
+    """SSE 流式问答：逐 delta 下发 + event: done 携带 sources。"""
+    res = client.post(
+        "/api/v1/document/chat",
+        headers={**learner, "Accept": "text/event-stream"},
+        json={"documentId": md_doc, "message": "核心定理是什么？"},
+    )
+    assert res.status_code == 200
+    assert "text/event-stream" in res.headers.get("content-type", "")
+    body = res.text
+    assert '"delta"' in body  # 逐字增量
+    assert "event: done" in body  # 正常收尾
+    assert '"sources"' in body  # done 事件携带溯源
+
+
+def test_doc_chat_ownership(client, learner, md_doc):
+    """他人不可就本人文档发起问答 → 1004。"""
+    admin = _login(client, "admin", "admin123")
+    res = client.post(
+        "/api/v1/document/chat",
+        headers=admin,
+        json={"documentId": md_doc, "message": "讲了什么？"},
+    )
+    assert res.json()["code"] == 1004
+
+
 # ---- 5. 归属与鉴权 --------------------------------------------------------
 def test_document_ownership_and_auth(client, learner, md_doc):
     """他人不可访问/生成；未登录 → 1002；不存在文档 → 1004。"""

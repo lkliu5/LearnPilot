@@ -185,6 +185,22 @@
   --font-display: 'Sora Variable', var(--font-cjk);
   --font-mono: 'JetBrains Mono', 'Sora Variable', var(--font-cjk);
 
+  /* ========== 论文级图解 / 思维导图 / 图注 · 字体规范（纯系统字体，不打包 web 字体）==========
+     逐字回退：拉丁字母与数字命中 Times New Roman（论文标准衬线体）；中文命中衬线体
+     （思源宋体 / 宋体系兜底 → 系统 serif），保证任意环境中英文各得其体、观感统一。
+     图解、思维导图、图注三处统一引用 var(--font-paper)。*/
+  --font-paper: 'Times New Roman', 'Source Han Serif SC', 'Source Han Serif CN',
+    'Songti SC', 'STSong', 'SimSun', 'Noto Serif SC', serif;
+
+  /* ========== 论文级图解 / 导图 · 学术冷灰蓝配色（克制、低饱和；深浅主题均落在浅底卡片上）==========
+     墨黑偏冷的线条与文字 + 近白冷灰节点底 + 极少量赭石点缀，观感对齐 SCI 示意图。*/
+  --paper-ink: #1f2a33;          /* 节点文字 / 主文字：冷调墨黑 */
+  --paper-line: #5c6b78;         /* 连线：沉稳灰蓝 */
+  --paper-node-fill: #f5f7f9;    /* 节点底：近白冷灰 */
+  --paper-node-fill-2: #eef1f4;  /* 次级节点底 */
+  --paper-node-border: #35434f;  /* 节点描边：深石板 */
+  --paper-caption: #445059;      /* 图注文字：中性深灰 */
+
   --text-xs: 12px;
   --text-sm: 14px;
   --text-base: 16px;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PageType } from '../App'
 import { useJourney } from '../store/journey'
@@ -205,21 +205,43 @@ interface MenuItem {
   beta?: boolean
 }
 
-/** 学习主线（有先后依赖，标序号①②③）*/
+/** 核心学习（主线，有先后依赖，标序号①②③）*/
 const mainlineItems: MenuItem[] = [
   { id: 'profile', icon: icons.profile, label: '画像诊断', description: '知识能力评估', seq: 1 },
   { id: 'learning-path', icon: icons.learningPath, label: '学习路径', description: '个性化导航', seq: 2, requires: 'hasDiagnosed' },
   { id: 'learning-resource', icon: icons.resource, label: '学习资源', description: 'AI讲义·测试题', seq: 3, requires: 'hasGeneratedPath' },
 ]
 
-/** 总览与工具（无先后顺序）*/
-const toolItems: MenuItem[] = [
-  { id: 'dashboard', icon: icons.dashboard, label: '学情概览', description: '首页 · 学习总览' },
+/** 学情管家（统领性监测入口，单独成组、突出）*/
+const stewardItems: MenuItem[] = [
+  { id: 'dashboard', icon: icons.dashboard, label: '学情管家', description: '全程监测 · 主动建议' },
+]
+
+/** 文档学习（与内置课程平行的学习方式，不再埋在工具里）*/
+const docItems: MenuItem[] = [
   { id: 'document-learning', icon: icons.docLearn, label: '文档学习', description: '传文档 · 生成多模态资料' },
+]
+
+/** 我的空间（个人资产）*/
+const spaceItems: MenuItem[] = [
   { id: 'my-resources', icon: icons.myResources, label: '我的资源库', description: '生成资产 · 查看下载' },
+]
+
+/** 工具（辅助能力）*/
+const toolItems: MenuItem[] = [
   { id: 'workflow', icon: icons.workflow, label: 'Agent工作流', description: 'AI协同可视化' },
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
 ]
+
+/** learner 侧栏分组顺序（信息架构：核心学习 → 学情管家 → 文档学习 → 我的空间 → 工具）*/
+const learnerGroups: { title: string; items: MenuItem[] }[] = [
+  { title: '核心学习', items: mainlineItems },
+  { title: '学情管家', items: stewardItems },
+  { title: '文档学习', items: docItems },
+  { title: '我的空间', items: spaceItems },
+  { title: '工具', items: toolItems },
+]
+const learnerItemCount = learnerGroups.reduce((n, g) => n + g.items.length, 0)
 
 /** 管理（仅 admin 渲染，B4 阶段）*/
 const adminItems: MenuItem[] = [
@@ -371,21 +393,29 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
         </button>
       </div>
 
-      {/* 导航区域 */}
+      {/* 导航区域：按信息架构分组（核心学习 / 学情管家 / 文档学习 / 我的空间 / 工具） */}
       <nav className="sidebar__nav">
-        {!collapsed && <p className="sidebar__nav-group-title">学习主线</p>}
-        {mainlineItems.map((item, i) => renderItem(item, i))}
-
-        <div className="sidebar__nav-divider" />
-
-        {!collapsed && <p className="sidebar__nav-group-title">总览与工具</p>}
-        {toolItems.map((item, i) => renderItem(item, mainlineItems.length + i))}
+        {learnerGroups.map((group, gi) => {
+          const offset = learnerGroups.slice(0, gi).reduce((n, g) => n + g.items.length, 0)
+          const steward = group.title === '学情管家'
+          return (
+            <Fragment key={group.title}>
+              {gi > 0 && <div className="sidebar__nav-divider" />}
+              {!collapsed && (
+                <p className={`sidebar__nav-group-title${steward ? ' sidebar__nav-group-title--steward' : ''}`}>
+                  {group.title}
+                </p>
+              )}
+              {group.items.map((item, i) => renderItem(item, offset + i))}
+            </Fragment>
+          )
+        })}
 
         {isAdmin && (
           <>
             <div className="sidebar__nav-divider" />
             {!collapsed && <p className="sidebar__nav-group-title">管理</p>}
-            {adminItems.map((item, i) => renderItem(item, mainlineItems.length + toolItems.length + i))}
+            {adminItems.map((item, i) => renderItem(item, learnerItemCount + i))}
           </>
         )}
       </nav>

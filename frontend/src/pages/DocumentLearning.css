@@ -4,19 +4,23 @@
    ============================================ */
 
 .doclearn {
-  max-width: 1180px;
+  max-width: 1440px;
   margin: 0 auto;
 }
 
+/* NotebookLM 式三栏：左「来源与概览」· 中「和文档问答」· 右「生成六类」 */
 .doclearn__grid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr) 380px;
   gap: var(--space-lg);
   align-items: start;
   margin-top: var(--space-lg);
 }
+.doclearn__col {
+  min-width: 0;
+}
 
-/* ===================== 来源区 ===================== */
+/* ===================== 左栏 · 来源与概览 ===================== */
 .doclearn__sources {
   position: sticky;
   top: var(--space-lg);
@@ -28,6 +32,24 @@
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow-soft);
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+
+/* ===================== 中栏 · 和文档问答 ===================== */
+.doclearn__chat {
+  position: sticky;
+  top: var(--space-lg);
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.docchat.socratic {
+  height: calc(100vh - 200px);
+  min-height: 480px;
+  max-height: 780px;
 }
 
 .doclearn__panel-title {
@@ -119,11 +141,23 @@
 }
 
 /* 文档列表 */
+.doclearn-doclist__hint {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  opacity: 0.85;
+  line-height: 1.5;
+}
+.doclearn-doclist__hint b {
+  color: var(--primary);
+  font-weight: 700;
+}
 .doclearn-doclist {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 52vh;
+  /* 左栏为 flex 纵向容器且限高，需禁止本列表被压缩为 0（自身超长再内部滚动） */
+  flex: 0 0 auto;
+  max-height: 44vh;
   overflow-y: auto;
 }
 .doclearn-doclist__empty {
@@ -138,22 +172,43 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
-  cursor: pointer;
-  text-align: left;
   transition: all var(--transition-fast);
 }
 .doclearn-docitem:hover {
   border-color: var(--primary-200);
   box-shadow: var(--shadow-soft);
 }
+.doclearn-docitem--checked {
+  border-color: var(--primary-200);
+  background: var(--primary-50);
+}
 .doclearn-docitem--active {
   border-color: var(--primary);
-  background: var(--primary-50);
+  box-shadow: var(--shadow-inner-glow);
+}
+.doclearn-docitem__check {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+.doclearn-docitem__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
 }
 .doclearn-docitem__type {
   flex: 0 0 auto;
@@ -314,6 +369,15 @@
   color: var(--ink);
   font-weight: 700;
 }
+.doclearn-actions__multi {
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--accent, #c58940);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
 .doclearn-actions__wait {
   display: inline-flex;
   align-items: center;
@@ -443,12 +507,29 @@
 }
 
 /* ===================== 响应式 ===================== */
-@media (max-width: 900px) {
+/* 中等屏：右栏（生成）下沉到左栏之下，左栏 + 中栏两列并排 */
+@media (max-width: 1180px) {
+  .doclearn__grid {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+  .doclearn__studio {
+    grid-column: 1 / -1;
+  }
+  .doclearn__chat {
+    position: static;
+  }
+  .docchat.socratic {
+    height: 560px;
+  }
+}
+/* 窄屏：三栏纵向堆叠（来源 → 问答 → 生成） */
+@media (max-width: 860px) {
   .doclearn__grid {
     grid-template-columns: 1fr;
   }
   .doclearn__sources {
     position: static;
+    max-height: none;
   }
   .doclearn-doclist {
     max-height: none;
@@ -458,6 +539,14 @@
   .doclearn-actions__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* 左栏概览：当前聚焦文档名 */
+.doclearn-overview__docname {
+  margin: -4px 0 8px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--primary-d, #46624f);
 }
 
 /* ===================== 文档概览（NotebookLM 式速读） ===================== */

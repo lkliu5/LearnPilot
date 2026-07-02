@@ -1,0 +1,19 @@
+/* 和文档对话（中栏主交互区）：复用 .socratic 对话面板，仅调整为「填满中栏高度」并加溯源槽样式。 */
+.docchat.socratic {
+  height: 100%;
+  min-height: 520px;
+}
+
+/* 本回答溯源：置于对话区与输入区之间的常驻插槽，紧贴最新回答，突出「标出处」。 */
+.docchat__src {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-sm) 0 2px;
+}
+.docchat__src-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  letter-spacing: 0.02em;
+}

@@ -15,17 +15,23 @@
 - POST   /document/generate/mindmap      基于文档生成思维导图（Markmap）
 - POST   /document/generate/quiz         基于文档生成练习题
 - POST   /document/generate/flashcards   基于文档生成闪卡
+- POST   /document/chat                  和文档对话（严格基于文档、流式即问即答、标出处溯源）
+
+生成类接口均支持可选 documentIds（多篇文档合并检索范围统一生成，未传则回退单篇 documentId）。
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.schemas.document import (
+    DocChatRequest,
     DocDiagramRequest,
     DocFlashcardRequest,
     DocLectureRequest,
@@ -34,6 +40,7 @@ from app.schemas.document import (
     DocQuizRequest,
     DocVideoRequest,
 )
+from app.services import document_chat
 from app.services import document_generation as gen
 from app.services import document_parse, document_store
 
@@ -128,8 +135,8 @@ async def gen_lecture(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成讲义（接口文档 20.5.1）。"""
-    return _guarded_generate(gen.generate_lecture, db, user.id, body.documentId, body.difficulty)
+    """基于文档生成讲义（接口文档 20.5.1；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_lecture, db, user.id, body.doc_ids(), body.difficulty)
 
 
 @router.post("/document/generate/video")
@@ -138,8 +145,8 @@ async def gen_video(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成视频分镜（接口文档 20.5.2）。"""
-    return _guarded_generate(gen.generate_video, db, user.id, body.documentId, body.difficulty)
+    """基于文档生成视频分镜（接口文档 20.5.2；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_video, db, user.id, body.doc_ids(), body.difficulty)
 
 
 @router.post("/document/generate/diagram")
@@ -148,8 +155,8 @@ async def gen_diagram(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成 Mermaid 图解（接口文档 20.5.3）。"""
-    return _guarded_generate(gen.generate_diagram, db, user.id, body.documentId)
+    """基于文档生成 Mermaid 图解（接口文档 20.5.3；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_diagram, db, user.id, body.doc_ids())
 
 
 @router.post("/document/generate/mindmap")
@@ -158,8 +165,8 @@ async def gen_mindmap(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成思维导图（接口文档 20.5.4）。"""
-    return _guarded_generate(gen.generate_mindmap, db, user.id, body.documentId)
+    """基于文档生成思维导图（接口文档 20.5.4；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_mindmap, db, user.id, body.doc_ids())
 
 
 @router.post("/document/generate/quiz")
@@ -168,8 +175,8 @@ async def gen_quiz(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成练习题（接口文档 20.6）。"""
-    return _guarded_generate(gen.generate_quiz, db, user.id, body.documentId, body.count)
+    """基于文档生成练习题（接口文档 20.6；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_quiz, db, user.id, body.doc_ids(), body.count)
 
 
 @router.post("/document/generate/flashcards")
@@ -178,5 +185,45 @@ async def gen_flashcards(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成闪卡（接口文档 20.7）。"""
-    return _guarded_generate(gen.generate_flashcards, db, user.id, body.documentId, body.count)
+    """基于文档生成闪卡（接口文档 20.7；支持 documentIds 多篇统一生成）。"""
+    return _guarded_generate(gen.generate_flashcards, db, user.id, body.doc_ids(), body.count)
+
+
+# ---- 和文档对话（严格基于文档、流式即问即答、标出处溯源） -------------------
+@router.post("/document/chat")
+async def doc_chat(
+    body: DocChatRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """和文档对话（接口文档 20.8）。就选中文档（可多篇 documentIds）提问，答案严格基于文档。
+
+    请求头携带 Accept: text/event-stream → SSE 流式（15.4：data:{"delta"} 逐条 + event: done
+    携带 sources 溯源，异常 event: error）；不带该头 → 整体 JSON {sessionId, reply, sources}。
+    非本人/不存在 → 1004；文档未就绪 → 1001；生成异常 → 2001。
+    """
+    doc_ids = body.doc_ids()
+    streaming = "text/event-stream" in (request.headers.get("accept") or "")
+    try:
+        if streaming:
+            # SSE 前先做归属/就绪校验（错误走 JSON 信封，而非流内 error）
+            gen.resolve_docs(db, user.id, doc_ids)
+            events = document_chat.sse_stream(
+                db, user_id=user.id, doc_ids=doc_ids, session_id=body.sessionId, message=body.message
+            )
+            return StreamingResponse(
+                events,
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+        data = document_chat.chat(
+            db, user_id=user.id, doc_ids=doc_ids, session_id=body.sessionId, message=body.message
+        )
+    except document_store.UnknownDocument:
+        return fail(code=1004, message="文档不存在", status_code=404)
+    except gen.DocumentNotReady:
+        return fail(code=1001, message="文档尚未完成解析入库，请稍后重试", status_code=400)
+    except LLMGenerationError as exc:
+        return fail(code=2001, message=f"文档问答生成失败：{exc}", status_code=500)
+    return success(data)

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import RadarChart from '../components/charts/RadarChart'
 import LearningPathCard from '../components/LearningPathCard'
-import AgentStatusCard from '../components/AgentStatusCard'
 import CountUp from '../components/CountUp'
 import BlurText from '@/components/BlurText/BlurText'
 import GuideCard from '../components/GuideCard'
@@ -17,6 +16,10 @@ import { KNOWLEDGE_POINTS } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
 import { getDashboardOverview, synthesizeOverview, type DashboardOverview } from '../services/dashboard'
 import { getLearningEvaluation, synthesizeEvaluation, type LearningEvaluation } from '../services/learningEval'
+import { getResourceHistory } from '../services/resourceHistory'
+import { synthesizeSteward } from '../services/stewardActivity'
+import { StewardHero, AgentActivityBoard } from '../components/LearningSteward'
+import { getUser } from '../services/api'
 import type { PageType } from '../App'
 import './Dashboard.css'
 
@@ -58,6 +61,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   /* 门控：学情概览数据须来自「真实诊断结果 / 画像」，无则视为未诊断（问题 4）。
      Mock 模式以本地画像快照为准（确认画像后写入）；联调以后端 journey.hasDiagnosed 为准。 */
   const journeyHasDiagnosed = useJourney((s) => s.hasDiagnosed)
+  const hasGeneratedPath = useJourney((s) => s.hasGeneratedPath)
   const portraitDims = usePortrait((s) => s.dims)
   const diagnosed = journeyHasDiagnosed && (USE_REAL_API || portraitDims.length > 0)
 
@@ -88,6 +92,20 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
       alive = false
     }
   }, [masteryStatus, diagnosed])
+  /* 学情管家·生成 Agent 活动计量：复用我的资源库生成历史（接口 19.1）total 字段。
+     mock 返回本地合成条数；联调返回真实累计。仅诊断后拉取，随掌握度变化重取。 */
+  const [resourceCount, setResourceCount] = useState(0)
+  useEffect(() => {
+    if (!diagnosed) return
+    let alive = true
+    getResourceHistory({ page: 1, pageSize: 1 })
+      .then((d) => alive && setResourceCount(d.total))
+      .catch((e) => console.warn('[steward] 生成历史计量获取失败（已忽略）', e))
+    return () => {
+      alive = false
+    }
+  }, [masteryStatus, diagnosed])
+
   const masteredIds = useMemo(
     () => KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').map((k) => k.id),
     [masteryStatus]
@@ -111,6 +129,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   const learnedResources = USE_REAL_API && overview ? overview.learned_resources : masteredCore
   /* 同级对比同属队列统计：仅联调由后端给出，Mock 下无真实样本则不展示该行 */
   const betterThanPct = USE_REAL_API && overview ? overview.comparison.betterThanPct : null
+  const coveragePct = Math.round(knowledgeGraphCoverage * 100)
 
   /* 岗位对标已降权为「可选轻量模块」：不再占学情概览主信息位，仅在概览末尾折叠回显 + 入口，
      完整对标在「画像诊断」页。数据源照旧（journey / overview.targetSummary），不改口径。 */
@@ -120,6 +139,34 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   const targetJobName = USE_REAL_API && overview ? overview.targetSummary.targetJobName : journeyTargetJobName
   const matchPct = USE_REAL_API && overview ? overview.targetSummary.matchPct : journeyMatchPct
   const [jobAsideOpen, setJobAsideOpen] = useState(false)
+
+  /* 学情管家·各 Agent 活动汇总 + 主动建议：纯前端派生自既有能力（journey/portrait/mastery/
+     评估 Agent/生成历史），不新增后端接口、不改既有口径。 */
+  const stewardSummary = useMemo(
+    () =>
+      synthesizeSteward({
+        hasDiagnosed: journeyHasDiagnosed,
+        hasGeneratedPath,
+        portraitDimCount: portraitDims.length,
+        targetJobName: journeyTargetJobName,
+        masteredCore,
+        totalCore: KNOWLEDGE_POINTS.length,
+        resourceCount,
+        evaluation: evalData,
+        weakTopics: profileData.weak_topics,
+      }),
+    [
+      journeyHasDiagnosed,
+      hasGeneratedPath,
+      portraitDims.length,
+      journeyTargetJobName,
+      masteredCore,
+      resourceCount,
+      evalData,
+      profileData.weak_topics,
+    ]
+  )
+  const userName = getUser()?.displayName ?? '学习者_001'
 
   /* 未诊断：学情概览不展示任何数据，仅留引导态（问题 4）——避免新用户首登即见假数据 */
   if (!diagnosed) {
@@ -143,10 +190,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
               <path d="M12 16h.01" />
             </svg>
           </div>
-          <h2 className="dashboard__empty-title">学情概览尚未生成</h2>
+          <h2 className="dashboard__empty-title">学情管家待启动</h2>
           <p className="dashboard__empty-desc">
-            综合评分、知识雷达、优势与盲区都来自你的<strong>真实学习画像</strong>。
-            先完成一次画像诊断，AI 才能据此生成你的专属学情概览。
+            AI 学情管家会持续监测你的学习全过程，协调诊断/规划/生成/评估各专家 Agent 为你服务。
+            综合评分、知识雷达、优势与盲区都来自你的<strong>真实学习画像</strong>——
+            先完成一次画像诊断，管家才能据此开始监测并给出建议。
           </p>
           <button className="dashboard__empty-cta" type="button" onClick={() => onNavigate?.('profile')}>
             先完成画像诊断 →
@@ -164,6 +212,22 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
       initial="hidden"
       animate="visible"
     >
+      {/* 学情管家身份 + 全局学情监测：统领整页的「管家」角色叙事 */}
+      <motion.div variants={itemVariants}>
+        <StewardHero
+          userName={userName}
+          overallLevel={profileData.overall_level}
+          overallScore={profileData.overall_score}
+          masteredCore={masteredCore}
+          totalCore={KNOWLEDGE_POINTS.length}
+          coveragePct={coveragePct}
+          resourceCount={resourceCount}
+          activeAgents={stewardSummary.activeAgents}
+          totalAgents={stewardSummary.totalAgents}
+          monitoredAt={`${hours}:${minutes}`}
+        />
+      </motion.div>
+
       {/* 首屏状态化引导：唯一明确的下一步 */}
       <motion.div variants={itemVariants}>
         <GuideCard onNavigate={onNavigate} />
@@ -576,71 +640,10 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
           </motion.div>
         </div>
 
-        {/* Agent 状态 + 互动面板 双栏 */}
-        <div className="dashboard__dual" data-reveal>
-          {/* 左栏 2/3：Agent 状态 */}
-          <motion.div className="dashboard__card dashboard__dual__main" variants={itemVariants}>
-            <div className="card-header">
-              <h3>Agent状态</h3>
-              <span className="card-badge">3 Active</span>
-            </div>
-            <div className="card-content">
-              <div className="agent-list">
-                <AgentStatusCard
-                  name="学情诊断Agent"
-                  status="success"
-                  lastAction="画像生成完成"
-                />
-                <AgentStatusCard
-                  name="领域知识生成Agent"
-                  status="running"
-                  lastAction="正在生成学习资源..."
-                />
-                <AgentStatusCard
-                  name="内容审核校验Agent"
-                  status="idle"
-                  lastAction="等待校验任务"
-                />
-              </div>
-            </div>
-          </motion.div>
-
-          {/* 右栏 1/3：互动面板 */}
-          <motion.div className="dashboard__card dashboard__dual__side" variants={itemVariants}>
-            <div className="card-header">
-              <h3>互动面板</h3>
-            </div>
-            <div className="card-content">
-              <div className="interaction-panel">
-                <div className="interaction-panel__item">
-                  <div className="interaction-panel__avatar interaction-panel__avatar--green">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
-                    </svg>
-                  </div>
-                  <div className="interaction-panel__body">
-                    <span className="interaction-panel__agent">学情诊断Agent</span>
-                    <p className="interaction-panel__msg">我已完成你的诊断，点击复习巩固。</p>
-                    <button className="interaction-panel__btn">Review Now</button>
-                  </div>
-                </div>
-                <div className="interaction-panel__divider" />
-                <div className="interaction-panel__item">
-                  <div className="interaction-panel__avatar interaction-panel__avatar--blue">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" />
-                    </svg>
-                  </div>
-                  <div className="interaction-panel__body">
-                    <span className="interaction-panel__agent">内容审核校验Agent</span>
-                    <p className="interaction-panel__msg">校验通过，幻觉率 2.1%。</p>
-                    <button className="interaction-panel__btn">查看报告</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+        {/* 各 Agent 活动汇总（管家看板）+ 主动建议：真实派生自既有能力，替换原静态占位 */}
+        <motion.div variants={itemVariants} data-reveal>
+          <AgentActivityBoard summary={stewardSummary} onNavigate={onNavigate} />
+        </motion.div>
 
         {/* 岗位对标（可选轻量模块）：已从学情概览主信息位降权——折叠在概览末尾，默认收起，
             不占主视觉、不参与「真实画像→掌握度→学习评估」主叙事；完整对标仍在「画像诊断」页。 */}

@@ -13,9 +13,13 @@
  */
 
 import { sanitizeFilename, triggerDownload } from './lectureExport'
+import { PAPER_FONT_STACK } from './figureCaption'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const XLINK_NS = 'http://www.w3.org/1999/xlink'
+// 独立导出的 SVG 脱离页面、无 :root 变量，图注字体必须用字面量字体栈（与 --font-paper 同源）。
+const CAPTION_FONT_SIZE = 15
+const CAPTION_PAD = 46 // 图注区高度（分隔线 + 文字 + 上下留白）
 
 /** 把克隆体里的 foreignObject 文字降级为原生 <text>（位置/颜色/字体取自在线 DOM）。 */
 function inlineForeignObjects(clone: SVGSVGElement, live: SVGSVGElement, anchor: 'start' | 'middle'): void {
@@ -50,10 +54,11 @@ function inlineForeignObjects(clone: SVGSVGElement, live: SVGSVGElement, anchor:
   })
 }
 
-/** 由在线 SVG 生成「自包含、可脱离页面渲染」的 SVG 串与像素尺寸。 */
+/** 由在线 SVG 生成「自包含、可脱离页面渲染」的 SVG 串与像素尺寸；caption 非空时在图下方嵌入学术图注。 */
 function buildSvgString(
   live: SVGSVGElement,
   anchor: 'start' | 'middle',
+  caption?: string,
 ): { xml: string; width: number; height: number } {
   const clone = live.cloneNode(true) as SVGSVGElement
   inlineForeignObjects(clone, live, anchor)
@@ -63,24 +68,27 @@ function buildSvgString(
   const hasVb = !!vb && vb.width > 0 && vb.height > 0
   const rect = live.getBoundingClientRect()
   const width = Math.max(1, Math.round(hasVb ? vb!.width : rect.width || parseFloat(live.getAttribute('width') || '') || 800))
-  const height = Math.max(
+  const baseHeight = Math.max(
     1,
     Math.round(hasVb ? vb!.height : rect.height || parseFloat(live.getAttribute('height') || '') || 600),
   )
+  const cap = (caption ?? '').trim()
+  const capPad = cap ? CAPTION_PAD : 0
+  const height = baseHeight + capPad
+
+  // 内容盒（viewBox 坐标系）——图注区在其正下方扩展 capPad
+  const ox = hasVb ? vb!.x : 0
+  const oy = hasVb ? vb!.y : 0
+  const bw = hasVb ? vb!.width : width
+  const bh = (hasVb ? vb!.height : baseHeight) + capPad
 
   clone.setAttribute('xmlns', SVG_NS)
   clone.setAttribute('xmlns:xlink', XLINK_NS)
   clone.setAttribute('width', String(width))
   clone.setAttribute('height', String(height))
-  if (!clone.getAttribute('viewBox') && hasVb) {
-    clone.setAttribute('viewBox', `${vb!.x} ${vb!.y} ${vb!.width} ${vb!.height}`)
-  }
+  clone.setAttribute('viewBox', `${ox} ${oy} ${bw} ${bh}`)
 
-  // 白底矩形：避免透明背景下深色文字在图片查看器里看不清
-  const ox = hasVb ? vb!.x : 0
-  const oy = hasVb ? vb!.y : 0
-  const bw = hasVb ? vb!.width : width
-  const bh = hasVb ? vb!.height : height
+  // 白底矩形：避免透明背景下深色文字在图片查看器里看不清（含图注区）
   const bg = clone.ownerDocument.createElementNS(SVG_NS, 'rect')
   bg.setAttribute('x', String(ox))
   bg.setAttribute('y', String(oy))
@@ -89,27 +97,58 @@ function buildSvgString(
   bg.setAttribute('fill', '#ffffff')
   clone.insertBefore(bg, clone.firstChild)
 
+  // 学术图注：细分隔线 + 居中小字（论文字体栈），置于内容正下方
+  if (cap) {
+    const doc = clone.ownerDocument
+    const lineY = oy + bh - capPad + 14
+    const sep = doc.createElementNS(SVG_NS, 'line')
+    sep.setAttribute('x1', String(ox + bw * 0.14))
+    sep.setAttribute('x2', String(ox + bw * 0.86))
+    sep.setAttribute('y1', String(lineY))
+    sep.setAttribute('y2', String(lineY))
+    sep.setAttribute('stroke', '#c3ccd3')
+    sep.setAttribute('stroke-width', '1')
+    clone.appendChild(sep)
+
+    const t = doc.createElementNS(SVG_NS, 'text')
+    t.setAttribute('x', String(ox + bw / 2))
+    t.setAttribute('y', String(lineY + 20))
+    t.setAttribute('text-anchor', 'middle')
+    t.setAttribute('dominant-baseline', 'central')
+    t.setAttribute('fill', '#445059')
+    t.setAttribute('font-family', PAPER_FONT_STACK)
+    t.setAttribute('font-size', `${CAPTION_FONT_SIZE}px`)
+    t.textContent = cap
+    clone.appendChild(t)
+  }
+
   const xml = new XMLSerializer().serializeToString(clone)
   return { xml, width, height }
 }
 
-/** 导出在线 SVG 为 .svg 文件（文件名如「图解-知识点.svg」）。 */
-export function downloadSvg(svg: SVGSVGElement, baseName: string, anchor: 'start' | 'middle' = 'middle'): void {
-  const { xml } = buildSvgString(svg, anchor)
+/** 导出在线 SVG 为 .svg 文件（文件名如「图解-知识点.svg」）；caption 非空时图下方带学术图注。 */
+export function downloadSvg(
+  svg: SVGSVGElement,
+  baseName: string,
+  anchor: 'start' | 'middle' = 'middle',
+  caption?: string,
+): void {
+  const { xml } = buildSvgString(svg, anchor, caption)
   const blob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`], {
     type: 'image/svg+xml;charset=utf-8',
   })
   triggerDownload(blob, `${sanitizeFilename(baseName)}.svg`)
 }
 
-/** 导出在线 SVG 为 .png（SVG → Image → canvas → PNG，默认 2 倍清晰度）。 */
+/** 导出在线 SVG 为 .png（SVG → Image → canvas → PNG，默认 2 倍清晰度）；caption 非空时带学术图注。 */
 export async function downloadSvgAsPng(
   svg: SVGSVGElement,
   baseName: string,
   anchor: 'start' | 'middle' = 'middle',
+  caption?: string,
   scale = 2,
 ): Promise<void> {
-  const { xml, width, height } = buildSvgString(svg, anchor)
+  const { xml, width, height } = buildSvgString(svg, anchor, caption)
   const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
   try {
     const img = new Image()

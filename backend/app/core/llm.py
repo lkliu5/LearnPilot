@@ -684,6 +684,35 @@ def _doc_key_sentences(contexts: list[str], *, max_n: int, min_chars: int = 8) -
     return out
 
 
+# ---- 文档问答（「和文档对话」严格基于文档 + 溯源，mock 兜底） ----------------
+_DOC_CHAT_SYSTEM = (
+    "你是「文档问答」助手，只依据用户提供的《{source_title}》文档片段回答问题，目标是帮助用户"
+    "「读懂这篇文档」。铁律：只用给定文档片段中的信息，**禁止**引入文档之外的知识或编造事实；"
+    "文档片段里没有答案时，明确回答「文档中未提及该内容」。在引用具体内容处以 [n] 标注对应"
+    "文档片段序号（n 从 1 起，对应给定片段顺序），便于溯源。简体中文，条理清晰、简洁作答。"
+)
+
+
+def _mock_doc_answer(source_title: str, contexts: list[str], message: str) -> str:
+    """确定性文档问答回答：由文档要点句合成、带 [n] 溯源标记（严格来自文档、不臆造）。
+
+    无检索片段 → 明确「文档中未提及」（防幻觉）；否则给出 lead-in + 逐条要点（每条挂 [n] 溯源），
+    与下方来源列表一一对应。逐字流式由调用方 char stream 完成。
+    """
+    q = (message or "").strip().replace("\n", " ")
+    focus = (q[:40] + "…") if len(q) > 40 else (q or "这个问题")
+    sentences = _doc_key_sentences(contexts, max_n=4)
+    if not sentences:
+        return (
+            f"关于「{focus}」，当前文档《{source_title}》中未提及相关内容。"
+            "（本回答严格基于你上传的文档，不做文档之外的推测。）"
+        )
+    lead = f"根据你上传的《{source_title}》，就「{focus}」，文档中相关的内容如下："
+    body = "\n".join(f"{i}. {sent}[{i}]" for i, sent in enumerate(sentences[:3], start=1))
+    tail = "以上要点均出自文档原文（见下方「来源」标注）。若需更系统的梳理，可在右侧生成讲义或图解。"
+    return f"{lead}\n{body}\n{tail}"
+
+
 def audit_practice(practice: dict[str, Any]) -> list[str]:
     """critic 审核：练习题（QuizQuestion 结构）答案自洽性校验，返回问题清单。
 
@@ -2011,6 +2040,44 @@ class LLMClient:
         if self.is_mock:
             return _mock_tutor_reply(message)[1]
         return []
+
+    # ---- 文档问答（NotebookLM 式「和文档对话」，严格基于文档 + 溯源，流式） ----
+    def doc_chat_stream(
+        self,
+        *,
+        source_title: str,
+        contexts: list[str],
+        history: list[dict[str, str]],
+        message: str,
+    ) -> Iterator[str]:
+        """就选中文档回答用户问题（逐 delta 流式）。**严格基于文档片段、防幻觉、标出处**。
+
+        与苏格拉底辅导不同：这里是「理解文档」的即问即答（直接作答，不刻意反问）；答案只依据
+        传入的文档检索片段（contexts），文档没有的明确回答「文档中未提及」，引用处以 [n] 标注
+        对应片段序号（与下方来源列表一一对应）。
+        - mock：确定性——由文档要点句合成带 [n] 溯源标记的回答，**逐字**流式（无 Key 全链路可跑）；
+        - deepseek：真实流式，system 约束「仅据文档片段作答 + [n] 标注」。
+        """
+        self._ensure_supported()
+        if not self.is_mock:
+            joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
+            prompt = (
+                f"文档标题：{source_title}\n文档片段（回答只能依据这些片段）：\n"
+                f"{joined or '（未检索到相关片段）'}\n\n用户问题：{message}"
+            )
+            return llm_deepseek.chat_stream(
+                prompt, system=_DOC_CHAT_SYSTEM.format(source_title=source_title), history=history
+            )
+        answer = _mock_doc_answer(source_title, contexts, message)
+
+        def _char_stream() -> Iterator[str]:
+            delay = settings.tutor_stream_delay_ms / 1000
+            for char in answer:
+                if delay > 0:
+                    time.sleep(delay)
+                yield char
+
+        return _char_stream()
 
     # ---- 智能辅导·按需资源生成（接口文档 8.8，C-fix 批3-bonus） ---------------
     def suggest_remedial_resources(

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PageType } from '../App'
 import PageHeader from '../components/PageHeader'
@@ -6,6 +6,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import QuizRenderer from '../components/QuizRenderer'
 import SourceTrace from '../components/SourceTrace'
 import FlashcardDeck from '../components/FlashcardDeck'
+import DocumentChat from '../components/DocumentChat'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 /* 复用学习资源页的共享样式（讲义导出条 / 难度切换 / loading / 各渲染组件的导出工具条等，
    均为 class 前缀样式、无全局副作用），保证复用的渲染/下载组件在本页样式一致。 */
@@ -74,81 +75,115 @@ const STATUS_LABEL: Record<DocumentItem['status'], string> = {
 export default function DocumentLearning({ onNavigate: _onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const [docs, setDocs] = useState<DocumentItem[]>([])
   const [loadingDocs, setLoadingDocs] = useState(true)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** 勾选的文档 id（= 生成 / 问答的合并范围）；单选时行为同现在。 */
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
+  /** 聚焦文档（左栏概览目标 + 生成主文档）。 */
+  const [focusedId, setFocusedId] = useState<string | null>(null)
 
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  /** docId → 已生成产物集合（切换文档即切换视图）。 */
+  /** scopeKey（勾选集合排序拼接）→ 已生成产物集合（切换范围即切换视图）。 */
   const [bags, setBags] = useState<Record<string, ArtifactBag>>({})
   const [activeKind, setActiveKind] = useState<Kind | null>(null)
-  /** 正在生成中的形态集合：支持多形态并行生成，互不锁死（生成中的卡片各自 loading，其余可用）。 */
+  /** 正在生成中的形态集合：支持多形态并行生成，互不锁死。 */
   const [genKinds, setGenKinds] = useState<Set<Kind>>(() => new Set())
   const [genErr, setGenErr] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string>('初级')
 
-  /** docId → 文档概览（选中即自动生成，展示在产出区顶部，先看概览再决定生成什么）。 */
+  /** docId → 文档概览（聚焦即自动生成，展示在左栏「关于来源」区）。 */
   const [overviews, setOverviews] = useState<Record<string, OverviewResult>>({})
   const [overviewBusy, setOverviewBusy] = useState<Set<string>>(() => new Set())
 
   const lectureRef = useRef<HTMLDivElement>(null)
 
-  /* 挂载：拉取我的文档列表 */
+  /* 挂载：拉取我的文档列表，默认聚焦 + 勾选第一篇。 */
   useEffect(() => {
     listDocuments()
       .then((items) => {
         setDocs(items)
-        if (items.length) setSelectedId((cur) => cur ?? items[0].id)
+        if (items.length) {
+          setFocusedId((cur) => cur ?? items[0].id)
+          setCheckedIds((cur) => (cur.size ? cur : new Set([items[0].id])))
+        }
       })
       .catch((e) => console.error('[doclearn] 加载文档列表失败', e))
       .finally(() => setLoadingDocs(false))
   }, [])
 
-  const selectedDoc = docs.find((d) => d.id === selectedId) ?? null
-  const bag = selectedId ? bags[selectedId] ?? {} : {}
+  /* ---------------- 派生：问答 / 生成范围 ---------------- */
+  const checkedList = useMemo(() => docs.filter((d) => checkedIds.has(d.id)), [docs, checkedIds])
+  const readyChecked = useMemo(() => checkedList.filter((d) => d.status === 'indexed'), [checkedList])
+  const scopeIds = useMemo(() => readyChecked.map((d) => d.id), [readyChecked])
+  const scopeKey = useMemo(() => [...scopeIds].sort().join(','), [scopeIds])
+  const primaryId = useMemo(
+    () => (focusedId && scopeIds.includes(focusedId) ? focusedId : scopeIds[0] ?? null),
+    [focusedId, scopeIds]
+  )
+  const scopeTitle = useMemo(() => {
+    if (readyChecked.length > 1) return `${readyChecked[0].title} 等 ${readyChecked.length} 篇文档`
+    return readyChecked[0]?.title ?? '文档'
+  }, [readyChecked])
 
-  /* 声明当前辅导上下文（选中文档）→ 供 App 顶层全局 dock / 选中即问就该文档发起辅导。 */
+  const focusedDoc = docs.find((d) => d.id === focusedId) ?? null
+  const bag = scopeKey ? bags[scopeKey] ?? {} : {}
+
+  /* 声明当前辅导上下文（聚焦文档）→ 供 App 顶层全局 dock / 选中即问该文档发起辅导。 */
   useEffect(() => {
     setTutorContext({
-      kpId: selectedDoc ? `doc:${selectedDoc.id}` : 'doc-learning',
-      kpName: selectedDoc?.title ?? '当前文档',
+      kpId: focusedDoc ? `doc:${focusedDoc.id}` : 'doc-learning',
+      kpName: focusedDoc?.title ?? '当前文档',
     })
-  }, [selectedDoc])
+  }, [focusedDoc])
 
-  /* 切换选中文档：把视图切到该文档已生成的第一个产物（没有则回到操作引导） */
+  /* 切换生成范围：把视图切到该范围已生成的第一个产物（没有则回到操作引导）。 */
   useEffect(() => {
-    if (!selectedId) {
-      setActiveKind(null)
-      return
-    }
-    const b = bags[selectedId]
+    const b = bags[scopeKey]
     const first = b ? (KIND_META.map((k) => k.id).find((k) => b[k]) ?? null) : null
     setActiveKind(first)
     setGenErr(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId])
+  }, [scopeKey])
 
-  /* 选中文档就绪即自动生成「文档概览」（NotebookLM 式速读）；已生成 / 生成中不重复拉取。 */
+  /* 聚焦文档就绪即自动生成「文档概览」（NotebookLM 式速读）；已生成 / 生成中不重复拉取。 */
   useEffect(() => {
-    if (!selectedId) return
-    const doc = docs.find((d) => d.id === selectedId)
+    if (!focusedId) return
+    const doc = docs.find((d) => d.id === focusedId)
     if (!doc || doc.status !== 'indexed') return
-    if (overviews[selectedId] || overviewBusy.has(selectedId)) return
-    setOverviewBusy((prev) => new Set(prev).add(selectedId))
-    generateOverview(selectedId)
-      .then((o) => setOverviews((prev) => ({ ...prev, [selectedId]: o })))
+    if (overviews[focusedId] || overviewBusy.has(focusedId)) return
+    setOverviewBusy((prev) => new Set(prev).add(focusedId))
+    generateOverview(focusedId)
+      .then((o) => setOverviews((prev) => ({ ...prev, [focusedId]: o })))
       .catch((e) => console.error('[doclearn] 文档概览生成失败', e))
       .finally(() =>
         setOverviewBusy((prev) => {
           const next = new Set(prev)
-          next.delete(selectedId)
+          next.delete(focusedId)
           return next
         })
       )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, docs])
+  }, [focusedId, docs])
+
+  /* ---------------- 选择 ---------------- */
+
+  /** 点击文档主体：聚焦 + 单选（范围收敛为该篇，行为与原单文档一致）。 */
+  const selectSingle = (id: string) => {
+    setFocusedId(id)
+    setCheckedIds(new Set([id]))
+  }
+  /** 勾选/取消勾选：加入 / 移出合并范围（多选统一生成 / 问答）。 */
+  const toggleCheck = (id: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setFocusedId((cur) => cur ?? id)
+  }
 
   /* ---------------- 上传 ---------------- */
 
@@ -173,7 +208,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       try {
         const { document } = await uploadDocument(file)
         setDocs((prev) => [document, ...prev.filter((d) => d.id !== document.id)])
-        setSelectedId(document.id)
+        selectSingle(document.id)
         // 联调下解析/向量化异步：轮询状态直至 indexed，实时回填列表徽章
         if (document.status !== 'indexed' && document.status !== 'failed') {
           void waitIndexed(document.id, (d) =>
@@ -205,42 +240,40 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       console.error('[doclearn] 删除失败', err)
     }
     setDocs((prev) => prev.filter((d) => d.id !== docId))
-    setBags((prev) => {
-      const next = { ...prev }
-      delete next[docId]
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(docId)
       return next
     })
-    if (selectedId === docId) setSelectedId((cur) => (cur === docId ? null : cur))
+    if (focusedId === docId) setFocusedId((cur) => (cur === docId ? null : cur))
   }
 
-  /* ---------------- 生成 ---------------- */
+  /* ---------------- 生成（基于勾选范围，主文档 primaryId + 合并 scopeIds） ---------------- */
 
   const runGenerate = async (kind: Kind, opts?: { diff?: string; regen?: boolean }) => {
-    // 仅拦截「同一形态重复触发」，不同形态可并行生成（不再一处生成锁死全部）
-    if (!selectedId || genKinds.has(kind)) return
-    const doc = docs.find((d) => d.id === selectedId)
-    if (!doc) return
-    if (doc.status !== 'indexed') {
-      setGenErr('文档正在解析入库，请稍候再生成。')
+    if (!primaryId || genKinds.has(kind)) return
+    if (!scopeIds.length) {
+      setGenErr('所选文档正在解析入库，请稍候再生成。')
       return
     }
     // 已生成且非强制重生成 → 直接切视图
-    if (!opts?.regen && bags[selectedId]?.[kind]) {
+    if (!opts?.regen && bags[scopeKey]?.[kind]) {
       setActiveKind(kind)
       return
     }
     setGenErr(null)
     setGenKinds((prev) => new Set(prev).add(kind))
     const diff = opts?.diff ?? difficulty
+    const ids = scopeIds
     try {
       let data: ArtifactBag[Kind]
-      if (kind === 'lecture') data = await generateLecture(selectedId, diff)
-      else if (kind === 'video') data = await generateVideo(selectedId, diff)
-      else if (kind === 'diagram') data = await generateDiagram(selectedId)
-      else if (kind === 'mindmap') data = await generateMindmap(selectedId)
-      else if (kind === 'quiz') data = await generateQuiz(selectedId, 5)
-      else data = await generateFlashcards(selectedId, 8)
-      setBags((prev) => ({ ...prev, [selectedId]: { ...prev[selectedId], [kind]: data } }))
+      if (kind === 'lecture') data = await generateLecture(primaryId, diff, ids)
+      else if (kind === 'video') data = await generateVideo(primaryId, diff, ids)
+      else if (kind === 'diagram') data = await generateDiagram(primaryId, ids)
+      else if (kind === 'mindmap') data = await generateMindmap(primaryId, ids)
+      else if (kind === 'quiz') data = await generateQuiz(primaryId, 5, ids)
+      else data = await generateFlashcards(primaryId, 8, ids)
+      setBags((prev) => ({ ...prev, [scopeKey]: { ...prev[scopeKey], [kind]: data } }))
       setActiveKind(kind)
     } catch (e) {
       console.error('[doclearn] 生成失败', e)
@@ -263,13 +296,13 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
 
   const exportLectureMd = () => {
     if (!bag.lecture) return
-    exportLectureMarkdown(bag.lecture.markdown, `讲义-${selectedDoc?.title ?? '文档'}-${bag.lecture.difficulty}`)
+    exportLectureMarkdown(bag.lecture.markdown, `讲义-${scopeTitle}-${bag.lecture.difficulty}`)
   }
   const exportLecturePdf = () => {
     const body = lectureRef.current?.querySelector('.markdown-body') as HTMLElement | null
     if (!body) return
-    const meta = `${selectedDoc?.title ?? '文档'} · 难度：${bag.lecture?.difficulty ?? difficulty} · 导出于 ${new Date().toLocaleString('zh-CN')}`
-    const ok = exportLectureToPdf(body, `讲义-${selectedDoc?.title ?? '文档'}`, meta)
+    const meta = `${scopeTitle} · 难度：${bag.lecture?.difficulty ?? difficulty} · 导出于 ${new Date().toLocaleString('zh-CN')}`
+    const ok = exportLectureToPdf(body, `讲义-${scopeTitle}`, meta)
     if (!ok) window.alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试导出 PDF。')
   }
 
@@ -341,7 +374,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">文档知识脉络图解（可缩放 / 拖拽 / 导出 SVG · PNG）：</div>
             {bag.diagram && (
-              <MermaidDiagram chart={bag.diagram.mermaid} downloadName={`图解-${selectedDoc?.title ?? '文档'}`} />
+              <MermaidDiagram chart={bag.diagram.mermaid} downloadName={`图解-${scopeTitle}`} />
             )}
             <SourceTrace sources={bag.diagram?.sources} />
           </Suspense>
@@ -351,7 +384,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
           <Suspense fallback={<Loading />}>
             <div className="resource-modal-hint">文档结构化思维导图（可缩放 / 拖拽 / 导出 SVG · PNG）：</div>
             {bag.mindmap && (
-              <MindMap markdown={bag.mindmap.markdown} downloadName={`思维导图-${selectedDoc?.title ?? '文档'}`} />
+              <MindMap markdown={bag.mindmap.markdown} downloadName={`思维导图-${scopeTitle}`} />
             )}
           </Suspense>
         )
@@ -379,8 +412,8 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
             {bag.flashcards && (
               <FlashcardDeck
                 cards={bag.flashcards.cards}
-                title={selectedDoc?.title ?? '文档闪卡'}
-                downloadName={`闪卡-${selectedDoc?.title ?? '文档'}`}
+                title={scopeTitle}
+                downloadName={`闪卡-${scopeTitle}`}
               />
             )}
             <SourceTrace sources={bag.flashcards?.sources} />
@@ -391,23 +424,66 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
 
   const readyCount = docs.filter((d) => d.status === 'indexed').length
 
+  /* 左栏「关于来源」概览块（聚焦文档的 AI 速读）。 */
+  const renderOverview = () => {
+    if (!focusedDoc || focusedDoc.status !== 'indexed') return null
+    if (!overviews[focusedId!] && !overviewBusy.has(focusedId!)) return null
+    const ov = overviews[focusedId!]
+    return (
+      <div className="doclearn-overview">
+        <div className="doclearn-overview__head">
+          <span className="doclearn-overview__icon">🧭</span>
+          <span className="doclearn-overview__title">文档概览</span>
+          <span className="doclearn-overview__tag">AI 速读 · 溯源自本文档</span>
+          {overviewBusy.has(focusedId!) && !ov && <span className="doclearn-drop__spinner" />}
+        </div>
+        <div className="doclearn-overview__docname">{focusedDoc.title}</div>
+        {ov ? (
+          <>
+            <p className="doclearn-overview__summary">{ov.summary}</p>
+            {ov.about && <p className="doclearn-overview__about">{ov.about}</p>}
+            {ov.structure && (
+              <p className="doclearn-overview__structure">
+                <b>核心结构概况：</b>
+                {ov.structure}
+              </p>
+            )}
+            {ov.keyPoints.length > 0 && (
+              <div className="doclearn-overview__keys">
+                <span className="doclearn-overview__keys-label">关键点</span>
+                <ul>
+                  {ov.keyPoints.map((k, i) => (
+                    <li key={i}>{k}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="doclearn-overview__summary">正在通读文档、生成概览…</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="doclearn">
       <PageHeader
         title="文档学习"
         highlight="文档"
-        subtitle="上传你的资料，AI 基于该文档生成讲义 / 视频 / 图解 / 思维导图 / 练习题 / 闪卡 · 内容严格溯源自文档"
+        subtitle="上传你的资料，左栏管理来源与概览、中栏和文档即问即答、右栏一键生成六类学习资源 · 内容严格溯源自文档"
         badges={[
           { label: '我的文档', value: docs.length },
           { label: '已就绪', value: readyCount, tone: 'safe' },
+          { label: '本次范围', value: readyChecked.length, tone: 'accent' },
         ]}
       />
 
       <div className="doclearn__grid">
-        {/* ============ 来源区 ============ */}
-        <aside className="doclearn__sources">
+        {/* ============ 左栏 · 来源与概览 ============ */}
+        <aside className="doclearn__col doclearn__sources">
           <div className="doclearn__panel-title">
-            <span>来源文档</span>
+            <span>来源与概览</span>
             <span className="doclearn__panel-count">{docs.length}</span>
           </div>
 
@@ -445,7 +521,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
               <>
                 <span className="doclearn-drop__icon">⬆</span>
                 <span className="doclearn-drop__text">
-                  拖放文件到此，或<b>点击上传</b>
+                  拖放文件到此，或<b>点击上传</b>（可多选）
                 </span>
                 <span className="doclearn-drop__hint">支持 PDF · TXT · Markdown · DOCX（≤ {DOC_MAX_MB}MB）</span>
               </>
@@ -453,112 +529,97 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
           </div>
           {uploadErr && <div className="doclearn-drop__err">{uploadErr}</div>}
 
-          {/* 文档列表 */}
+          {/* 文档列表（勾选 = 合并范围；点击标题 = 聚焦单选） */}
+          {docs.length > 0 && (
+            <div className="doclearn-doclist__hint">
+              勾选可多选，基于多篇<b>统一生成 / 问答</b>；点击标题查看该文档概览
+            </div>
+          )}
           <div className="doclearn-doclist">
             {loadingDocs ? (
               <div className="resource-loading">加载文档…</div>
             ) : docs.length === 0 ? (
               <div className="doclearn-doclist__empty">还没有文档，先上传一份开始学习吧。</div>
             ) : (
-              docs.map((d) => (
-                <button
-                  key={d.id}
-                  className={`doclearn-docitem ${selectedId === d.id ? 'doclearn-docitem--active' : ''}`}
-                  onClick={() => setSelectedId(d.id)}
-                >
-                  <span className={`doclearn-docitem__type doclearn-docitem__type--${d.fileType}`}>{d.fileType.toUpperCase()}</span>
-                  <span className="doclearn-docitem__body">
-                    <span className="doclearn-docitem__title">{d.title}</span>
-                    <span className="doclearn-docitem__meta">
-                      <span className={`doclearn-docitem__status doclearn-docitem__status--${d.status}`}>
-                        {STATUS_LABEL[d.status]}
-                      </span>
-                      · {formatBytes(d.size)} · {d.chunks} 块
-                    </span>
-                  </span>
-                  <span
-                    className="doclearn-docitem__del"
-                    onClick={(e) => handleDelete(d.id, e)}
-                    role="button"
-                    tabIndex={-1}
-                    aria-label="删除文档"
-                    title="删除"
+              docs.map((d) => {
+                const checked = checkedIds.has(d.id)
+                const focused = focusedId === d.id
+                return (
+                  <div
+                    key={d.id}
+                    className={`doclearn-docitem ${focused ? 'doclearn-docitem--active' : ''} ${checked ? 'doclearn-docitem--checked' : ''}`}
                   >
-                    ×
-                  </span>
-                </button>
-              ))
+                    <input
+                      type="checkbox"
+                      className="doclearn-docitem__check"
+                      checked={checked}
+                      onChange={() => toggleCheck(d.id)}
+                      aria-label={`勾选「${d.title}」加入生成/问答范围`}
+                      title="加入本次生成 / 问答范围"
+                    />
+                    <button className="doclearn-docitem__main" onClick={() => selectSingle(d.id)}>
+                      <span className={`doclearn-docitem__type doclearn-docitem__type--${d.fileType}`}>
+                        {d.fileType.toUpperCase()}
+                      </span>
+                      <span className="doclearn-docitem__body">
+                        <span className="doclearn-docitem__title">{d.title}</span>
+                        <span className="doclearn-docitem__meta">
+                          <span className={`doclearn-docitem__status doclearn-docitem__status--${d.status}`}>
+                            {STATUS_LABEL[d.status]}
+                          </span>
+                          · {formatBytes(d.size)} · {d.chunks} 块
+                        </span>
+                      </span>
+                    </button>
+                    <span
+                      className="doclearn-docitem__del"
+                      onClick={(e) => handleDelete(d.id, e)}
+                      role="button"
+                      tabIndex={-1}
+                      aria-label="删除文档"
+                      title="删除"
+                    >
+                      ×
+                    </span>
+                  </div>
+                )
+              })
             )}
           </div>
+
+          {/* 文档概览（移至左栏「关于来源」信息区） */}
+          {renderOverview()}
         </aside>
 
-        {/* ============ 生成 + 产出区 ============ */}
-        <section className="doclearn__studio">
-          {!selectedDoc ? (
+        {/* ============ 中栏 · 和文档问答（流式即问即答、溯源、历史保留） ============ */}
+        <section className="doclearn__col doclearn__chat">
+          <DocumentChat key={scopeKey || 'empty'} docIds={scopeIds} docTitles={readyChecked.map((d) => d.title)} />
+        </section>
+
+        {/* ============ 右栏 · 生成六类 + 产出 ============ */}
+        <section className="doclearn__col doclearn__studio">
+          {!primaryId ? (
             <div className="doclearn-empty">
               <div className="doclearn-empty__art">📚</div>
-              <h3 className="doclearn-empty__title">从上传一份文档开始</h3>
+              <h3 className="doclearn-empty__title">选中文档，一键生成资源</h3>
               <p className="doclearn-empty__desc">
-                上传 PDF / 文本 / Markdown / Word 资料后，在这里选中它，
+                在左栏上传并勾选文档后，这里可基于所选文档
                 <br />
-                即可让 AI 基于文档生成讲义、视频、图解、思维导图、练习题与闪卡。
+                生成讲义、视频、图解、思维导图、练习题与闪卡，生成后进「我的资源库」可下载。
               </p>
               <button className="doclearn-empty__cta" onClick={() => fileInputRef.current?.click()}>
-                ⬆ 上传第一份文档
+                ⬆ 上传文档
               </button>
             </div>
           ) : (
             <>
-              {/* 文档概览（选中文档即自动展示：是什么 / 讲了什么 / 结构概况 / 关键点） */}
-              {selectedDoc.status === 'indexed' &&
-                (overviews[selectedId!] || overviewBusy.has(selectedId!)) && (
-                  <div className="doclearn-overview">
-                    <div className="doclearn-overview__head">
-                      <span className="doclearn-overview__icon">🧭</span>
-                      <span className="doclearn-overview__title">文档概览</span>
-                      <span className="doclearn-overview__tag">AI 速读 · 内容溯源自本文档</span>
-                      {overviewBusy.has(selectedId!) && !overviews[selectedId!] && (
-                        <span className="doclearn-drop__spinner" />
-                      )}
-                    </div>
-                    {overviews[selectedId!] ? (
-                      <>
-                        <p className="doclearn-overview__summary">{overviews[selectedId!].summary}</p>
-                        {overviews[selectedId!].about && (
-                          <p className="doclearn-overview__about">{overviews[selectedId!].about}</p>
-                        )}
-                        {overviews[selectedId!].structure && (
-                          <p className="doclearn-overview__structure">
-                            <b>核心结构概况：</b>
-                            {overviews[selectedId!].structure}
-                          </p>
-                        )}
-                        {overviews[selectedId!].keyPoints.length > 0 && (
-                          <div className="doclearn-overview__keys">
-                            <span className="doclearn-overview__keys-label">关键点</span>
-                            <ul>
-                              {overviews[selectedId!].keyPoints.map((k, i) => (
-                                <li key={i}>{k}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="doclearn-overview__summary">正在通读文档、生成概览…</p>
-                    )}
-                  </div>
-                )}
-
               {/* 生成操作区 */}
               <div className="doclearn-actions">
                 <div className="doclearn-actions__head">
-                  <span className="doclearn-actions__doc">当前文档：<b>{selectedDoc.title}</b></span>
-                  {selectedDoc.status !== 'indexed' && (
-                    <span className="doclearn-actions__wait">
-                      <span className="doclearn-drop__spinner" /> {STATUS_LABEL[selectedDoc.status]}
-                    </span>
-                  )}
+                  <span className="doclearn-actions__doc">
+                    生成范围：<b>{scopeTitle}</b>
+                    {readyChecked.length > 1 && <span className="doclearn-actions__multi">合并 {readyChecked.length} 篇</span>}
+                  </span>
                 </div>
                 <div className="doclearn-actions__grid">
                   {KIND_META.map((k) => {
@@ -570,9 +631,8 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                         key={k.id}
                         className={`doclearn-act ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''}`}
                         onClick={() => runGenerate(k.id)}
-                        // 只禁用「正在生成该形态」的卡片；其余卡片始终可点（并行/排队生成，不锁死）
-                        disabled={busy || selectedDoc.status !== 'indexed'}
-                        title={done ? '查看已生成内容' : `基于文档生成${k.label}`}
+                        disabled={busy || !scopeIds.length}
+                        title={done ? '查看已生成内容' : `基于所选文档生成${k.label}`}
                       >
                         <span className="doclearn-act__icon">{busy ? <span className="doclearn-drop__spinner" /> : k.icon}</span>
                         <span className="doclearn-act__label">{k.label}</span>
@@ -620,7 +680,7 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                     >
                       <span className="doclearn-output__empty-icon">✨</span>
                       <p>
-                        选择上方任一形态，AI 会<b>基于「{selectedDoc.title}」</b>为你生成对应学习资料。
+                        选择上方任一形态，AI 会<b>基于「{scopeTitle}」</b>为你生成对应学习资料。
                       </p>
                     </motion.div>
                   )}

@@ -4,6 +4,11 @@
 引擎产出：讲义 / 视频分镜 / 图解 / 思维导图 / 练习题 / 闪卡。与内置课程主线（画像/诊断/
 路径/掌握度/既有生成接口）**完全解耦**——不读画像、不写掌握度、不碰 KnowledgePoint。
 
+多文档统一生成（新增）：一次生成可传入多篇文档（documentIds），在**各自专属集合**上分别
+检索后合并候选、统一重排，形成「一次生成的合并检索范围」——与内置库隔离、文档间互不污染
+（各集合物理独立，仅在本次生成的内存候选池合并）。来源按各文档标题分别标注，可看出内容
+来自哪几篇文档。单篇时行为与原先完全一致。
+
 复用点（不重造）：
 - 检索：rag.retriever.get_document_retriever（文档专属集合）+ rag.reranker 重排；
 - 讲义生成：agents.generator_agent.run_generator（RAG 上下文驱动，mock/real 双模）；
@@ -49,24 +54,69 @@ class InvalidDifficulty(Exception):
     """难度档非法 → code 1001 / 400。"""
 
 
-# ---- 文档检索（专属集合，隔离内置库） --------------------------------------
-def _retrieve(doc: Document, query: str, top_k: int = _RETRIEVE_TOP_K) -> list[dict[str, Any]]:
-    """在文档专属向量集合上混合检索 + 重排；空结果回落按 chunk 顺序取前 top_k。"""
-    candidates = get_document_retriever(doc.collection).search(query, top_k=_RETRIEVE_POOL)
-    if candidates:
-        ranked, _used = get_reranker().rerank(query, candidates, top_k=top_k)
-        chunks = ranked
-    else:
-        # 检索为空（如降级嵌入 + 极短文档）→ 直接取集合内切片，保证生成始终有文档上下文
-        chunks = get_collection_store(doc.collection).get_all()[:top_k]
+# ---- 文档归属 / 就绪校验（支持单篇与多篇统一生成） ------------------------
+def _require_ready(doc: Document) -> None:
+    if doc.status != "indexed":
+        raise DocumentNotReady(doc.status)
+
+
+def resolve_docs(db: Session, user_id: str, doc_ids: list[str]) -> list[Document]:
+    """把 documentId(s) 解析为本人、且已就绪的文档列表（顺序保留、去重）。
+
+    任一不存在/非本人 → UnknownDocument（路由转 1004）；任一未就绪 → DocumentNotReady（1001）。
+    首篇为「主文档」，用于响应 docId、资源库埋点主键与生成缓存标识。
+    """
+    seen: set[str] = set()
+    docs: list[Document] = []
+    for did in doc_ids:
+        if not did or did in seen:
+            continue
+        seen.add(did)
+        doc = document_store.require_document(db, user_id, did)
+        _require_ready(doc)
+        docs.append(doc)
+    if not docs:
+        raise document_store.UnknownDocument("")
+    return docs
+
+
+def _merged_title(docs: list[Document]) -> str:
+    """多文档生成的显示标题：单篇取原标题，多篇标「首篇 等 N 篇文档」。"""
+    if len(docs) == 1:
+        return docs[0].title
+    return f"{docs[0].title} 等 {len(docs)} 篇文档"
+
+
+# ---- 文档检索（专属集合，隔离内置库；多篇合并候选后统一重排） --------------
+def retrieve(docs: list[Document], query: str, top_k: int = _RETRIEVE_TOP_K) -> list[dict[str, Any]]:
+    """在每篇文档的专属向量集合上分别检索，合并候选池后统一重排，取前 top_k。
+
+    - 单篇：等价于原先「该集合混合检索 + 重排」；
+    - 多篇：各集合分别取候选（隔离），仅在内存候选池合并、统一重排——形成一次生成的
+      「合并检索范围」，不建持久化合并集合、不污染任何集合。
+    每条候选标注来源文档标题（`__docTitle`），供来源溯源区分多篇出处。
+    """
+    pooled: list[dict[str, Any]] = []
+    for doc in docs:
+        cands = get_document_retriever(doc.collection).search(query, top_k=_RETRIEVE_POOL)
+        if not cands:
+            # 检索为空（如降级嵌入 + 极短文档）→ 直接取集合内切片，保证生成始终有文档上下文
+            cands = get_collection_store(doc.collection).get_all()[:_RETRIEVE_POOL]
+        for c in cands:
+            c["__docTitle"] = doc.title
+            pooled.append(c)
+    if not pooled:
+        return []
+    ranked, _used = get_reranker().rerank(query, pooled, top_k=top_k)
     return [
         {
             "id": c.get("id", ""),
             "content": c.get("content", ""),
             "metadata": c.get("metadata") or {},
             "score": float(c.get("score", 0.0)),
+            "docTitle": c.get("__docTitle") or docs[0].title,
         }
-        for c in chunks
+        for c in ranked
         if c.get("content")
     ]
 
@@ -80,14 +130,17 @@ def _summary(chunks: list[dict[str, Any]], *, limit: int = 1200) -> str:
     return "\n".join(_contexts(chunks))[:limit]
 
 
-def _sources(doc: Document, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """检索切片 → 来源标注（按文档切片位置，confidence=重排分）。始终标注为本文档来源。"""
+def sources_of(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """检索切片 → 来源标注（按各文档标题 + 切片位置，confidence=重排分）。
+
+    多篇统一生成时，来源标题分别带各自文档名，可直接看出内容来自哪几篇文档。
+    """
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
     for c in chunks:
         meta = c.get("metadata") or {}
         loc = meta.get("source_location") or "正文"
-        title = f"{doc.title} · {loc}"
+        title = f"{c.get('docTitle') or '文档'} · {loc}"
         if title in seen:
             continue
         seen.add(title)
@@ -101,25 +154,21 @@ def _sources(doc: Document, chunks: list[dict[str, Any]]) -> list[dict[str, Any]
     return out
 
 
-def _require_ready(doc: Document) -> None:
-    if doc.status != "indexed":
-        raise DocumentNotReady(doc.status)
-
-
 # ---- 讲义（复用生成 Agent + 逐句接地防幻觉） --------------------------------
 def generate_lecture(
-    db: Session, user_id: str, doc_id: str, difficulty: str = "初级"
+    db: Session, user_id: str, doc_ids: list[str], difficulty: str = "初级"
 ) -> dict[str, Any]:
     """基于文档生成自适应讲义。复用 generator_agent（RAG 驱动）+ sentence_grounding（防幻觉）。"""
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
+    docs = resolve_docs(db, user_id, doc_ids)
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
+    primary = docs[0]
+    title = _merged_title(docs)
 
-    chunks = _retrieve(doc, f"{doc.title} 核心概念 重点", top_k=_RETRIEVE_TOP_K)
+    chunks = retrieve(docs, f"{title} 核心概念 重点", top_k=_RETRIEVE_TOP_K)
     res = run_generator(
         db,
-        kp_name=doc.title,
+        kp_name=title,
         difficulty=difficulty,
         rag_context=chunks,
         description=_summary(chunks),
@@ -127,18 +176,19 @@ def generate_lecture(
     markdown = res["output"]["markdown"]
     # 图文增强（复用讲义配图/图解注入；kp_id 传文档专属标识，不与内置知识点冲突）
     markdown = lecture_media.enrich_lecture(
-        markdown, kp_id=f"doc:{doc_id}", kp_name=doc.title, description=_summary(chunks), llm=get_llm()
+        markdown, kp_id=f"doc:{primary.id}", kp_name=title, description=_summary(chunks), llm=get_llm()
     )
     # 防幻觉：逐句 vs 文档切片接地校验（对文档而非内置课程，mock/降级环境同样生效）
     grounding = sentence_grounding(markdown, _contexts(chunks))
     payload = {
-        "docId": doc_id,
+        "docId": primary.id,
+        "docIds": [d.id for d in docs],
         "difficulty": difficulty,
         "markdown": markdown,
-        "sources": _sources(doc, chunks),
+        "sources": sources_of(chunks),
         "hallucinationRate": grounding["hallucinationRate"],
     }
-    generation_log.record_document(db, user_id, doc_id, doc.title, "lecture", difficulty=difficulty)
+    generation_log.record_document(db, user_id, primary.id, title, "lecture", difficulty=difficulty)
     return payload
 
 
@@ -148,36 +198,55 @@ def generate_overview(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
 
     走文档专属向量集合检索（隔离内置库），内容严格来自文档（防幻觉）；LLMClient 双模 + mock 兜底、
     经内容安全钝化。概览为「选中文档即自动展示」的速读入口，不计入资源库产物（不落 generation_log）。
+    概览按单篇文档生成（左栏「关于来源」信息区），不做多篇合并。
     """
     doc = document_store.require_document(db, user_id, doc_id)
     _require_ready(doc)
-    chunks = _retrieve(doc, f"{doc.title} 概览 简介 主要内容 结构")
+    chunks = retrieve([doc], f"{doc.title} 概览 简介 主要内容 结构")
     overview = get_llm().generate_overview(doc.title, _contexts(chunks))
-    return {"docId": doc_id, "overview": overview, "sources": _sources(doc, chunks)}
+    return {"docId": doc_id, "overview": overview, "sources": sources_of(chunks)}
 
 
 # ---- 图解（复用 LLMClient.generate_diagram，文档内容驱动） ------------------
-def generate_diagram(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
-    chunks = _retrieve(doc, f"{doc.title} 结构 流程 关系")
-    payload = get_llm().generate_diagram(f"doc:{doc_id}", doc.title, _summary(chunks))
-    generation_log.record_document(db, user_id, doc_id, doc.title, "diagram")
-    return {"docId": doc_id, "mermaid": payload["mermaid"], "sources": _sources(doc, chunks)}
+def generate_diagram(db: Session, user_id: str, doc_ids: list[str]) -> dict[str, Any]:
+    docs = resolve_docs(db, user_id, doc_ids)
+    primary = docs[0]
+    title = _merged_title(docs)
+    chunks = retrieve(docs, f"{title} 结构 流程 关系")
+    payload = get_llm().generate_diagram(f"doc:{primary.id}", title, _summary(chunks))
+    generation_log.record_document(db, user_id, primary.id, title, "diagram")
+    return {"docId": primary.id, "docIds": [d.id for d in docs], "mermaid": payload["mermaid"], "sources": sources_of(chunks)}
 
 
 # ---- 思维导图（从文档标题/结构确定性抽取，内容来自文档） --------------------
-def generate_mindmap(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
-    markdown = _build_mindmap(doc)
+def generate_mindmap(db: Session, user_id: str, doc_ids: list[str]) -> dict[str, Any]:
+    docs = resolve_docs(db, user_id, doc_ids)
+    primary = docs[0]
+    title = _merged_title(docs)
+    markdown = _build_mindmap(docs, title)
     markdown = content_safety.guard(markdown, where="document_mindmap")
-    generation_log.record_document(db, user_id, doc_id, doc.title, "mindmap")
-    return {"docId": doc_id, "markdown": markdown}
+    generation_log.record_document(db, user_id, primary.id, title, "mindmap")
+    return {"docId": primary.id, "docIds": [d.id for d in docs], "markdown": markdown}
 
 
-def _build_mindmap(doc: Document) -> str:
-    """优先按文档 Markdown 标题层级构建 Markmap 大纲；无标题则用要点句作二级节点。"""
+def _build_mindmap(docs: list[Document], title: str) -> str:
+    """思维导图大纲（Markmap）。
+
+    - 单篇：优先按文档 Markdown 标题层级构建；无标题则用要点句作二级节点。
+    - 多篇：以各文档标题为二级节点，其下挂各自要点句（体现来自多篇）。
+    """
+    if len(docs) > 1:
+        lines = [f"# {title}"]
+        for doc in docs:
+            lines.append(f"## {doc.title[:40]}")
+            chunks = retrieve([doc], f"{doc.title} 要点", top_k=4)
+            from app.core.llm import _doc_key_sentences
+
+            for sent in _doc_key_sentences(_contexts(chunks), max_n=4):
+                lines.append(f"### {sent[:36]}")
+        return "\n".join(lines)
+
+    doc = docs[0]
     lines = [f"# {doc.title}"]
     headings = [
         (len(m.group(1)), m.group(2).strip())
@@ -186,13 +255,13 @@ def _build_mindmap(doc: Document) -> str:
     ]
     if len(headings) >= 2:
         base = min(lv for lv, _ in headings)
-        for lv, title in headings[:40]:
+        for lv, htitle in headings[:40]:
             # 归一到二级起（# 已占一级）：相对深度 + 1
             depth = min(lv - base + 2, 6)
-            lines.append(f"{'#' * depth} {title[:40]}")
+            lines.append(f"{'#' * depth} {htitle[:40]}")
         return "\n".join(lines)
     # 无标题结构 → 取文档要点句作二级节点（内容来自文档）
-    chunks = _retrieve(doc, f"{doc.title} 要点", top_k=6)
+    chunks = retrieve([doc], f"{doc.title} 要点", top_k=6)
     from app.core.llm import _doc_key_sentences  # 复用确定性要点抽取
 
     for sent in _doc_key_sentences(_contexts(chunks), max_n=8):
@@ -205,15 +274,16 @@ def _build_mindmap(doc: Document) -> str:
 
 # ---- 视频分镜（复用 LLMClient.generate_video_script + 铺帧） ----------------
 def generate_video(
-    db: Session, user_id: str, doc_id: str, difficulty: str = "初级"
+    db: Session, user_id: str, doc_ids: list[str], difficulty: str = "初级"
 ) -> dict[str, Any]:
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
+    docs = resolve_docs(db, user_id, doc_ids)
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
-    chunks = _retrieve(doc, f"{doc.title} 讲解 要点")
+    primary = docs[0]
+    title = _merged_title(docs)
+    chunks = retrieve(docs, f"{title} 讲解 要点")
     script = get_llm().generate_video_script(
-        f"doc:{doc_id}", doc.title, difficulty, _summary(chunks)
+        f"doc:{primary.id}", title, difficulty, _summary(chunks)
     )
     scenes: list[dict[str, Any]] = []
     narration: list[dict[str, Any]] = []
@@ -223,9 +293,10 @@ def generate_video(
             {"frame": frame, "title": s["title"], "points": list(s["points"]), "narration": s["narration"]}
         )
         narration.append({"frame": frame, "text": s["narration"]})
-    generation_log.record_document(db, user_id, doc_id, doc.title, "video", difficulty=difficulty)
+    generation_log.record_document(db, user_id, primary.id, title, "video", difficulty=difficulty)
     return {
-        "docId": doc_id,
+        "docId": primary.id,
+        "docIds": [d.id for d in docs],
         "difficulty": difficulty,
         "videoUrl": None,  # 无服务端渲染 → 前端 Remotion Player + TTS（与内置 8.3 同口径）
         "title": script["title"],
@@ -235,29 +306,31 @@ def generate_video(
         "width": _VIDEO_WIDTH,
         "height": _VIDEO_HEIGHT,
         "durationInFrames": len(scenes) * _SCENE_FRAMES,
-        "sources": _sources(doc, chunks),
+        "sources": sources_of(chunks),
     }
 
 
 # ---- 练习题（复用 LLMClient.generate_doc_quiz + audit_practice 审核） -------
 def generate_quiz(
-    db: Session, user_id: str, doc_id: str, count: int = 5
+    db: Session, user_id: str, doc_ids: list[str], count: int = 5
 ) -> dict[str, Any]:
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
-    chunks = _retrieve(doc, f"{doc.title} 重点 考点", top_k=_RETRIEVE_TOP_K)
-    result = get_llm().generate_doc_quiz(doc.title, _contexts(chunks), count=count)
-    generation_log.record_document(db, user_id, doc_id, doc.title, "quiz")
-    return {"docId": doc_id, "questions": result["questions"], "sources": _sources(doc, chunks)}
+    docs = resolve_docs(db, user_id, doc_ids)
+    primary = docs[0]
+    title = _merged_title(docs)
+    chunks = retrieve(docs, f"{title} 重点 考点", top_k=_RETRIEVE_TOP_K)
+    result = get_llm().generate_doc_quiz(title, _contexts(chunks), count=count)
+    generation_log.record_document(db, user_id, primary.id, title, "quiz")
+    return {"docId": primary.id, "docIds": [d.id for d in docs], "questions": result["questions"], "sources": sources_of(chunks)}
 
 
 # ---- 闪卡（新做，走 LLMClient，mock 确定性兜底） ---------------------------
 def generate_flashcards(
-    db: Session, user_id: str, doc_id: str, count: int = 8
+    db: Session, user_id: str, doc_ids: list[str], count: int = 8
 ) -> dict[str, Any]:
-    doc = document_store.require_document(db, user_id, doc_id)
-    _require_ready(doc)
-    chunks = _retrieve(doc, f"{doc.title} 要点 概念", top_k=_RETRIEVE_TOP_K)
-    result = get_llm().generate_flashcards(doc.title, _contexts(chunks), count=count)
-    generation_log.record_document(db, user_id, doc_id, doc.title, "flashcard")
-    return {"docId": doc_id, "cards": result["cards"], "sources": _sources(doc, chunks)}
+    docs = resolve_docs(db, user_id, doc_ids)
+    primary = docs[0]
+    title = _merged_title(docs)
+    chunks = retrieve(docs, f"{title} 要点 概念", top_k=_RETRIEVE_TOP_K)
+    result = get_llm().generate_flashcards(title, _contexts(chunks), count=count)
+    generation_log.record_document(db, user_id, primary.id, title, "flashcard")
+    return {"docId": primary.id, "docIds": [d.id for d in docs], "cards": result["cards"], "sources": sources_of(chunks)}

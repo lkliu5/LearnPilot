@@ -161,6 +161,23 @@
 }
 .sidebar__nav-group-title:first-child { margin-top: 2px; }
 
+/* 学情管家分组：统领性入口，标题加主色圆点 + 主色调，视觉上突出 */
+.sidebar__nav-group-title--steward {
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sidebar__nav-group-title--steward::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px rgba(var(--primary-rgb), 0.6);
+  flex-shrink: 0;
+}
+
 .sidebar__nav-divider {
   height: 1px;
   background: var(--sidebar-divider);

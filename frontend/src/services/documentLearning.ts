@@ -1,11 +1,12 @@
 /**
- * 文档学习·数据获取层（接口文档第 20 章：上传→独立向量集合→基于文档的生成）。
+ * 文档学习·数据获取层（接口文档第 20 章：上传→独立向量集合→基于文档的生成 + 问答）。
  *
  * - 联调（USE_REAL_API）：走真实后端 /document/* 系列接口，生成内容严格溯源自用户上传文档；
  *   各生成接口由后端旁路以 source="document" 自动埋点到「我的资源库」。
  * - mock：全程本地合成（内存文档表 + 从文档正文派生的假产物），无任何后端 / Key 也能跑通
- *   「上传 → 选中 → 生成六类 → 展示 / 下载」全链路（与项目 Mock-first 纪律一致）。
+ *   「上传 → 选中 → 生成六类 / 问答 → 展示 / 下载」全链路（与项目 Mock-first 纪律一致）。
  *
+ * 多文档统一生成（新增）：生成接口可传 documentIds（多篇合并检索范围统一生成）；未传则回退单篇。
  * 与 services/resource.ts（内置课程知识点资源）互不影响：这里只处理「用户自带文档」。
  */
 import { apiGet, apiPost, apiPostForm, apiRequest, USE_REAL_API } from './api'
@@ -124,18 +125,75 @@ function keySentences(text: string, n: number): string[] {
   return [...parts, ...pad]
 }
 
+/* ---- 多文档 mock 合并（体现「一次生成的合并检索范围」，来源覆盖多篇） ---- */
+
+/** docId 列表 → 内存中的文档对象（保序、去空）。 */
+function pickMockDocs(ids: string[]): DocumentItem[] {
+  const out: DocumentItem[] = []
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    const d = mockDocs.find((x) => x.id === id)
+    if (d) out.push(d)
+  }
+  return out
+}
+
+/** 多篇统一标题：单篇取原标题，多篇标「首篇 等 N 篇文档」。 */
+function mergedTitle(docs: DocumentItem[]): string {
+  return docs.length === 1 ? docs[0].title : `${docs[0].title} 等 ${docs.length} 篇文档`
+}
+
+/** 跨多篇文档轮流抽取要点句（每句仍取自各自文档，体现来自多篇）。 */
+function mergedSentences(docs: DocumentItem[], n: number): { text: string; docTitle: string }[] {
+  const per = docs.map((d) => ({
+    doc: d,
+    sents: keySentences(mockContent[d.id] ?? '', Math.ceil(n / docs.length) + 2),
+  }))
+  const out: { text: string; docTitle: string }[] = []
+  let i = 0
+  while (out.length < n) {
+    let added = false
+    for (const p of per) {
+      if (p.sents[i]) {
+        out.push({ text: p.sents[i], docTitle: p.doc.title })
+        added = true
+        if (out.length >= n) break
+      }
+    }
+    if (!added) break
+    i++
+  }
+  return out.length ? out : [{ text: `文档要点 1`, docTitle: docs[0]?.title ?? '文档' }]
+}
+
+/** 多篇来源：每篇给出 1-2 条来源，标题带各自文档名（可看出来自哪几篇）。 */
+function mergedSources(docs: DocumentItem[]): SourceRef[] {
+  if (docs.length === 1) return mockSources(docs[0])
+  return docs.flatMap((d, di) => [
+    { title: `${d.title} · 段落 1`, type: '文档' as const, confidence: 93 - di * 3 },
+    { title: `${d.title} · 段落 3`, type: '文档' as const, confidence: 85 - di * 3 },
+  ])
+}
+
 const mockSources = (doc: DocumentItem): SourceRef[] => [
   { title: `${doc.title} · 段落 1`, type: '文档', confidence: 94 },
   { title: `${doc.title} · 段落 3`, type: '文档', confidence: 88 },
   { title: `${doc.title} · 段落 6`, type: '文档', confidence: 82 },
 ]
 
-function buildMockLecture(doc: DocumentItem, difficulty: string): LectureResult {
-  const sents = keySentences(mockContent[doc.id] ?? '', 6)
+function buildMockLecture(docs: DocumentItem[], difficulty: string): LectureResult {
+  const title = mergedTitle(docs)
+  const sents = mergedSentences(docs, 6).map((s) => s.text)
+  const srcNote =
+    docs.length > 1
+      ? `> 本讲义由 AI 基于你选中的 ${docs.length} 篇文档合并生成，内容严格取自这些文档（难度：${difficulty}）。`
+      : `> 本讲义由 AI 基于你上传的《${docs[0].filename}》生成，内容严格取自文档（难度：${difficulty}）。`
   const md = [
-    `# ${doc.title}`,
+    `# ${title}`,
     ``,
-    `> 本讲义由 AI 基于你上传的《${doc.filename}》生成，内容严格取自文档（难度：${difficulty}）。`,
+    srcNote,
     ``,
     `## 一、核心概览`,
     ``,
@@ -157,32 +215,34 @@ function buildMockLecture(doc: DocumentItem, difficulty: string): LectureResult 
     `- 建议结合原文档对照复习，并完成配套练习题 / 闪卡巩固。`,
     ``,
   ].join('\n')
-  return { markdown: md, difficulty, sources: mockSources(doc), hallucinationRate: 0.12 }
+  return { markdown: md, difficulty, sources: mergedSources(docs), hallucinationRate: 0.12 }
 }
 
-function buildMockVideo(doc: DocumentItem, difficulty: string): VideoResult {
-  const s = keySentences(mockContent[doc.id] ?? '', 6)
+function buildMockVideo(docs: DocumentItem[], difficulty: string): VideoResult {
+  const title = mergedTitle(docs)
+  const s = mergedSentences(docs, 6).map((x) => x.text)
   const scenes: LectureScene[] = [
-    { title: `导入 · ${doc.title}`, points: [s[0].slice(0, 28), '本视频取材自你的文档'], narration: `欢迎学习《${doc.title}》。${s[0]}` },
+    { title: `导入 · ${title}`, points: [s[0].slice(0, 28), '本视频取材自你选中的文档'], narration: `欢迎学习《${title}》。${s[0]}` },
     { title: '核心要点', points: [s[1].slice(0, 24), s[2].slice(0, 24)], narration: `${s[1]} ${s[2]}` },
     { title: '深入理解', points: [s[3].slice(0, 24), s[4].slice(0, 24)], narration: `${s[3]} ${s[4]}` },
     { title: '总结回顾', points: [s[5].slice(0, 24), '完成练习巩固'], narration: `本节小结：${s[5]}` },
   ]
-  return { title: doc.title, difficulty, scenes, sources: mockSources(doc) }
+  return { title, difficulty, scenes, sources: mergedSources(docs) }
 }
 
-function buildMockDiagram(doc: DocumentItem): DiagramResult {
-  const s = keySentences(mockContent[doc.id] ?? '', 4).map((t) => t.slice(0, 12).replace(/[[\]{}()"]/g, ''))
+function buildMockDiagram(docs: DocumentItem[]): DiagramResult {
+  const title = mergedTitle(docs)
+  const s = mergedSentences(docs, 4).map((x) => x.text.slice(0, 12).replace(/[[\]{}()"]/g, ''))
   const mermaid = [
     'flowchart TD',
-    `  A["${doc.title}"] --> B["${s[0]}"]`,
+    `  A["${title.slice(0, 14)}"] --> B["${s[0]}"]`,
     `  A --> C["${s[1]}"]`,
     `  B --> D["${s[2]}"]`,
     `  C --> E["${s[3]}"]`,
     `  D --> F["综合应用"]`,
     `  E --> F`,
   ].join('\n')
-  return { mermaid, sources: mockSources(doc) }
+  return { mermaid, sources: mergedSources(docs) }
 }
 
 function buildMockOverview(doc: DocumentItem): OverviewResult {
@@ -197,7 +257,16 @@ function buildMockOverview(doc: DocumentItem): OverviewResult {
   }
 }
 
-function buildMockMindmap(doc: DocumentItem): MindmapResult {
+function buildMockMindmap(docs: DocumentItem[]): MindmapResult {
+  if (docs.length > 1) {
+    const lines = [`# ${mergedTitle(docs)}`]
+    for (const d of docs) {
+      lines.push(`## ${d.title.slice(0, 40)}`)
+      for (const sent of keySentences(mockContent[d.id] ?? '', 4)) lines.push(`### ${sent.slice(0, 30)}`)
+    }
+    return { markdown: lines.join('\n') }
+  }
+  const doc = docs[0]
   const s = keySentences(mockContent[doc.id] ?? '', 6).map((t) => t.slice(0, 18))
   const md = [
     `# ${doc.title}`,
@@ -214,15 +283,16 @@ function buildMockMindmap(doc: DocumentItem): MindmapResult {
   return { markdown: md }
 }
 
-function buildMockQuiz(doc: DocumentItem, count: number): QuizResult {
-  const s = keySentences(mockContent[doc.id] ?? '', count + 2)
+function buildMockQuiz(docs: DocumentItem[], count: number): QuizResult {
+  const title = mergedTitle(docs)
+  const s = mergedSentences(docs, count + 2).map((x) => x.text)
   const questions: QuizQuestion[] = Array.from({ length: count }, (_, i) => ({
     question_id: `docq_${i + 1}`,
     question_type: i % 3 === 2 ? 'boolean' : 'single',
     question_text:
       i % 3 === 2
-        ? `判断：根据《${doc.title}》，“${s[i].slice(0, 22)}…”这一说法成立。`
-        : `根据《${doc.title}》，下列关于“${s[i].slice(0, 18)}”的说法，哪一项与文档一致？`,
+        ? `判断：根据《${title}》，“${s[i].slice(0, 22)}…”这一说法成立。`
+        : `根据《${title}》，下列关于“${s[i].slice(0, 18)}”的说法，哪一项与文档一致？`,
     options:
       i % 3 === 2
         ? [
@@ -238,16 +308,46 @@ function buildMockQuiz(doc: DocumentItem, count: number): QuizResult {
     correct_answer: 'a',
     explanation: `依据文档原文：${s[i]}`,
   }))
-  return { questions, sources: mockSources(doc) }
+  return { questions, sources: mergedSources(docs) }
 }
 
-function buildMockFlashcards(doc: DocumentItem, count: number): FlashcardResult {
-  const s = keySentences(mockContent[doc.id] ?? '', count)
+function buildMockFlashcards(docs: DocumentItem[], count: number): FlashcardResult {
+  const title = mergedTitle(docs)
+  const s = mergedSentences(docs, count)
   const cards: FlashcardCard[] = s.slice(0, count).map((sent, i) => ({
-    front: `关于《${doc.title}》的要点 ${i + 1}：文档是怎么讲的？`,
-    back: sent,
+    front: `关于《${title}》的要点 ${i + 1}：文档是怎么讲的？`,
+    back: sent.text,
   }))
-  return { cards, sources: mockSources(doc) }
+  return { cards, sources: mergedSources(docs) }
+}
+
+/**
+ * 和文档对话·mock 兜底答案（严格基于选中文档正文合成，带 [n] 行内溯源）。
+ * 供 services/documentChat.ts 在无后端 / SSE 失败时逐字流式吐出，全链路可跑。
+ */
+export function mockDocAnswer(
+  docIds: string[],
+  message: string
+): { answer: string; sources: SourceRef[] } {
+  const docs = pickMockDocs(docIds)
+  if (!docs.length) {
+    return { answer: '请先在左侧选择至少一篇文档，我才能基于它来回答。', sources: [] }
+  }
+  const title = mergedTitle(docs)
+  const q = (message || '').trim().replace(/\s+/g, ' ')
+  const focus = q.length > 40 ? `${q.slice(0, 40)}…` : q || '这个问题'
+  const picked = mergedSentences(docs, 3)
+  const hasText = picked.some((p) => !/^文档要点 \d+$/.test(p.text))
+  if (!hasText) {
+    return {
+      answer: `关于「${focus}」，当前所选文档《${title}》在本地演示模式下未解析出可引用的正文内容（PDF/DOCX 需联调真实后端解析）。联调后我会严格基于文档原文作答并逐条标注出处。`,
+      sources: mergedSources(docs),
+    }
+  }
+  const lead = `根据你选中的《${title}》，就「${focus}」，文档中相关的内容如下：`
+  const body = picked.map((p, i) => `${i + 1}. ${p.text}[${i + 1}]`).join('\n')
+  const tail = '以上要点均出自文档原文（见下方「来源」标注）。如需更系统的梳理，可在右侧生成讲义或图解。'
+  return { answer: `${lead}\n${body}\n${tail}`, sources: mergedSources(docs) }
 }
 
 /** mock：把上传文件读成文本（md/txt 可读；pdf/docx 本地读不了则给占位正文）。 */
@@ -342,7 +442,18 @@ export async function waitIndexed(
   return doc
 }
 
-/* -------- 20.5 ~ 20.7 六类内容生成（均基于 documentId，溯源自该文档） -------- */
+/* -------- 20.5 ~ 20.7 六类内容生成（均基于 documentId(s)，溯源自该/这些文档） -------- */
+
+/** 归一：把（主 docId + 可选多篇 docIds）拼成请求体，向后兼容单篇。 */
+function docScopeBody(docId: string, documentIds?: string[]): Record<string, unknown> {
+  const ids = (documentIds ?? []).filter(Boolean)
+  return ids.length > 1 ? { documentId: docId, documentIds: ids } : { documentId: docId }
+}
+function resolveMockScope(docId: string, documentIds?: string[]): DocumentItem[] {
+  const ids = documentIds?.length ? documentIds : [docId]
+  const docs = pickMockDocs(ids)
+  return docs.length ? docs : pickMockDocs([docId])
+}
 
 /** 文档概览（选中文档即自动生成展示）：内容取自该文档，联调走后端、离线走 mock。 */
 export async function generateOverview(docId: string): Promise<OverviewResult> {
@@ -364,11 +475,15 @@ export async function generateOverview(docId: string): Promise<OverviewResult> {
   return buildMockOverview(await getDocument(docId))
 }
 
-export async function generateLecture(docId: string, difficulty = '初级'): Promise<LectureResult> {
+export async function generateLecture(
+  docId: string,
+  difficulty = '初级',
+  documentIds?: string[]
+): Promise<LectureResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ markdown: string; difficulty: string; sources: RawSource[]; hallucinationRate: number }>(
       '/document/generate/lecture',
-      { documentId: docId, difficulty }
+      { ...docScopeBody(docId, documentIds), difficulty }
     )
     return {
       markdown: d.markdown,
@@ -378,17 +493,21 @@ export async function generateLecture(docId: string, difficulty = '初级'): Pro
     }
   }
   await mockDelay()
-  return buildMockLecture(await getDocument(docId), difficulty)
+  return buildMockLecture(resolveMockScope(docId, documentIds), difficulty)
 }
 
-export async function generateVideo(docId: string, difficulty = '初级'): Promise<VideoResult> {
+export async function generateVideo(
+  docId: string,
+  difficulty = '初级',
+  documentIds?: string[]
+): Promise<VideoResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{
       title: string
       difficulty: string
       scenes: { title: string; points: string[]; narration: string }[]
       sources: RawSource[]
-    }>('/document/generate/video', { documentId: docId, difficulty })
+    }>('/document/generate/video', { ...docScopeBody(docId, documentIds), difficulty })
     return {
       title: d.title,
       difficulty: d.difficulty ?? difficulty,
@@ -397,51 +516,56 @@ export async function generateVideo(docId: string, difficulty = '初级'): Promi
     }
   }
   await mockDelay()
-  return buildMockVideo(await getDocument(docId), difficulty)
+  return buildMockVideo(resolveMockScope(docId, documentIds), difficulty)
 }
 
-export async function generateDiagram(docId: string): Promise<DiagramResult> {
+export async function generateDiagram(docId: string, documentIds?: string[]): Promise<DiagramResult> {
   if (USE_REAL_API) {
-    const d = await apiPost<{ mermaid: string; sources: RawSource[] }>('/document/generate/diagram', {
-      documentId: docId,
-    })
+    const d = await apiPost<{ mermaid: string; sources: RawSource[] }>(
+      '/document/generate/diagram',
+      docScopeBody(docId, documentIds)
+    )
     return { mermaid: d.mermaid, sources: toSourceRefs(d.sources) }
   }
   await mockDelay()
-  return buildMockDiagram(await getDocument(docId))
+  return buildMockDiagram(resolveMockScope(docId, documentIds))
 }
 
-export async function generateMindmap(docId: string): Promise<MindmapResult> {
+export async function generateMindmap(docId: string, documentIds?: string[]): Promise<MindmapResult> {
   if (USE_REAL_API) {
-    const d = await apiPost<{ markdown: string }>('/document/generate/mindmap', { documentId: docId })
+    const d = await apiPost<{ markdown: string }>('/document/generate/mindmap', docScopeBody(docId, documentIds))
     return { markdown: d.markdown }
   }
   await mockDelay()
-  return buildMockMindmap(await getDocument(docId))
+  return buildMockMindmap(resolveMockScope(docId, documentIds))
 }
 
-export async function generateQuiz(docId: string, count = 5): Promise<QuizResult> {
+export async function generateQuiz(docId: string, count = 5, documentIds?: string[]): Promise<QuizResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ questions: QuizQuestion[]; sources: RawSource[] }>('/document/generate/quiz', {
-      documentId: docId,
+      ...docScopeBody(docId, documentIds),
       count,
     })
     return { questions: d.questions ?? [], sources: toSourceRefs(d.sources) }
   }
   await mockDelay()
-  return buildMockQuiz(await getDocument(docId), count)
+  return buildMockQuiz(resolveMockScope(docId, documentIds), count)
 }
 
-export async function generateFlashcards(docId: string, count = 8): Promise<FlashcardResult> {
+export async function generateFlashcards(
+  docId: string,
+  count = 8,
+  documentIds?: string[]
+): Promise<FlashcardResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ cards: FlashcardCard[]; sources: RawSource[] }>('/document/generate/flashcards', {
-      documentId: docId,
+      ...docScopeBody(docId, documentIds),
       count,
     })
     return { cards: d.cards ?? [], sources: toSourceRefs(d.sources) }
   }
   await mockDelay()
-  return buildMockFlashcards(await getDocument(docId), count)
+  return buildMockFlashcards(resolveMockScope(docId, documentIds), count)
 }
 
 /** mock 生成拟真延时（体现「AI 生成中」loading 态）。 */
