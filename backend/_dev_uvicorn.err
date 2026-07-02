@@ -1,17 +1,9 @@
 C:\Users\力恺\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.0.post2)/charset_normalizer (3.4.6) doesn't match a supported version!
   warnings.warn(
-INFO:     Started server process [37000]
+INFO:     Started server process [18316]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-Loading weights:   0%|          | 0/71 [00:00<?, ?it/s]Loading weights:  86%|████████▌ | 61/71 [00:00<00:00, 576.97it/s]Loading weights: 100%|██████████| 71/71 [00:00<00:00, 671.56it/s]
+Loading weights:   0%|          | 0/71 [00:00<?, ?it/s]Loading weights: 100%|██████████| 71/71 [00:00<00:00, 5602.51it/s]
 The Transformer `cache_dir` argument is deprecated. Please pass `cache_dir` via `model_kwargs`, `processor_kwargs`, and/or `config_kwargs` instead.
-Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:  28%|██▊       | 56/201 [00:00<00:00, 545.80it/s]Loading weights:  60%|█████▉    | 120/201 [00:00<00:00, 598.44it/s]Loading weights:  90%|████████▉ | 180/201 [00:00<00:00, 592.38it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 604.12it/s]
-Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
-Traceback (most recent call last):
-  File "C:\Users\力恺\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
-    self._context.run(self._callback, *self._args)
-  File "C:\Users\力恺\AppData\Local\Programs\Python\Python312\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 4277.08it/s]

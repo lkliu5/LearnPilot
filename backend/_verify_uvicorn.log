@@ -1,0 +1,70 @@
+C:\Users\Á¦âý\AppData\Local\Programs\Python\Python312\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.0.post2)/charset_normalizer (3.4.6) doesn't match a supported version!
+  warnings.warn(
+INFO:     Started server process [35228]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:14050 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8027 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8033 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8031 - "GET /api/v1/journey HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8040 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8042 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8046 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8049 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9883 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9891 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9892 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9893 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9890 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9897 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9894 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9901 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9903 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9906 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14330 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14333 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14342 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14340 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14341 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14344 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14352 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14353 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14355 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14356 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14384 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14391 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14393 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14389 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14390 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9371 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9375 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9376 - "GET /api/v1/journey HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9377 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9380 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9384 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9388 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9387 - "GET /api/v1/journey HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9391 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9398 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9401 - "GET /api/v1/dashboard/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9404 - "GET /api/v1/dashboard/evaluation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9434 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9433 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9439 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9442 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9441 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9440 - "POST /api/v1/resource/lecture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9445 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9450 - "GET /api/v1/mastery HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9454 - "GET /api/v1/quiz/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9452 - "GET /api/v1/resource/diagram/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14782 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14783 - "POST /api/v1/learning/cornell-cues HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14781 - "POST /api/v1/learning/cornell-cues HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14793 - "POST /api/v1/resource/video HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14790 - "POST /api/v1/resource/video HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14791 - "POST /api/v1/resource/video/render HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14803 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14801 - "POST /api/v1/resource/video/render HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14807 - "GET /api/v1/learning/steps/nn HTTP/1.1" 200 OK

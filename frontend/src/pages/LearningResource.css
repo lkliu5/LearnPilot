@@ -1443,12 +1443,12 @@
 .res-hero {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 18px;
   text-align: left;
-  padding: 22px 24px;
-  min-height: 196px;
+  padding: 24px 26px;
+  min-height: 214px;
   border-radius: var(--radius-xl);
   border: 1px solid var(--line);
   background: var(--bg-card);
@@ -1459,46 +1459,69 @@
 }
 .res-hero:hover { transform: translateY(-4px); box-shadow: var(--shadow-glass-hover); }
 
-/* 有序学习卡：主色调渐变强调（推荐位） */
+/* 有序学习卡：暖色（accent）柔和渐变——路径地图气质 */
 .res-hero--flow {
-  background: linear-gradient(150deg, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--bg-card) 60%);
-  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    linear-gradient(150deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--bg-card) 62%);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
 }
-.res-hero--flow:hover { border-color: color-mix(in srgb, var(--primary) 50%, var(--line)); }
-/* 资源中枢卡：强调色（紫）渐变 */
+.res-hero--flow:hover { border-color: color-mix(in srgb, var(--accent) 48%, var(--line)); }
+/* 资源中枢卡：绿色（primary）柔和渐变——资源箱气质 */
 .res-hero--browse {
-  background: linear-gradient(150deg, color-mix(in srgb, var(--purple-500) 12%, var(--surface)), var(--bg-card) 60%);
-  border-color: color-mix(in srgb, var(--purple-500) 26%, var(--line));
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 60%),
+    linear-gradient(150deg, color-mix(in srgb, var(--primary) 12%, var(--surface)), var(--bg-card) 62%);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
 }
-.res-hero--browse:hover { border-color: color-mix(in srgb, var(--purple-500) 44%, var(--line)); }
+.res-hero--browse:hover { border-color: color-mix(in srgb, var(--primary) 48%, var(--line)); }
 
+/* 左侧内容列 */
+.res-hero__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 右上角标签 */
 .res-hero__tag {
   position: absolute;
   top: 16px;
   right: 16px;
+  z-index: 2;
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   padding: 3px 11px;
   border-radius: var(--radius-full);
-  color: #fff;
-  background: linear-gradient(135deg, var(--primary-500), var(--purple-500));
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 34%, transparent);
 }
-.res-hero__icon { font-size: 1.9rem; line-height: 1; }
+.res-hero__tag--rec {
+  color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white), var(--accent));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 36%, transparent);
+}
+.res-hero__tag--all {
+  color: var(--primary-d);
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
 .res-hero__title { font-size: 1.3rem; font-weight: 800; color: var(--ink); }
-.res-hero__desc { font-size: 0.86rem; line-height: 1.65; color: var(--ink-soft); max-width: 42ch; }
+.res-hero__desc { font-size: 0.86rem; line-height: 1.65; color: var(--ink-soft); max-width: 34ch; }
 
 .res-hero__foot {
   margin-top: auto;
   width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding-top: 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 12px;
 }
-.res-hero__prog { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.res-hero__prog { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .res-hero__prog-bar {
   height: 7px;
   border-radius: var(--radius-full);
@@ -1509,7 +1532,7 @@
   display: block;
   height: 100%;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--primary-400), var(--primary-600));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, white), var(--accent));
   transition: width 0.5s ease;
 }
 .res-hero__prog-text { font-size: 0.72rem; color: var(--ink-soft); font-weight: 600; }
@@ -1521,14 +1544,49 @@
   color: var(--ink);
   margin-right: 3px;
 }
+
+/* 实心主按钮（卡片整体可点，此处为视觉主按钮，非嵌套 button） */
 .res-hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  font-size: 0.86rem;
+  padding: 9px 20px;
+  border-radius: var(--radius-full);
+  font-size: 0.84rem;
   font-weight: 700;
-  color: var(--primary-600);
+  color: #fff;
   white-space: nowrap;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
 }
-.res-hero--browse .res-hero__cta { color: var(--purple-600); }
+.res-hero--flow .res-hero__cta {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.res-hero--browse .res-hero__cta {
+  background: linear-gradient(135deg, var(--primary), var(--primary-d));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--primary) 34%, transparent);
+}
+.res-hero:hover .res-hero__cta { transform: translateX(2px); filter: brightness(1.04); }
+
+/* 右侧场景插画 */
+.res-hero__art {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 168px;
+  max-width: 42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.res-hero__svg { width: 100%; height: auto; display: block; }
+@media (max-width: 900px) {
+  .res-hero__art { width: 138px; }
+}
+@media (max-width: 560px) {
+  .res-hero { flex-direction: column; }
+  .res-hero__art { align-self: flex-end; width: 150px; margin-top: 4px; }
+}
 
 /* ----- 状态信息条（瘦身，一行；小尺寸、不占主视觉） ----- */
 .res-statusbar {

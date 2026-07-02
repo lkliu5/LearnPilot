@@ -117,7 +117,7 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   /* 给滚动条留出空隙，避免遮挡导航项与激活态发光 */
   margin-right: -6px;
   padding-right: 6px;
@@ -127,8 +127,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 16px;
+  gap: 13px;
+  padding: 14px 16px;
   background: transparent;
   border: none;
   border-radius: 12px;
@@ -148,17 +148,18 @@
 .sidebar__nav-group-title {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--gray-400);
   text-transform: uppercase;
-  padding: 4px 16px;
-  margin-top: 2px;
+  padding: 0 16px;
+  margin: 10px 0 8px;
 }
+.sidebar__nav-group-title:first-child { margin-top: 2px; }
 
 .sidebar__nav-divider {
   height: 1px;
   background: var(--sidebar-divider);
-  margin: 12px 8px;
+  margin: 14px 8px 6px;
 }
 
 /* ===== 主线序号徽章 ①②③ ===== */
@@ -340,7 +341,7 @@
 .sidebar__nav-content {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 

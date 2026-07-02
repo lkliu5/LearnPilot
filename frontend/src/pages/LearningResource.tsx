@@ -475,6 +475,74 @@ function lectureOutline(md: string): string {
 
 const Loading = () => <div className="resource-loading">资源加载中…</div>
 
+/* hub 首屏两大操作卡的场景插画（纯 SVG 绘制，套「分层柔和色 + 投影 + 星点」的既有插画风格；
+   固定浅底面板，深浅主题均适配）。有序学习＝暖色路径地图 + 小红旗；资源中枢＝绿色开箱多资源。 */
+function HeroFlowArt() {
+  return (
+    <svg className="res-hero__svg" viewBox="0 0 176 156" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <filter id="heroFlowSh" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#8a5a24" floodOpacity="0.2" />
+        </filter>
+      </defs>
+      <rect width="176" height="156" rx="18" fill="#f6ecd6" />
+      {/* 起伏地面 */}
+      <path d="M0 118 Q44 100 88 116 T176 112 V156 H0 Z" fill="#efdcb0" opacity="0.7" />
+      {/* 路径底带 + 虚线中线 */}
+      <path d="M32 128 C 52 96, 96 120, 88 82 C 82 52, 122 66, 140 32" fill="none" stroke="#e6cf9c" strokeWidth="13" strokeLinecap="round" />
+      <path d="M32 128 C 52 96, 96 120, 88 82 C 82 52, 122 66, 140 32" fill="none" stroke="#c58940" strokeWidth="3" strokeLinecap="round" strokeDasharray="1.5 12" />
+      {/* 起点 */}
+      <g filter="url(#heroFlowSh)">
+        <circle cx="32" cy="128" r="9" fill="#fff" />
+        <circle cx="32" cy="128" r="4.4" fill="#5b7f6e" />
+      </g>
+      {/* 途经里程碑 */}
+      <g filter="url(#heroFlowSh)">
+        <circle cx="88" cy="82" r="9" fill="#fff" />
+        <circle cx="88" cy="82" r="4.4" fill="#c58940" />
+      </g>
+      {/* 终点小红旗 */}
+      <g filter="url(#heroFlowSh)">
+        <rect x="137" y="30" width="3.4" height="34" rx="1.7" fill="#7a5a34" />
+        <path d="M140 30 L164 38 L140 47 Z" fill="#e0573b" />
+      </g>
+      <path d="M150 96 Q152 103 159 105 Q152 107 150 114 Q148 107 141 105 Q148 103 150 96Z" fill="#f0b94a" />
+    </svg>
+  )
+}
+
+function HeroBrowseArt() {
+  return (
+    <svg className="res-hero__svg" viewBox="0 0 176 156" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <filter id="heroBrowseSh" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#2f5a45" floodOpacity="0.2" />
+        </filter>
+      </defs>
+      <rect width="176" height="156" rx="18" fill="#e6f1ea" />
+      {/* 开箱翻盖（在最底层） */}
+      <path d="M40 92 L28 78 L70 83 Z" fill="#496b5b" />
+      <path d="M136 92 L148 78 L106 83 Z" fill="#496b5b" />
+      {/* 从箱口探出的多类资源卡 */}
+      <g filter="url(#heroBrowseSh)">
+        <rect x="54" y="44" width="26" height="48" rx="5" fill="#e9c07a" transform="rotate(-13 67 68)" />
+        <rect x="96" y="42" width="26" height="48" rx="5" fill="#8fc3a8" transform="rotate(12 109 66)" />
+        <rect x="75" y="34" width="28" height="52" rx="5" fill="#ffffff" />
+        <rect x="81" y="45" width="16" height="4" rx="2" fill="#cbdbd1" />
+        <rect x="81" y="54" width="16" height="4" rx="2" fill="#dae6df" />
+        <rect x="81" y="63" width="10" height="4" rx="2" fill="#dae6df" />
+      </g>
+      {/* 绿色资源箱（箱体盖住卡片下缘＝插入箱内） */}
+      <g filter="url(#heroBrowseSh)">
+        <path d="M40 92 L136 92 L128 134 L48 134 Z" fill="#5b7f6e" />
+        <path d="M40 92 L88 102 L136 92 L88 82 Z" fill="#6f9280" />
+        <rect x="72" y="106" width="32" height="9" rx="4.5" fill="#83a593" />
+      </g>
+      <path d="M150 104 Q152 111 159 113 Q152 115 150 122 Q148 115 141 113 Q148 111 150 104Z" fill="#f0b94a" />
+    </svg>
+  )
+}
+
 export default function LearningResource({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   /* 当前知识点：无论联调/mock 都从 resourceNav 路由传参通道取（页面随导航重挂载，挂载时读取即可）。
      mock 模式按 kpId 选对应知识点内容（KP_RESOURCES），故从学习路径点不同知识点会进入对应内容，
@@ -1073,33 +1141,38 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           {/* 主操作区：两个大卡片并列，首屏突出、无需滚动即可操作 */}
           <RevealItem className="res-hero-grid">
             <button type="button" className="res-hero res-hero--flow" onClick={() => setView('flow')}>
-              <span className="res-hero__tag">推荐</span>
-              <span className="res-hero__icon" aria-hidden="true">🧭</span>
-              <span className="res-hero__title">有序学习</span>
-              <span className="res-hero__desc">费曼讲解 + 康奈尔笔记，按最优顺序把「{kpName}」一步步学透。</span>
-              <span className="res-hero__foot">
-                <span className="res-hero__prog">
-                  <span className="res-hero__prog-bar">
-                    <span className="res-hero__prog-fill" style={{ width: `${flowPct}%` }} />
+              <span className="res-hero__tag res-hero__tag--rec">推荐</span>
+              <span className="res-hero__body">
+                <span className="res-hero__title">有序学习</span>
+                <span className="res-hero__desc">费曼讲解 + 康奈尔笔记，按最优顺序把「{kpName}」一步步学透。</span>
+                <span className="res-hero__foot">
+                  <span className="res-hero__prog">
+                    <span className="res-hero__prog-bar">
+                      <span className="res-hero__prog-fill" style={{ width: `${flowPct}%` }} />
+                    </span>
+                    <span className="res-hero__prog-text">
+                      {flowPct > 0 ? `上次学到 ${stepProg.done}/${stepProg.total} 步 · ${flowPct}%` : '尚未开始 · 从第 1 步开始'}
+                    </span>
                   </span>
-                  <span className="res-hero__prog-text">
-                    {flowPct > 0 ? `上次学到 ${stepProg.done}/${stepProg.total} 步 · ${flowPct}%` : '尚未开始 · 从第 1 步开始'}
-                  </span>
+                  <span className="res-hero__cta">继续学习 →</span>
                 </span>
-                <span className="res-hero__cta">继续学习 →</span>
               </span>
+              <span className="res-hero__art" aria-hidden="true"><HeroFlowArt /></span>
             </button>
 
             <button type="button" className="res-hero res-hero--browse" onClick={() => setView('browse')}>
-              <span className="res-hero__icon" aria-hidden="true">🗂</span>
-              <span className="res-hero__title">资源中枢</span>
-              <span className="res-hero__desc">按需生成 6 类多模态资源，讲义 / 视频 / 导图 / 图解 / 代码 / 推荐自由浏览。</span>
-              <span className="res-hero__foot">
-                <span className="res-hero__stat">
-                  <b>{HUB_CARDS.length}</b> 类资源可用{genDoneCount > 0 ? ` · 已生成 ${genDoneCount}` : ''}
+              <span className="res-hero__tag res-hero__tag--all">全部资源</span>
+              <span className="res-hero__body">
+                <span className="res-hero__title">资源中枢</span>
+                <span className="res-hero__desc">按需生成 6 类多模态资源，讲义 / 视频 / 导图 / 图解 / 代码 / 推荐自由浏览。</span>
+                <span className="res-hero__foot">
+                  <span className="res-hero__stat">
+                    <b>{HUB_CARDS.length}</b> 类资源可用{genDoneCount > 0 ? ` · 已生成 ${genDoneCount}` : ''}
+                  </span>
+                  <span className="res-hero__cta">进入资源库 →</span>
                 </span>
-                <span className="res-hero__cta">进入资源库 →</span>
               </span>
+              <span className="res-hero__art" aria-hidden="true"><HeroBrowseArt /></span>
             </button>
           </RevealItem>
 
