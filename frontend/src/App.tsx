@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './components/Sidebar'
 import ScrollToTop from './components/ScrollToTop'
 import PageErrorBoundary from './components/PageErrorBoundary'
+import GlobalTutorLayer from './components/GlobalTutorLayer'
 import Dashboard from './pages/Dashboard'
 import ProfileBuilder from './pages/ProfileBuilder'
 import LearningPath from './pages/LearningPath'
@@ -215,6 +216,12 @@ function App() {
           <PageErrorBoundary resetKey={currentPage}>{renderPage()}</PageErrorBoundary>
         </motion.div>
       </main>
+
+      {/* 全局即时辅导层（B-2 全局化）：正文内容页选中即问 + 常驻辅导 dock，一次接入全站可用。
+          仅学习内容页挂载，避免管理端 / 落地页出现无关入口。 */}
+      {!isAdmin && (currentPage === 'learning-resource' || currentPage === 'document-learning') && (
+        <GlobalTutorLayer />
+      )}
     </div>
   )
 }

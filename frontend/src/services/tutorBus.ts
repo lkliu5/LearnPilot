@@ -27,3 +27,34 @@ export function onOpenTutor(listener: Listener): () => void {
 export function openInstantTutor(payload: OpenTutorPayload = {}): void {
   listeners.forEach((l) => l(payload))
 }
+
+/**
+ * 全局辅导上下文（B-2 全局化）：常驻的即时辅导 dock 升到 App 顶层后，需要知道「当前在学什么」
+ * 才能把提问落到对应知识点/文档。各内容页在进入时用 setTutorContext 声明一次当前上下文，
+ * dock 与选中气泡据此发起针对性辅导；未声明时用通用兜底（mock 全链路可跑通）。
+ */
+export interface TutorContext {
+  kpId: string
+  kpName: string
+}
+
+let currentContext: TutorContext = { kpId: 'general', kpName: '当前内容' }
+const ctxListeners = new Set<(c: TutorContext) => void>()
+
+export function getTutorContext(): TutorContext {
+  return currentContext
+}
+
+/** 内容页声明当前辅导上下文（知识点 / 文档）。同值不重复广播。 */
+export function setTutorContext(ctx: TutorContext): void {
+  if (ctx.kpId === currentContext.kpId && ctx.kpName === currentContext.kpName) return
+  currentContext = ctx
+  ctxListeners.forEach((l) => l(ctx))
+}
+
+export function onTutorContext(listener: (c: TutorContext) => void): () => void {
+  ctxListeners.add(listener)
+  return () => {
+    ctxListeners.delete(listener)
+  }
+}

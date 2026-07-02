@@ -6,6 +6,9 @@ import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
+import type { SourceRef } from './SourceTrace'
+import { weaveCitations } from '../utils/citations'
+import './MarkdownRenderer.css'
 
 // 讲义内嵌图解：```mermaid 围栏复用既有 MermaidDiagram 渲染（懒加载，避免无图解页引入 mermaid）。
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
@@ -65,9 +68,19 @@ function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
  * - remark-gfm 解析 GFM 扩展（表格 | --- |、删除线 ~~、任务列表 - [ ]、自动链接）；
  * - ```mermaid 围栏走 MermaidDiagram（讲义内嵌结构 / 流程图解）；
  * - 图片走 MarkdownImage（来源标注 + 裂图兜底）；urlTransform 放行自包含 data:image 占位图。
+ *
+ * 论文级 RAG 溯源（可选 `sources`）：传入来源后，正文相应段落挂上 [1][2] 上标引用（复用
+ * remark-gfm 原生脚注），末尾自动汇聚成学术格式「参考文献」区块——像论文而非大框。
  */
-export default function MarkdownRenderer({ content }: { content: string }) {
-  const normalized = normalizeMathDelimiters(content)
+export default function MarkdownRenderer({
+  content,
+  sources,
+}: {
+  content: string
+  sources?: SourceRef[]
+}) {
+  const withCites = sources?.length ? weaveCitations(content, sources).content : content
+  const normalized = normalizeMathDelimiters(withCites)
   return (
     <div className="markdown-body">
       <ReactMarkdown
@@ -102,7 +115,13 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           pre: ({ children }) => <div className="md-codeblock">{children}</div>,
           img: ({ src, alt }) => <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} />,
           h1: ({ children }) => <h1 className="resource-title">{children}</h1>,
-          h2: ({ children }) => <h2 className="section-title">{children}</h2>,
+          // remark-gfm 脚注区默认标题是英文「Footnotes」→ 归一化成学术「参考文献」。
+          h2: ({ children, id }) =>
+            id === 'footnote-label' ? (
+              <h2 className="paper-refs__title">参考文献</h2>
+            ) : (
+              <h2 className="section-title">{children}</h2>
+            ),
           h3: ({ children }) => <h3 className="subsection-title">{children}</h3>,
           p: ({ children }) => <p className="content-paragraph">{children}</p>,
           ul: ({ children }) => <ul className="content-list">{children}</ul>,

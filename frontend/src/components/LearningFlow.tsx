@@ -5,6 +5,7 @@ import QuizRenderer, { type QuizQuestion } from './QuizRenderer'
 import WeakPointReinforce from './WeakPointReinforce'
 import CornellNotes from './CornellNotes'
 import FeynmanTutor from './FeynmanTutor'
+import { defaultSources, type SourceRef } from './SourceTrace'
 import { STATUS_LABEL, type KPStatus } from '../store/mastery'
 import {
   getCornellCues,
@@ -52,6 +53,8 @@ interface LearningFlowProps {
   kpName: string
   level: string
   lectureMarkdown: string
+  /** 定制讲义的 RAG 溯源来源（论文级上标引用 + 末尾参考文献）；mock 下回退到内置来源。 */
+  lectureSources?: SourceRef[]
   diagramChart: string
   questions: QuizQuestion[]
   kpStatus: KPStatus
@@ -71,6 +74,7 @@ export default function LearningFlow({
   kpName,
   level,
   lectureMarkdown,
+  lectureSources,
   diagramChart,
   questions,
   kpStatus,
@@ -118,10 +122,13 @@ export default function LearningFlow({
     (k) => steps[k]
   )
 
-  /** 标记某步骤完成/取消并刷新进度（18.3 POST）。 */
+  /** 标记某步骤完成/取消并刷新进度（18.3 POST）；标记为「完成」时按既定链条自动带到下一环。 */
   const toggleStep = (step: StepKey, done: boolean) => {
     markStep(kpId, step, done)
-      .then(setProgress)
+      .then((p) => {
+        setProgress(p)
+        if (done) advanceAfter(step, p)
+      })
       .catch((e) => console.error('[flow] 步骤标记失败', e))
   }
 
@@ -136,6 +143,42 @@ export default function LearningFlow({
     // 仅在学习步骤全部完成后才前置 pending-check（未走完不进入检验态）
     if (allStepsDone) onGoCheck()
     gateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  /**
+   * 「看过 / 完成 X」→ 按有序学习既定链条自动带到下一环：
+   *   讲解视频 → 定制讲义 → 知识图解 →（输入完成）康奈尔笔记 → 费曼讲解 → 代码实操 →
+   *   （6 步全部完成）解锁并定位到末尾的阶段测试。用刚回写的最新进度 p 判断，避免闭包读到旧态。
+   */
+  const advanceAfter = (step: StepKey, p: StepProgress) => {
+    switch (step) {
+      case 'video':
+        setInputTab('lecture')
+        break
+      case 'lecture':
+        setInputTab('diagram')
+        break
+      case 'diagram':
+        setPhaseIdx(1) // → 康奈尔笔记
+        break
+      case 'note':
+        setPhaseIdx(2) // → 费曼讲解
+        break
+      case 'feynman':
+        setPhaseIdx(3) // → 代码实操
+        break
+      case 'practice': {
+        const done = (['video', 'lecture', 'diagram', 'note', 'feynman', 'practice'] as StepKey[]).every(
+          (k) => p.steps[k]
+        )
+        if (done) onGoCheck() // 6 步走完 → 解锁阶段测试
+        // 等 gate 由「锁定」切到「可作答」渲染完成后再平滑定位过去
+        requestAnimationFrame(() =>
+          gateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        )
+        break
+      }
+    }
   }
 
   const handleQuiz = (
@@ -249,7 +292,11 @@ export default function LearningFlow({
                             </button>
                           </div>
                           <div ref={flowLectureRef}>
-                            <MarkdownRenderer content={lectureMarkdown} />
+                            {/* 论文级 RAG 溯源：与资源中枢同款——正文织入 [1][2] 上标、末尾学术参考文献 */}
+                            <MarkdownRenderer
+                              content={lectureMarkdown}
+                              sources={lectureSources ?? defaultSources}
+                            />
                           </div>
                         </>
                       ) : (

@@ -129,6 +129,10 @@
   align-items: center;
   gap: 13px;
   padding: 14px 16px;
+  /* 关键：作为滚动容器 .sidebar__nav 的 flex 子项，禁止纵向被压缩。
+     否则在矮窗口下各项会从 ~65px 挤成 padding 高度(~28px)、内容裁切，
+     且因项收缩到能塞下、滚动区间几乎为 0 → 滚轮无法滚动。 */
+  flex-shrink: 0;
   background: transparent;
   border: none;
   border-radius: 12px;
@@ -153,6 +157,7 @@
   text-transform: uppercase;
   padding: 0 16px;
   margin: 10px 0 8px;
+  flex-shrink: 0;
 }
 .sidebar__nav-group-title:first-child { margin-top: 2px; }
 
@@ -160,6 +165,7 @@
   height: 1px;
   background: var(--sidebar-divider);
   margin: 14px 8px 6px;
+  flex-shrink: 0;
 }
 
 /* ===== 主线序号徽章 ①②③ ===== */

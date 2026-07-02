@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import QuizRenderer, { type QuizQuestion, type QuizGrade, type ShortAnswerGrade } from '../components/QuizRenderer'
-import SourceTrace, { defaultSources, type SourceRef } from '../components/SourceTrace'
+import { defaultSources, type SourceRef } from '../components/SourceTrace'
 import WeakPointReinforce from '../components/WeakPointReinforce'
 import PageHeader from '../components/PageHeader'
 import LearningFlow from '../components/LearningFlow'
-import AskTutorDock from '../components/AskTutorDock'
-import SelectionAskBubble from '../components/SelectionAskBubble'
 import StuckNudge from '../components/StuckNudge'
+import { setTutorContext } from '../services/tutorBus'
 import { reportStuck } from '../services/stuckSignal'
 import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
 import { RevealGroup, RevealItem } from '../components/Reveal'
@@ -659,6 +658,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const loadMastery = useMastery((s) => s.load)
   const kpName = kpById(kpId)?.name ?? '当前知识点'
 
+  /* 声明当前辅导上下文 → 供 App 顶层全局 dock / 选中即问就该知识点发起辅导。 */
+  useEffect(() => {
+    setTutorContext({ kpId, kpName })
+  }, [kpId, kpName])
+
   /* 单类型生成：复用既有单类型生成接口（types 传单元素逐次调用，契约不变）。
      mock 模式内容为本地确定性常量，仅以短延时模拟「生成中」过程；external 走 fetchRecommendations。 */
   const generateOne = async (t: GenType): Promise<void> => {
@@ -979,9 +983,6 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               </div>
             )}
 
-            {/* RAG 溯源（针对讲义内容，归位到讲义详情底部工具条上方）*/}
-            <SourceTrace sources={USE_REAL_API ? lectureSources[level] : undefined} />
-
             {/* 讲义导出：导出当前已渲染内容，不重新生成。.md 原文最稳；.pdf 经浏览器打印另存 */}
             <div className="lecture-export">
               <span className="lecture-export__label">导出讲义：</span>
@@ -1006,10 +1007,10 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             </div>
 
             <div className="lecture-body" ref={lectureRef}>
-              {/* B-2：在讲义正文里选中一段文字，就近浮出「就这段问 AI」→ 就该句发起即时辅导 */}
-              <SelectionAskBubble containerRef={lectureRef} />
+              {/* B-2：选中即问已升为全局能力（见 App 顶层 GlobalTutorLayer），此处无需再单接。
+                  论文级 RAG 溯源：正文相应段落织入 [1][2] 上标引用、末尾汇聚成学术「参考文献」。*/}
               {activeLecture ? (
-                <MarkdownRenderer content={activeLecture} />
+                <MarkdownRenderer content={activeLecture} sources={lectureSources[level] ?? defaultSources} />
               ) : (
                 <div className="resource-loading">「{kpName}」的定制讲义生成中，请稍候…</div>
               )}
@@ -1264,6 +1265,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               kpName={kpName}
               level={level}
               lectureMarkdown={activeLecture}
+              lectureSources={lectureSources[level]}
               diagramChart={USE_REAL_API ? diagramChart : mockRes.diagram}
               questions={questions}
               kpStatus={kpStatus}
@@ -1538,9 +1540,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         )}
       </AnimatePresence>
 
-      {/* 即时辅导 · 常驻辅导入口（核心痛点「自学卡住没人答疑」升格）：
-          学习界面右缘常驻，随手发起辅导 → 逐字流式回答 → 识别问题 → 针对性资源清单 → 勾选生成（复用既有链路/接口）。*/}
-      <AskTutorDock kpId={kpId} kpName={kpName} />
+      {/* 即时辅导 · 常驻辅导入口已升为全局层（App 顶层 GlobalTutorLayer）：本页选中即问 / 卡顿关怀
+          经 tutorBus 命令全局 dock 打开，无需再在此单挂（避免与全局 dock 重复订阅）。 */}
 
       {/* B-3 主动察觉卡顿：行为出现卡住信号时，AI 主动弹轻量关怀小卡（同一知识点/会话限频，关闭后不再弹）。 */}
       <StuckNudge kpId={kpId} kpName={kpName} />

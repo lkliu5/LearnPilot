@@ -34,6 +34,7 @@ import {
   type QuizResult,
   type VideoResult,
 } from '../services/documentLearning'
+import { setTutorContext } from '../services/tutorBus'
 import './DocumentLearning.css'
 
 const MindMap = lazy(() => import('../components/MindMap'))
@@ -107,6 +108,14 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
 
   const selectedDoc = docs.find((d) => d.id === selectedId) ?? null
   const bag = selectedId ? bags[selectedId] ?? {} : {}
+
+  /* 声明当前辅导上下文（选中文档）→ 供 App 顶层全局 dock / 选中即问就该文档发起辅导。 */
+  useEffect(() => {
+    setTutorContext({
+      kpId: selectedDoc ? `doc:${selectedDoc.id}` : 'doc-learning',
+      kpName: selectedDoc?.title ?? '当前文档',
+    })
+  }, [selectedDoc])
 
   /* 切换选中文档：把视图切到该文档已生成的第一个产物（没有则回到操作引导） */
   useEffect(() => {

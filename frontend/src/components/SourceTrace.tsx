@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { sourcePercent } from '../utils/citations'
+import './SourceTrace.css'
 
 export interface SourceRef {
   title: string
@@ -17,51 +17,32 @@ export const defaultSources: SourceRef[] = [
   { title: '《神经网络与深度学习》 邱锡鹏', type: '教材', confidence: 90 },
 ]
 
-const typeColor: Record<SourceRef['type'], string> = {
-  教材: 'var(--primary-600)',
-  论文: 'var(--purple-600)',
-  文档: 'var(--success-600)',
-  课程: 'var(--warning-600)',
-}
-
+/**
+ * RAG 溯源 · 论文级参考文献样式。
+ *
+ * 从旧版「可折叠大框」升级为学术引用列表：编号 [n]、标题 + 出处（教材/论文/课程/文档）+
+ * 可信度，小字悬挂缩进，整体像论文末尾的参考文献。用于无正文正文可挂载上标的卡片场景
+ * （资源库预览、文档学习各资源卡）；讲义正文的上标引用 [1][2] 由 MarkdownRenderer 就地织入。
+ */
 export default function SourceTrace({ sources = defaultSources }: { sources?: SourceRef[] }) {
-  const [open, setOpen] = useState(false)
-
+  if (!sources.length) return null
   return (
-    <div className="src-trace">
-      <button className="src-trace__toggle" onClick={() => setOpen((v) => !v)}>
-        <span className="src-trace__shield">🛡️</span>
-        <span className="src-trace__title">RAG 溯源 · 多智能体已交叉校验</span>
-        <span className="src-trace__count">{sources.length} 篇来源</span>
-        <span className={`src-trace__chevron ${open ? 'src-trace__chevron--open' : ''}`}>▾</span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.ul
-            className="src-trace__list"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            {sources.map((s) => (
-              <li key={s.title} className="src-trace__item">
-                <span className="src-trace__type" style={{ color: typeColor[s.type] }}>
-                  {s.type}
-                </span>
-                <span className="src-trace__name">{s.title}</span>
-                <span className="src-trace__conf">
-                  <span className="src-trace__conf-bar">
-                    <span className="src-trace__conf-fill" style={{ width: `${s.confidence}%` }} />
-                  </span>
-                  {s.confidence}%
-                </span>
-              </li>
-            ))}
-          </motion.ul>
-        )}
-      </AnimatePresence>
-    </div>
+    <section className="paper-refs" aria-label="RAG 溯源参考文献">
+      <h4 className="paper-refs__title">
+        <span className="paper-refs__badge">🛡 RAG 溯源</span>
+        参考文献
+        <span className="paper-refs__count">多智能体交叉校验 · {sources.length} 篇</span>
+      </h4>
+      <ol className="paper-refs__list">
+        {sources.map((s, i) => (
+          <li key={`${s.title}-${i}`} className="paper-refs__item">
+            <span className="paper-refs__name">{s.title}</span>
+            <span className="paper-refs__meta">
+              · {s.type} · 可信度 {sourcePercent(s.confidence)}%
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }

@@ -17,3 +17,365 @@
 [2m09:18:50[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.css[22m
 [2m09:25:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.css[22m
 [2m09:26:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.css[22m
+[2m09:53:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.css[22m
+[2m09:54:27[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.css[22m
+[2m10:54:07[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/MarkdownRenderer.tsx[22m
+[2m10:54:07[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  24 |  import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+  25 |  import "katex/dist/katex.min.css";
+  26 |  import "./MarkdownRenderer.css";
+     |          ^
+  27 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  28 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 11)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:07[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  24 |  import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+  25 |  import "katex/dist/katex.min.css";
+  26 |  import "./MarkdownRenderer.css";
+     |          ^
+  27 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  28 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 11)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:16[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:16[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:16[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+      at async viteTransformMiddleware (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24)
+[2m10:54:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[39m           ol[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mol[39m className[33m=[39m[32m"ordered-list"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mol[39m[33m>[39m[33m,[39m
+ [90m 129 |[39m           blockquote[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mblockquote[39m className[33m=[39m[32m"content-quote"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mblockquote[39m[33m>[39m[33m,[39m
+[31m[1m>[22m[39m[90m 130 |[39m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[39m
+ [90m     |[39m                                              [31m[1m^[22m[39m[0m
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[39m           ol[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mol[39m className[33m=[39m[32m"ordered-list"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mol[39m[33m>[39m[33m,[39m
+ [90m 129 |[39m           blockquote[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mblockquote[39m className[33m=[39m[32m"content-quote"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mblockquote[39m[33m>[39m[33m,[39m
+[31m[1m>[22m[39m[90m 130 |[39m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[39m
+ [90m     |[39m                                              [31m[1m^[22m[39m[0m
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[39m           ol[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mol[39m className[33m=[39m[32m"ordered-list"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mol[39m[33m>[39m[33m,[39m
+ [90m 129 |[39m           blockquote[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mblockquote[39m className[33m=[39m[32m"content-quote"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mblockquote[39m[33m>[39m[33m,[39m
+[31m[1m>[22m[39m[90m 130 |[39m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[39m
+ [90m     |[39m                                              [31m[1m^[22m[39m[0m
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[39m           ol[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mol[39m className[33m=[39m[32m"ordered-list"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mol[39m[33m>[39m[33m,[39m
+ [90m 129 |[39m           blockquote[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mblockquote[39m className[33m=[39m[32m"content-quote"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mblockquote[39m[33m>[39m[33m,[39m
+[31m[1m>[22m[39m[90m 130 |[39m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[39m
+ [90m     |[39m                                              [31m[1m^[22m[39m[0m
+[2m10:54:23[22m [31m[1m[vite][22m[39m [31mInternal server error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[31m           ol[33m:[31m ({ children }) [33m=>[31m [33m<[31m[33mol[31m className[33m=[31m[32m"ordered-list"[31m[33m>[31m{children}[33m<[31m[33m/[31m[33mol[31m[33m>[31m[33m,[31m
+ [90m 129 |[31m           blockquote[33m:[31m ({ children }) [33m=>[31m [33m<[31m[33mblockquote[31m className[33m=[31m[32m"content-quote"[31m[33m>[31m{children}[33m<[31m[33m/[31m[33mblockquote[31m[33m>[31m[33m,[31m
+[31m[1m>[22m[31m[90m 130 |[31m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[31m
+ [90m     |[31m                                              [31m[1m^[22m[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:130:45
+[33m  128|            ol: ({ children }) => <ol className="ordered-list">{children}</ol>,
+  129|            blockquote: ({ children }) => <blockquote className="content-quote">{children}</blockquote>,
+  130|            // GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�
+     |                                               ^[39m
+      at constructor (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.unexpected (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+      at TypeScriptParserMixin.parsePropertyName (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:12041:18)
+      at TypeScriptParserMixin.parsePropertyDefinition (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11906:10)
+      at TypeScriptParserMixin.parseObjectLike (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11849:21)
+      at TypeScriptParserMixin.parseExprAtom (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11356:23)
+      at TypeScriptParserMixin.parseExprAtom (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+      at TypeScriptParserMixin.parseExprSubscripts (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+      at TypeScriptParserMixin.parseUpdate (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+      at TypeScriptParserMixin.parseMaybeUnary (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+      at TypeScriptParserMixin.parseMaybeUnary (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:9854:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+      at TypeScriptParserMixin.parseExprOps (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+      at TypeScriptParserMixin.parseMaybeConditional (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+      at TypeScriptParserMixin.parseMaybeAssign (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+      at TypeScriptParserMixin.parseMaybeAssign (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:9803:20)
+      at TypeScriptParserMixin.parseExpressionBase (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+      at F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+      at TypeScriptParserMixin.allowInAnd (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+      at TypeScriptParserMixin.parseExpression (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+      at TypeScriptParserMixin.jsxParseExpressionContainer (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4644:31)
+      at TypeScriptParserMixin.jsxParseAttributeValue (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4616:21)
+      at TypeScriptParserMixin.jsxParseAttribute (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4665:38)
+      at TypeScriptParserMixin.jsxParseOpeningElementAfterName (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4679:28)
+      at TypeScriptParserMixin.jsxParseOpeningElementAfterName (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10060:18)
+      at TypeScriptParserMixin.jsxParseOpeningElementAt (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4674:17)
+      at TypeScriptParserMixin.jsxParseElementAt (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4698:33)
+      at TypeScriptParserMixin.jsxParseElementAt (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4710:32)
+      at TypeScriptParserMixin.jsxParseElement (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4761:17)
+      at TypeScriptParserMixin.parseExprAtom (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4771:19)
+      at TypeScriptParserMixin.parseExprSubscripts (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+      at TypeScriptParserMixin.parseUpdate (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+      at TypeScriptParserMixin.parseMaybeUnary (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+      at TypeScriptParserMixin.parseMaybeUnary (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:9854:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+      at TypeScriptParserMixin.parseExprOps (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+      at TypeScriptParserMixin.parseMaybeConditional (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+      at TypeScriptParserMixin.parseMaybeAssign (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+      at F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:9792:39
+      at TypeScriptParserMixin.tryParse (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:6924:20)
+      at TypeScriptParserMixin.parseMaybeAssign (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:9792:18)
+      at F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+      at TypeScriptParserMixin.allowInAnd (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+      at TypeScriptParserMixin.parseMaybeAssignAllowIn (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+      at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+      at TypeScriptParserMixin.parseParenAndDistinguishExpression (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11692:28)
+      at TypeScriptParserMixin.parseExprAtom (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+      at TypeScriptParserMixin.parseExprAtom (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+      at TypeScriptParserMixin.parseExprSubscripts (F:\软件杯\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: F:\软件杯\frontend\src\components\MarkdownRenderer.tsx: Unexpected token (130:45)
+
+[0m [90m 128 |[39m           ol[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mol[39m className[33m=[39m[32m"ordered-list"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mol[39m[33m>[39m[33m,[39m
+ [90m 129 |[39m           blockquote[33m:[39m ({ children }) [33m=>[39m [33m<[39m[33mblockquote[39m className[33m=[39m[32m"content-quote"[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mblockquote[39m[33m>[39m[33m,[39m
+[31m[1m>[22m[39m[90m 130 |[39m           [90m// GFM 表格：包一层可横向滚动容器，宽表（如多列对比表）不撑破�[39m
+ [90m     |[39m                                              [31m[1m^[22m[39m[0m
+[2m10:54:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:23[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:23[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:23[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:23[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?
+[2m10:54:24[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./MarkdownRenderer.css" from "src/components/MarkdownRenderer.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/MarkdownRenderer.tsx[39m:11:7
+[33m  25 |  import "katex/dist/katex.min.css";
+  26 |  import { weaveCitations } from "../utils/citations";
+  27 |  import "./MarkdownRenderer.css";
+     |          ^
+  28 |  const MermaidDiagram = lazy(_c = () => import("./MermaidDiagram"));
+  29 |  _c2 = MermaidDiagram;[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+      at async viteTransformMiddleware (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24)
+[2m10:54:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx, /src/components/LearningFlow.tsx, /src/components/CornellNotes.tsx, /src/components/TutorResourcePanel.tsx[22m
+[2m10:54:58[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SourceTrace.tsx[22m
+[2m10:54:58[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./SourceTrace.css" from "src/components/SourceTrace.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/SourceTrace.tsx[39m:2:7
+[33m  16 |  }
+  17 |  import { sourcePercent } from "../utils/citations";
+  18 |  import "./SourceTrace.css";
+     |          ^
+  19 |  export const defaultSources = [
+  20 |    { title: "《深度学习》 Goodfellow, Bengio, Courville", type: "教材", confidence: 98 },[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:54:58[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./SourceTrace.css" from "src/components/SourceTrace.tsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mF:/软件杯/frontend/src/components/SourceTrace.tsx[39m:2:7
+[33m  16 |  }
+  17 |  import { sourcePercent } from "../utils/citations";
+  18 |  import "./SourceTrace.css";
+     |          ^
+  19 |  export const defaultSources = [
+  20 |    { title: "《深度学习》 Goodfellow, Bengio, Courville", type: "教材", confidence: 98 },[39m
+      at TransformPluginContext._formatError (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///F:/%E8%BD%AF%E4%BB%B6%E6%9D%AF/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m10:55:08[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx, /src/pages/LearningResource.tsx, /src/components/ResourceLibraryPreview.tsx[22m
+[2m10:55:22[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/AskTutorDock.tsx, /src/components/SelectionAskBubble.tsx, /src/components/StuckNudge.tsx[22m
+[2m10:55:43[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SelectionAskBubble.tsx[22m
+[2m10:55:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
+[2m10:56:06[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
+[2m10:56:22[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:56:32[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:56:45[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:56:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:57:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:57:20[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m10:57:27[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:57:33[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:57:38[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:57:44[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:58:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:58:25[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/LearningFlow.tsx[22m
+[2m10:58:57[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx[22m
+[2m10:59:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/DocumentLearning.tsx[22m
+[2m11:02:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m11:02:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LearningResource.tsx[22m
+[2m11:27:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/GlobalTutorLayer.tsx[22m
