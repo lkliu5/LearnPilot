@@ -140,8 +140,9 @@ function pickMockDocs(ids: string[]): DocumentItem[] {
   return out
 }
 
-/** 多篇统一标题：单篇取原标题，多篇标「首篇 等 N 篇文档」。 */
+/** 多篇统一标题：单篇取原标题，多篇标「首篇 等 N 篇文档」。空数组防御性回退。 */
 function mergedTitle(docs: DocumentItem[]): string {
+  if (!docs.length) return '文档'
   return docs.length === 1 ? docs[0].title : `${docs[0].title} 等 ${docs.length} 篇文档`
 }
 
@@ -450,9 +451,22 @@ function docScopeBody(docId: string, documentIds?: string[]): Record<string, unk
   return ids.length > 1 ? { documentId: docId, documentIds: ids } : { documentId: docId }
 }
 function resolveMockScope(docId: string, documentIds?: string[]): DocumentItem[] {
-  const ids = documentIds?.length ? documentIds : [docId]
+  const ids = (documentIds?.length ? documentIds : [docId]).filter(Boolean)
   const docs = pickMockDocs(ids)
-  return docs.length ? docs : pickMockDocs([docId])
+  if (docs.length) return docs
+  // 资源库里的文档资源，其来源文档可能不在本次会话的内存 mockDocs 中（往次生成 / 刷新后清空）。
+  // 合成占位文档，保证离线预览渲染占位内容而非在 buildMock*(docs[0]) 处崩溃（此前会白屏）。
+  return (ids.length ? ids : [docId || 'udoc_unknown']).map((id) => ({
+    id,
+    title: id,
+    filename: `${id}.md`,
+    fileType: 'md' as const,
+    size: 0,
+    status: 'indexed' as const,
+    chunks: 0,
+    error: null,
+    uploadedAt: new Date().toISOString(),
+  }))
 }
 
 /** 文档概览（选中文档即自动生成展示）：内容取自该文档，联调走后端、离线走 mock。 */

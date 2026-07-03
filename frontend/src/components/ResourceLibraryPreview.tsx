@@ -27,6 +27,36 @@ const CodeSandbox = lazy(() => import('./CodeSandbox'))
 
 const Loading = () => <div className="resource-loading">资源加载中…</div>
 
+/**
+ * 文档资源内容缓存 + 在途去重。
+ *
+ * 「我的资源库」只存生成日志、不存产物，故查看文档资源需按来源文档**重建内容**（重型：RAG +
+ * LLM 生成，联调下每次 ~数十秒）。而 React 严格模式会对同一 effect **双触发**、反复开关弹层也会
+ * 重复重建——此前每次「查看」都会向后端并发发起**两次**相同的重型生成，多个叠加会把后端拖到
+ * 无法响应（表现为「服务挂掉」）。这里按 (docId|kind|difficulty) **合并在途请求 + 缓存结果**：
+ * 同一资源并发只打后端一次、再次查看直接命中缓存，彻底消除重复重建。失败不缓存以允许重试。
+ */
+const docContentCache = new Map<string, Promise<unknown>>()
+function loadDocContent(kind: ResourceHistoryItem['kind'], docId: string, diff: string): Promise<unknown> {
+  const key = `${docId}|${kind}|${diff}`
+  let p = docContentCache.get(key)
+  if (!p) {
+    p = (async () => {
+      if (kind === 'lecture') return generateLecture(docId, diff)
+      if (kind === 'video') return generateVideo(docId, diff)
+      if (kind === 'diagram') return generateDiagram(docId)
+      if (kind === 'mindmap') return generateMindmap(docId)
+      if (kind === 'quiz') return generateQuiz(docId, 5)
+      return generateFlashcards(docId, 8)
+    })().catch((e) => {
+      docContentCache.delete(key) // 失败不缓存，允许下次重试
+      throw e
+    })
+    docContentCache.set(key, p)
+  }
+  return p
+}
+
 /** 从讲义 markdown 提取标题大纲（跳过代码块内 # 注释）→ 供思维导图结构化（与学习资源页同口径）。 */
 function lectureOutline(md: string): string {
   let inFence = false
@@ -116,13 +146,8 @@ export default function ResourceLibraryPreview({
     const diff = record.difficulty || '初级'
     async function loadDoc() {
       try {
-        let data: unknown
-        if (kind === 'lecture') data = await generateLecture(docId, diff)
-        else if (kind === 'video') data = await generateVideo(docId, diff)
-        else if (kind === 'diagram') data = await generateDiagram(docId)
-        else if (kind === 'mindmap') data = await generateMindmap(docId)
-        else if (kind === 'quiz') data = await generateQuiz(docId, 5)
-        else data = await generateFlashcards(docId, 8) // flashcard
+        // 合并在途 + 缓存：严格模式双触发 / 反复查看只对后端发起一次重型生成
+        const data = await loadDocContent(kind, docId, diff)
         if (alive) setDocData(data as Record<string, unknown>)
       } catch (e) {
         console.error('[resource-library] 文档资源内容加载失败', e)
