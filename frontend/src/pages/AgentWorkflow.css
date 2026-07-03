@@ -766,7 +766,7 @@
   background: var(--primary-50);
   transform: translateX(2px);
 }
-.wf-result__item-emoji { font-size: 1.3rem; flex-shrink: 0; }
+.wf-result__item-emoji { display: inline-flex; align-items: center; flex-shrink: 0; }
 .wf-result__item-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .wf-result__item-label { font-size: 0.9rem; font-weight: 600; color: var(--gray-800); }
 .wf-result__item-desc { font-size: 0.74rem; color: var(--gray-500); }

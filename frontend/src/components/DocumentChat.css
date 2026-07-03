@@ -4,16 +4,42 @@
   min-height: 520px;
 }
 
-/* 本回答溯源：置于对话区与输入区之间的常驻插槽，紧贴最新回答，突出「标出处」。 */
+/* 本回答溯源：默认收起为一行「查看来源」，答案正文为主；展开后才显示参考文献列表。 */
 .docchat__src {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: var(--space-sm) 0 2px;
+  padding: 4px 0 2px;
 }
-.docchat__src-label {
-  font-size: 0.72rem;
-  font-weight: 700;
+
+/* 收起态触发条：小字次要样式，不与答案争夺空间 */
+.docchat__src-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.6);
   color: var(--gray-500);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
   letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.docchat__src-toggle:hover {
+  color: var(--primary-600);
+  border-color: var(--primary-200);
+  background: var(--primary-50);
+}
+.docchat__src-caret {
+  font-size: 0.68rem;
+  line-height: 1;
+}
+.docchat__src-icon {
+  font-size: 0.78rem;
+  line-height: 1;
 }

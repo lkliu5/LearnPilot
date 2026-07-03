@@ -4,6 +4,7 @@ import { gsap } from 'gsap'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
 import { useGSAP } from '@gsap/react'
 import AgentStatusCard from '../components/AgentStatusCard'
+import ResourceTypeIcon from '../components/ResourceTypeIcon'
 import CountUp from '../components/CountUp'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
@@ -32,11 +33,11 @@ const DIFFICULTIES = ['入门', '初级', '高级'] as const
 
 /* 工作流完成产物 → 资源页对应 Tab（id 与 LearningResource 的 TAB_GROUPS 对齐） */
 const WORKFLOW_ARTIFACTS = [
-  { tab: 'lecture', emoji: '📖', label: '定制讲义', desc: '分阶知识讲义，按目标难度生成' },
-  { tab: 'mindmap', emoji: '🧠', label: '思维导图', desc: '由讲义结构化的知识脑图' },
-  { tab: 'video', emoji: '🎬', label: '讲解视频', desc: '配套讲解视频脚本与播放' },
-  { tab: 'quiz', emoji: '✍️', label: '分阶测试题', desc: '巩固检验的分阶测验题' },
-  { tab: 'diagram', emoji: '📊', label: '知识图解', desc: '按主题真实生成的 Mermaid 知识脉络图' },
+  { tab: 'lecture', label: '定制讲义', desc: '分阶知识讲义，按目标难度生成' },
+  { tab: 'mindmap', label: '思维导图', desc: '由讲义结构化的知识脑图' },
+  { tab: 'video', label: '讲解视频', desc: '配套讲解视频脚本与播放' },
+  { tab: 'quiz', label: '分阶测试题', desc: '巩固检验的分阶测验题' },
+  { tab: 'diagram', label: '知识图解', desc: '按主题真实生成的 Mermaid 知识脉络图' },
 ] as const
 
 gsap.registerPlugin(useGSAP, MotionPathPlugin)
@@ -854,7 +855,7 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
               <div className="wf-result__list">
                 {WORKFLOW_ARTIFACTS.map((a) => (
                   <button key={a.tab} className="wf-result__item" onClick={() => goToResourceTab(a.tab)}>
-                    <span className="wf-result__item-emoji">{a.emoji}</span>
+                    <span className="wf-result__item-emoji"><ResourceTypeIcon kind={a.tab} size={26} /></span>
                     <span className="wf-result__item-text">
                       <span className="wf-result__item-label">{a.label}</span>
                       <span className="wf-result__item-desc">{a.desc}</span>

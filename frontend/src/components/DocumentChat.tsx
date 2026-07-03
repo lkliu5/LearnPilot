@@ -32,6 +32,9 @@ export default function DocumentChat({ docIds, docTitles }: DocumentChatProps) {
   /** 每轮回答的溯源（展示在最新回答下方，标出处）。 */
   const [answerSources, setAnswerSources] = useState<Record<number, SourceRef[]>>({})
 
+  /** 溯源默认收起：答案正文为主，参考文献作为可选查看的辅助（点击展开）。 */
+  const [srcOpen, setSrcOpen] = useState(false)
+
   const control = useRef({ cancelled: false })
   const scopeKey = docIds.join(',')
 
@@ -112,6 +115,11 @@ export default function DocumentChat({ docIds, docTitles }: DocumentChatProps) {
   })()
   const latestSources = latestAgentIdx >= 0 ? answerSources[latestAgentIdx] : undefined
 
+  /* 每轮新回答到来 → 溯源自动收起，保证用户先看清答案正文，再按需展开来源。 */
+  useEffect(() => {
+    setSrcOpen(false)
+  }, [latestAgentIdx])
+
   return (
     <ChatPanel
       className="docchat"
@@ -142,9 +150,22 @@ export default function DocumentChat({ docIds, docTitles }: DocumentChatProps) {
       locked={disabled}
       belowChat={
         latestSources && latestSources.length ? (
-          <div className="docchat__src">
-            <span className="docchat__src-label">本回答溯源</span>
-            <SourceTrace sources={latestSources} />
+          <div className={`docchat__src${srcOpen ? ' docchat__src--open' : ''}`}>
+            <button
+              type="button"
+              className="docchat__src-toggle"
+              onClick={() => setSrcOpen((v) => !v)}
+              aria-expanded={srcOpen}
+            >
+              <span className="docchat__src-caret" aria-hidden="true">
+                {srcOpen ? '▾' : '▸'}
+              </span>
+              <span className="docchat__src-icon" aria-hidden="true">
+                🛡
+              </span>
+              {srcOpen ? '收起来源' : `查看来源 [${latestSources.length} 篇]`}
+            </button>
+            {srcOpen && <SourceTrace sources={latestSources} />}
           </div>
         ) : null
       }

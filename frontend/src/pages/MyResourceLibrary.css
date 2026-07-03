@@ -39,6 +39,9 @@
   gap: 8px;
 }
 .reslib-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 14px;
   border-radius: var(--radius-full);
   border: 1px solid var(--line);
@@ -47,6 +50,9 @@
   font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.18s ease;
+}
+.reslib-chip__icon {
+  margin-left: -2px;
 }
 .reslib-chip:hover {
   border-color: var(--primary);
@@ -213,6 +219,15 @@
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+}
+.reslib-card__btn--danger:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 8%, var(--surface-2));
+}
+.reslib-card__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .reslib-card__btn--primary:hover {
   background: var(--primary-d);

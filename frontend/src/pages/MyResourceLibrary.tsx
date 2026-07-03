@@ -3,8 +3,10 @@ import { AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import ResourceLibraryPreview from '../components/ResourceLibraryPreview'
+import ResourceTypeIcon from '../components/ResourceTypeIcon'
 import { setResourceNav } from '../services/resourceNav'
 import {
+  deleteResource,
   getResourceHistory,
   HISTORY_KPS,
   KIND_LABEL,
@@ -14,16 +16,7 @@ import {
 import type { PageType } from '../App'
 import './MyResourceLibrary.css'
 
-/* 形态 → 图标 / 主题色（与学习资源页插画色系一致） */
-const KIND_ICON: Record<ResourceKind, string> = {
-  lecture: '📖',
-  video: '🎬',
-  diagram: '📊',
-  mindmap: '🧠',
-  code: '💻',
-  quiz: '📝',
-  flashcard: '🃏',
-}
+/* 形态 → 主题强调色（卡片左缘/难度徽标等仍用；类型图标统一走 <ResourceTypeIcon>） */
 const KIND_ACCENT: Record<ResourceKind, string> = {
   lecture: '#5b7f6e',
   video: '#3f6cc4',
@@ -149,6 +142,28 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
     onNavigate?.('learning-resource')
   }
 
+  /* 删除资产（CRUD·删）：二次确认 → 后端按 user 校验归属删除（连带产物）→ 乐观移除刷新列表。 */
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const handleDelete = async (r: ResourceHistoryItem) => {
+    if (deletingId) return
+    const ok = window.confirm(
+      `确定删除「${KIND_LABEL[r.kind]} · ${r.kpName}」吗？\n此操作不可撤销，将连同已生成产物一并移除。`
+    )
+    if (!ok) return
+    setDeletingId(r.id)
+    try {
+      await deleteResource(r.id)
+      if (preview?.id === r.id) setPreview(null)
+      setRecords((rs) => rs.filter((x) => x.id !== r.id))
+      setTotal((t) => Math.max(0, t - 1))
+    } catch (e) {
+      console.error('[resource-library] 删除失败', e)
+      window.alert('删除失败：可能无权操作或该资源已不存在，请刷新后重试。')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="reslib-page">
       <PageHeader
@@ -174,7 +189,7 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
                   className={`reslib-chip ${kindFilter === f.key ? 'reslib-chip--active' : ''}`}
                   onClick={() => setKindFilter(f.key)}
                 >
-                  {f.key ? `${KIND_ICON[f.key]} ` : ''}
+                  {f.key && <ResourceTypeIcon kind={f.key} size={16} className="reslib-chip__icon" />}
                   {f.label}
                 </button>
               ))}
@@ -274,7 +289,7 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
             <RevealItem className="reslib-summary">
               {KIND_FILTERS.filter((f) => f.key).map((f) => (
                 <span key={f.key} className="reslib-summary__item">
-                  <span aria-hidden="true">{KIND_ICON[f.key as ResourceKind]}</span>
+                  <ResourceTypeIcon kind={f.key as ResourceKind} size={18} />
                   {KIND_LABEL[f.key as ResourceKind]}
                   <strong>{kindCounts[f.key as ResourceKind] ?? 0}</strong>
                 </span>
@@ -295,8 +310,8 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
                     onClick={() => setPreview(r)}
                     title="查看该资源"
                   >
-                    <span className="reslib-card__icon" style={{ background: `${KIND_ACCENT[r.kind]}1a` }}>
-                      {KIND_ICON[r.kind]}
+                    <span className="reslib-card__icon">
+                      <ResourceTypeIcon kind={r.kind} size={48} />
                     </span>
                     <span className="reslib-card__body">
                       <span className="reslib-card__kind">{KIND_LABEL[r.kind]}</span>
@@ -318,6 +333,15 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
                       title="在预览中下载（讲义 md/pdf · 视频 mp4 · 图解/导图 svg/png · 代码文件）"
                     >
                       下载
+                    </button>
+                    <button
+                      type="button"
+                      className="reslib-card__btn reslib-card__btn--danger"
+                      onClick={() => void handleDelete(r)}
+                      disabled={deletingId === r.id}
+                      title="删除该资产（连同已生成产物，不可撤销）"
+                    >
+                      {deletingId === r.id ? '删除中…' : '删除'}
                     </button>
                   </div>
                 </article>

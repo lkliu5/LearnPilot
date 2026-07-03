@@ -111,6 +111,7 @@
   cursor: pointer;
   transition: all var(--transition-fast);
 }
+.flow__input-tab-inner { display: inline-flex; align-items: center; gap: 6px; }
 .flow__input-tab:hover { transform: translateY(-1px); }
 .flow__input-tab--active {
   background: linear-gradient(135deg, var(--primary-500), var(--primary-600));

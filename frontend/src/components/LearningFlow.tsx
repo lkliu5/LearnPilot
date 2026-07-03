@@ -6,6 +6,7 @@ import WeakPointReinforce from './WeakPointReinforce'
 import CornellNotes from './CornellNotes'
 import FeynmanTutor from './FeynmanTutor'
 import { defaultSources, type SourceRef } from './SourceTrace'
+import ResourceTypeIcon, { type ResourceIconKind } from './ResourceTypeIcon'
 import { STATUS_LABEL, type KPStatus } from '../store/mastery'
 import {
   getCornellCues,
@@ -42,10 +43,10 @@ const PHASE_OF_STEP: Record<StepKey, number> = {
   practice: 3,
 }
 
-const INPUT_TABS: { key: StepKey; emoji: string; label: string }[] = [
-  { key: 'video', emoji: '🎬', label: '讲解视频' },
-  { key: 'lecture', emoji: '📖', label: '定制讲义' },
-  { key: 'diagram', emoji: '📊', label: '知识图解' },
+const INPUT_TABS: { key: StepKey; icon: ResourceIconKind; label: string }[] = [
+  { key: 'video', icon: 'video', label: '讲解视频' },
+  { key: 'lecture', icon: 'lecture', label: '定制讲义' },
+  { key: 'diagram', icon: 'diagram', label: '知识图解' },
 ]
 
 interface LearningFlowProps {
@@ -258,7 +259,7 @@ export default function LearningFlow({
                       className={`flow__input-tab ${inputTab === t.key ? 'flow__input-tab--active' : ''} ${steps[t.key] ? 'flow__input-tab--done' : ''}`}
                       onClick={() => setInputTab(t.key)}
                     >
-                      <span>{t.emoji} {t.label}</span>
+                      <span className="flow__input-tab-inner"><ResourceTypeIcon kind={t.icon} size={18} /> {t.label}</span>
                       {steps[t.key] && <span className="flow__input-tab-check">✓</span>}
                     </button>
                   ))}

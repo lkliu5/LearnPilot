@@ -7,6 +7,7 @@ import QuizRenderer from '../components/QuizRenderer'
 import SourceTrace from '../components/SourceTrace'
 import FlashcardDeck from '../components/FlashcardDeck'
 import DocumentChat from '../components/DocumentChat'
+import ResourceTypeIcon, { type ResourceIconKind } from '../components/ResourceTypeIcon'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 /* 复用学习资源页的共享样式（讲义导出条 / 难度切换 / loading / 各渲染组件的导出工具条等，
    均为 class 前缀样式、无全局副作用），保证复用的渲染/下载组件在本页样式一致。 */
@@ -71,14 +72,24 @@ interface ArtifactBag {
   flashcards?: FlashcardResult
 }
 
-const KIND_META: { id: Kind; label: string; desc: string; icon: string }[] = [
-  { id: 'lecture', label: '定制讲义', desc: '结构化 Markdown 讲义', icon: '📖' },
-  { id: 'video', label: '讲解视频', desc: '分镜脚本 + 同步旁白', icon: '🎬' },
-  { id: 'diagram', label: '知识图解', desc: 'Mermaid 流程图', icon: '🧩' },
-  { id: 'mindmap', label: '思维导图', desc: '脉络树状图', icon: '🗺️' },
-  { id: 'quiz', label: '练习题', desc: '分阶自测题', icon: '📝' },
-  { id: 'flashcards', label: '记忆闪卡', desc: '正反翻卡速记', icon: '🃏' },
+const KIND_META: { id: Kind; label: string; desc: string }[] = [
+  { id: 'lecture', label: '定制讲义', desc: '结构化 Markdown 讲义' },
+  { id: 'video', label: '讲解视频', desc: '分镜脚本 + 同步旁白' },
+  { id: 'diagram', label: '知识图解', desc: 'Mermaid 流程图' },
+  { id: 'mindmap', label: '思维导图', desc: '脉络树状图' },
+  { id: 'quiz', label: '练习题', desc: '分阶自测题' },
+  { id: 'flashcards', label: '记忆闪卡', desc: '正反翻卡速记' },
 ]
+
+/* 文档学习形态 id（quiz/flashcards 平行链路）→ 统一资源类型图标 kind（flashcards→flashcard）。 */
+const DOC_ICON_KIND: Record<Kind, ResourceIconKind> = {
+  lecture: 'lecture',
+  video: 'video',
+  diagram: 'diagram',
+  mindmap: 'mindmap',
+  quiz: 'quiz',
+  flashcards: 'flashcard',
+}
 
 const STATUS_LABEL: Record<DocumentItem['status'], string> = {
   pending: '待处理',
@@ -933,7 +944,9 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                         disabled={busy || !scopeIds.length}
                         title={done ? '点击在大预览中查看' : `基于所选文档生成${k.label}`}
                       >
-                        <span className="doclearn-act__icon">{busy ? <span className="doclearn-drop__spinner" /> : k.icon}</span>
+                        <span className="doclearn-act__icon">
+                          {busy ? <span className="doclearn-drop__spinner" /> : <ResourceTypeIcon kind={DOC_ICON_KIND[k.id]} size={30} />}
+                        </span>
                         <span className="doclearn-act__label">{k.label}</span>
                         <span className="doclearn-act__desc">
                           {busy

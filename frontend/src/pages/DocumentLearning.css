@@ -425,9 +425,10 @@
 .doclearn-act__icon {
   font-size: 22px;
   line-height: 1;
-  height: 24px;
+  height: 32px;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 .doclearn-act__label {
   font-size: var(--text-sm);

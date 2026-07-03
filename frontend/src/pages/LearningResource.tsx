@@ -10,6 +10,7 @@ import StuckNudge from '../components/StuckNudge'
 import { setTutorContext } from '../services/tutorBus'
 import { reportStuck } from '../services/stuckSignal'
 import ResourceIllustration, { type ResourceIllustrationType } from '../components/ResourceIllustration'
+import ResourceTypeIcon from '../components/ResourceTypeIcon'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { kpById } from '../data/knowledgePoints'
@@ -1305,7 +1306,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
                       disabled={genRunning}
                       onChange={() => toggleGen(o.type)}
                     />
-                    <span className="trp__item-icon">{GEN_ICON[o.type]}</span>
+                    <span className="trp__item-icon">
+                      {o.type === 'external' ? GEN_ICON.external : <ResourceTypeIcon kind={o.type} size={26} />}
+                    </span>
                     <span className="trp__item-body">
                       <span className="trp__item-title">{o.title}</span>
                       <span className="trp__item-expect">{o.expect}</span>

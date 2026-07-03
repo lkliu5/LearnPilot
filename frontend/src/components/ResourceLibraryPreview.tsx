@@ -390,11 +390,15 @@ export default function ResourceLibraryPreview({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.24 }}
         >
-          <div className="reslib-preview__toolbar">
-            <button type="button" className="reslib-preview__jump" onClick={() => onOpenInLearning(record)}>
-              {isDoc ? '在文档学习打开 →' : '在学习页打开 →'}
-            </button>
-          </div>
+          {/* 文档资源跳「文档学习」页无实际内容（无选中文档、无上下文），故仅内置课程资源保留跳转；
+             文档资源在本预览框内已可完整查看 + 下载 + 重新生成 + 编辑，无需跳转。 */}
+          {!isDoc && (
+            <div className="reslib-preview__toolbar">
+              <button type="button" className="reslib-preview__jump" onClick={() => onOpenInLearning(record)}>
+                在学习页打开 →
+              </button>
+            </div>
+          )}
           {renderBody()}
         </motion.div>
       </motion.div>
