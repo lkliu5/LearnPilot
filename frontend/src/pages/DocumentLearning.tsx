@@ -47,6 +47,21 @@ const Loading = () => <div className="resource-loading">资源加载中…</div>
 type Kind = 'lecture' | 'video' | 'diagram' | 'mindmap' | 'quiz' | 'flashcards'
 const LEVELS = ['入门', '初级', '中级', '高级', '精通'] as const
 
+/** 客户端阶段化进度文案：普通形态 4 段，视频（长任务）5 段更慢推进，给出「进行到哪一步」的明确反馈。 */
+const GEN_STAGES = ['检索文档片段', '组织知识结构', '生成内容', '排版与渲染'] as const
+const VIDEO_STAGES = ['检索文档片段', '编写分镜脚本', '生成同步旁白', '合成视频画面', '渲染输出'] as const
+type GenProgress = { pct: number; stage: string }
+
+/** 预览弹层头部主题浅底（与「我的资源库」预览一致，深浅主题下均为柔和浅色，文字用 --ink）。 */
+const KIND_HEAD: Record<Kind, string> = {
+  lecture: '#e7f4ee',
+  video: '#e8f0fb',
+  diagram: '#fbf2e2',
+  mindmap: '#efeafb',
+  quiz: '#fbeaf1',
+  flashcards: '#e5f5f1',
+}
+
 interface ArtifactBag {
   lecture?: LectureResult
   video?: VideoResult
@@ -92,6 +107,22 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
   const [genKinds, setGenKinds] = useState<Set<Kind>>(() => new Set())
   const [genErr, setGenErr] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string>('初级')
+
+  /** 各形态的客户端生成进度（阶段文案 + 百分比），驱动按钮进度条 / 弹层重生成进度。 */
+  const [progress, setProgress] = useState<Partial<Record<Kind, GenProgress>>>({})
+  /** 进度推进定时器句柄（按形态）；卸载 / 结束时清理，避免泄漏。 */
+  const progressTimers = useRef<Partial<Record<Kind, number>>>({})
+
+  /** 大预览弹层：当前打开的形态（null = 关闭）。内容直接读已落库产物 bag，不重新生成。 */
+  const [previewKind, setPreviewKind] = useState<Kind | null>(null)
+  /** 预览标题重命名覆盖：key = `${scopeKey}::${kind}`；空则回落默认标题。 */
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({})
+  const [renaming, setRenaming] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  /** 讲义简单文本编辑（改后写回产物 markdown，预览即时重渲染）。 */
+  const [editingLecture, setEditingLecture] = useState(false)
+  const [lectureDraft, setLectureDraft] = useState('')
+  const previewLectureRef = useRef<HTMLDivElement>(null)
 
   /** docId → 文档概览（聚焦即自动生成，展示在左栏「关于来源」区）。 */
   const [overviews, setOverviews] = useState<Record<string, OverviewResult>>({})
@@ -144,6 +175,10 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
     const first = b ? (KIND_META.map((k) => k.id).find((k) => b[k]) ?? null) : null
     setActiveKind(first)
     setGenErr(null)
+    // 切换生成范围：关闭旧范围的预览弹层与编辑态（产物已不再对应）
+    setPreviewKind(null)
+    setRenaming(false)
+    setEditingLecture(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey])
 
@@ -248,6 +283,58 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
     if (focusedId === docId) setFocusedId((cur) => (cur === docId ? null : cur))
   }
 
+  /* ---------------- 生成进度（客户端阶段化推进，给出明确「进行中 · 到哪一步」反馈） ---------------- */
+
+  /** 启动某形态的阶段化进度：向 92% 缓动逼近（留 8% 待真正返回时补满），视频推进更慢、阶段更多。 */
+  const startProgress = (kind: Kind) => {
+    const stages = kind === 'video' ? VIDEO_STAGES : GEN_STAGES
+    setProgress((prev) => ({ ...prev, [kind]: { pct: 6, stage: stages[0] } }))
+    const existing = progressTimers.current[kind]
+    if (existing) window.clearInterval(existing)
+    progressTimers.current[kind] = window.setInterval(() => {
+      setProgress((prev) => {
+        const cur = prev[kind]?.pct ?? 6
+        const ease = kind === 'video' ? 0.08 : 0.16
+        const next = Math.min(92, cur + Math.max(1.4, (92 - cur) * ease))
+        const si = Math.min(stages.length - 1, Math.floor((next / 92) * stages.length))
+        return { ...prev, [kind]: { pct: next, stage: stages[si] } }
+      })
+    }, kind === 'video' ? 620 : 430)
+  }
+  /** 结束进度：成功先补满 100% 再淡出清除；失败直接清除。 */
+  const stopProgress = (kind: Kind, ok: boolean) => {
+    const t = progressTimers.current[kind]
+    if (t) {
+      window.clearInterval(t)
+      delete progressTimers.current[kind]
+    }
+    if (ok) {
+      setProgress((prev) => ({ ...prev, [kind]: { pct: 100, stage: '完成' } }))
+      window.setTimeout(
+        () =>
+          setProgress((prev) => {
+            const next = { ...prev }
+            delete next[kind]
+            return next
+          }),
+        500
+      )
+    } else {
+      setProgress((prev) => {
+        const next = { ...prev }
+        delete next[kind]
+        return next
+      })
+    }
+  }
+  /* 卸载清理所有进度定时器 */
+  useEffect(
+    () => () => {
+      Object.values(progressTimers.current).forEach((t) => t && window.clearInterval(t))
+    },
+    []
+  )
+
   /* ---------------- 生成（基于勾选范围，主文档 primaryId + 合并 scopeIds） ---------------- */
 
   const runGenerate = async (kind: Kind, opts?: { diff?: string; regen?: boolean }) => {
@@ -256,13 +343,15 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       setGenErr('所选文档正在解析入库，请稍候再生成。')
       return
     }
-    // 已生成且非强制重生成 → 直接切视图
+    // 已生成且非强制重生成 → 直接切视图并打开大预览（读已落库产物，不重新生成）
     if (!opts?.regen && bags[scopeKey]?.[kind]) {
       setActiveKind(kind)
+      setPreviewKind(kind)
       return
     }
     setGenErr(null)
     setGenKinds((prev) => new Set(prev).add(kind))
+    startProgress(kind)
     const diff = opts?.diff ?? difficulty
     const ids = scopeIds
     try {
@@ -275,15 +364,30 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
       else data = await generateFlashcards(primaryId, 8, ids)
       setBags((prev) => ({ ...prev, [scopeKey]: { ...prev[scopeKey], [kind]: data } }))
       setActiveKind(kind)
+      // 生成完成即在大预览弹层展示（切难度 / 弹层内重生成时本就已打开，幂等无副作用）
+      setPreviewKind(kind)
+      stopProgress(kind, true)
     } catch (e) {
       console.error('[doclearn] 生成失败', e)
       setGenErr(`「${KIND_META.find((k) => k.id === kind)?.label}」生成失败，请稍后重试。`)
+      stopProgress(kind, false)
     } finally {
       setGenKinds((prev) => {
         const next = new Set(prev)
         next.delete(kind)
         return next
       })
+    }
+  }
+
+  /** 点击形态卡：已生成 → 直接开大预览；未生成 → 触发生成（生成完自动开预览）。 */
+  const openOrGenerate = (kind: Kind) => {
+    if (genKinds.has(kind)) return
+    if (bag[kind]) {
+      setActiveKind(kind)
+      setPreviewKind(kind)
+    } else {
+      void runGenerate(kind)
     }
   }
 
@@ -305,6 +409,81 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
     const ok = exportLectureToPdf(body, `讲义-${scopeTitle}`, meta)
     if (!ok) window.alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试导出 PDF。')
   }
+
+  /* ---------------- 大预览弹层：标题 / 重命名 / 讲义编辑 / 弹层内导出 ---------------- */
+
+  const kindLabel = (k: Kind) => KIND_META.find((m) => m.id === k)?.label ?? ''
+  const titleKeyFor = (k: Kind) => `${scopeKey}::${k}`
+  const defaultTitleFor = (k: Kind) => `${kindLabel(k)} · ${scopeTitle}`
+  const effTitleFor = (k: Kind) => titleOverrides[titleKeyFor(k)] || defaultTitleFor(k)
+  /** 下载文件名基名：重命名过则用自定义标题，否则回落 scopeTitle（不带形态前缀，避免与前缀重复）。 */
+  const dlBase = (k: Kind) => titleOverrides[titleKeyFor(k)] || scopeTitle
+
+  const beginRename = () => {
+    if (!previewKind) return
+    setTitleDraft(effTitleFor(previewKind))
+    setRenaming(true)
+  }
+  const commitRename = () => {
+    if (!previewKind) return
+    const v = titleDraft.trim()
+    const key = titleKeyFor(previewKind)
+    setTitleOverrides((prev) => {
+      const next = { ...prev }
+      if (!v || v === defaultTitleFor(previewKind)) delete next[key]
+      else next[key] = v
+      return next
+    })
+    setRenaming(false)
+  }
+
+  const beginEditLecture = () => {
+    if (!bag.lecture) return
+    setLectureDraft(bag.lecture.markdown)
+    setEditingLecture(true)
+  }
+  const saveLecture = () => {
+    setBags((prev) => {
+      const b = prev[scopeKey]
+      if (!b?.lecture) return prev
+      return { ...prev, [scopeKey]: { ...b, lecture: { ...b.lecture, markdown: lectureDraft } } }
+    })
+    setEditingLecture(false)
+  }
+
+  /** 弹层内讲义导出：复用现有导出能力，文件名带（可能被重命名过的）标题。 */
+  const exportPreviewMd = () => {
+    if (bag.lecture) exportLectureMarkdown(bag.lecture.markdown, `讲义-${dlBase('lecture')}`)
+  }
+  const exportPreviewPdf = () => {
+    const body = previewLectureRef.current?.querySelector('.markdown-body') as HTMLElement | null
+    if (!body) return
+    const meta = `${effTitleFor('lecture')} · 难度：${bag.lecture?.difficulty ?? difficulty} · 导出于 ${new Date().toLocaleString('zh-CN')}`
+    const ok = exportLectureToPdf(body, `讲义-${dlBase('lecture')}`, meta)
+    if (!ok) window.alert('浏览器拦截了打印窗口，请允许本站弹出窗口后重试导出 PDF。')
+  }
+
+  const closePreview = () => {
+    setPreviewKind(null)
+    setRenaming(false)
+    setEditingLecture(false)
+  }
+
+  /* 预览弹层：Esc 关闭 + 锁背景滚动（与「我的资源库」预览一致体验）。 */
+  useEffect(() => {
+    if (!previewKind) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePreview()
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKind])
 
   /* ---------------- 渲染：产出区 ---------------- */
 
@@ -414,6 +593,124 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                 cards={bag.flashcards.cards}
                 title={scopeTitle}
                 downloadName={`闪卡-${scopeTitle}`}
+              />
+            )}
+            <SourceTrace sources={bag.flashcards?.sources} />
+          </>
+        )
+    }
+  }
+
+  /* ---------------- 渲染：大预览弹层的内容体（读已落库产物 bag，不重新生成） ---------------- */
+  const renderPreviewBody = () => {
+    if (!previewKind) return null
+    switch (previewKind) {
+      case 'lecture':
+        return (
+          <>
+            <div className="level-switch">
+              <span className="level-switch__label">难度自适应：</span>
+              <div className="level-switch__seg">
+                {LEVELS.map((lv) => (
+                  <button
+                    key={lv}
+                    className={`level-switch__btn ${(bag.lecture?.difficulty ?? difficulty) === lv ? 'level-switch__btn--active' : ''}`}
+                    onClick={() => changeLectureLevel(lv)}
+                    disabled={genKinds.has('lecture') || editingLecture}
+                  >
+                    {lv}
+                  </button>
+                ))}
+              </div>
+              <span className="level-switch__hint">切换难度，AI 按该文档实时重生成讲义</span>
+            </div>
+            {bag.lecture && (
+              <div className="doclearn-halluc" title="讲义内容与文档原文的偏离度，越低越可信">
+                文档溯源 · 幻觉率 {Math.round(bag.lecture.hallucinationRate * 100)}%
+              </div>
+            )}
+            <SourceTrace sources={bag.lecture?.sources} />
+            {editingLecture ? (
+              <div className="docprev__edit">
+                <textarea
+                  className="docprev__editor"
+                  value={lectureDraft}
+                  onChange={(e) => setLectureDraft(e.target.value)}
+                  spellCheck={false}
+                  aria-label="编辑讲义 Markdown"
+                />
+                <div className="docprev__edit-actions">
+                  <button type="button" className="docprev__btn docprev__btn--primary" onClick={saveLecture}>
+                    保存
+                  </button>
+                  <button type="button" className="docprev__btn" onClick={() => setEditingLecture(false)}>
+                    取消
+                  </button>
+                  <span className="docprev__edit-hint">支持 Markdown / KaTeX 公式 / mermaid 图块，保存后即时渲染。</span>
+                </div>
+              </div>
+            ) : (
+              <div className="lecture-body" ref={previewLectureRef}>
+                {bag.lecture ? (
+                  <MarkdownRenderer content={bag.lecture.markdown} />
+                ) : (
+                  <div className="resource-loading">正在基于文档生成讲义…</div>
+                )}
+              </div>
+            )}
+          </>
+        )
+      case 'video':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">基于文档生成的讲解视频（Remotion 实时渲染 + 同步旁白）：</div>
+            {bag.video && (
+              <VideoLecture title={bag.video.title} scenes={bag.video.scenes} difficulty={bag.video.difficulty} />
+            )}
+            <SourceTrace sources={bag.video?.sources} />
+          </Suspense>
+        )
+      case 'diagram':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">文档知识脉络图解（可缩放 / 拖拽 / 导出 SVG · PNG）：</div>
+            {bag.diagram && <MermaidDiagram chart={bag.diagram.mermaid} downloadName={`图解-${dlBase('diagram')}`} />}
+            <SourceTrace sources={bag.diagram?.sources} />
+          </Suspense>
+        )
+      case 'mindmap':
+        return (
+          <Suspense fallback={<Loading />}>
+            <div className="resource-modal-hint">文档结构化思维导图（可缩放 / 拖拽 / 导出 SVG · PNG）：</div>
+            {bag.mindmap && <MindMap markdown={bag.mindmap.markdown} downloadName={`思维导图-${dlBase('mindmap')}`} />}
+          </Suspense>
+        )
+      case 'quiz':
+        return (
+          <>
+            <div className="resource-modal-hint">基于文档生成的练习题，作答后即时判分与解析（通过线 70 分）：</div>
+            {bag.quiz && bag.quiz.questions.length > 0 ? (
+              <QuizRenderer
+                questions={bag.quiz.questions}
+                autoGrade
+                passMark={70}
+                onRestudy={() => void runGenerate('lecture')}
+              />
+            ) : (
+              <div className="resource-loading">正在基于文档生成练习题…</div>
+            )}
+            <SourceTrace sources={bag.quiz?.sources} />
+          </>
+        )
+      case 'flashcards':
+        return (
+          <>
+            <div className="resource-modal-hint">正反翻卡速记，点击卡片翻面，← → 翻页浏览整套：</div>
+            {bag.flashcards && (
+              <FlashcardDeck
+                cards={bag.flashcards.cards}
+                title={effTitleFor('flashcards')}
+                downloadName={`闪卡-${dlBase('flashcards')}`}
               />
             )}
             <SourceTrace sources={bag.flashcards?.sources} />
@@ -626,18 +923,31 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
                     const done = !!bag[k.id]
                     const busy = genKinds.has(k.id)
                     const active = activeKind === k.id
+                    const pr = progress[k.id]
+                    const pct = Math.round(pr?.pct ?? 0)
                     return (
                       <button
                         key={k.id}
-                        className={`doclearn-act ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''}`}
-                        onClick={() => runGenerate(k.id)}
+                        className={`doclearn-act ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''} ${busy ? 'doclearn-act--busy' : ''}`}
+                        onClick={() => openOrGenerate(k.id)}
                         disabled={busy || !scopeIds.length}
-                        title={done ? '查看已生成内容' : `基于所选文档生成${k.label}`}
+                        title={done ? '点击在大预览中查看' : `基于所选文档生成${k.label}`}
                       >
                         <span className="doclearn-act__icon">{busy ? <span className="doclearn-drop__spinner" /> : k.icon}</span>
                         <span className="doclearn-act__label">{k.label}</span>
-                        <span className="doclearn-act__desc">{busy ? '生成中…' : done ? '已生成 · 点击查看' : k.desc}</span>
-                        {done && (
+                        <span className="doclearn-act__desc">
+                          {busy
+                            ? `生成中 · ${pct}%${pr?.stage ? ` · ${pr.stage}` : ''}`
+                            : done
+                              ? '已生成 · 点击查看'
+                              : k.desc}
+                        </span>
+                        {busy && (
+                          <span className="doclearn-act__progress" aria-hidden="true">
+                            <span className="doclearn-act__progress-fill" style={{ width: `${pct}%` }} />
+                          </span>
+                        )}
+                        {done && !busy && (
                           <span
                             className="doclearn-act__regen"
                             role="button"
@@ -690,6 +1000,110 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
           )}
         </section>
       </div>
+
+      {/* ============ 大预览弹层（读已落库产物；框内可下载 / 重新生成 / 重命名 · 编辑） ============ */}
+      <AnimatePresence>
+        {previewKind && (
+          <motion.div
+            className="rescard-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closePreview}
+            role="dialog"
+            aria-modal="true"
+            aria-label={effTitleFor(previewKind)}
+          >
+            <motion.div
+              className="rescard-detail rescard-detail--wide"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+            >
+              <div
+                className="rescard-detail__head rescard-detail__head--plain"
+                style={{ background: KIND_HEAD[previewKind] }}
+              />
+              <button type="button" className="rescard-detail__close" onClick={closePreview} aria-label="关闭">
+                ×
+              </button>
+
+              {/* 标题 + 重命名 */}
+              <div className="docprev__title">
+                <span className="docprev__kind-chip">{kindLabel(previewKind)}</span>
+                {renaming ? (
+                  <input
+                    className="docprev__title-input"
+                    value={titleDraft}
+                    autoFocus
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename()
+                      else if (e.key === 'Escape') setRenaming(false)
+                    }}
+                    aria-label="重命名标题"
+                  />
+                ) : (
+                  <>
+                    <span className="docprev__title-text">{effTitleFor(previewKind)}</span>
+                    <button type="button" className="docprev__rename" title="重命名标题" onClick={beginRename}>
+                      ✎
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="rescard-detail__body">
+                {/* 框内操作条：下载 / 重新生成 / 编辑 */}
+                <div className="docprev__toolbar">
+                  {previewKind === 'lecture' && !editingLecture && (
+                    <>
+                      <button type="button" className="docprev__btn" onClick={exportPreviewMd} disabled={!bag.lecture}>
+                        <span aria-hidden="true">⬇</span> Markdown
+                      </button>
+                      <button type="button" className="docprev__btn" onClick={exportPreviewPdf} disabled={!bag.lecture}>
+                        <span aria-hidden="true">🖨</span> PDF
+                      </button>
+                      <button type="button" className="docprev__btn" onClick={beginEditLecture} disabled={!bag.lecture}>
+                        <span aria-hidden="true">✎</span> 编辑
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="docprev__btn docprev__btn--primary"
+                    onClick={() => void runGenerate(previewKind, { regen: true })}
+                    disabled={genKinds.has(previewKind) || editingLecture}
+                    title="基于文档重新生成并刷新预览"
+                  >
+                    <span aria-hidden="true">↻</span> {genKinds.has(previewKind) ? '重新生成中…' : '重新生成'}
+                  </button>
+                </div>
+
+                {/* 重新生成进度条 */}
+                {genKinds.has(previewKind) && progress[previewKind] && (
+                  <div className="docprev__regen">
+                    <span className="docprev__regen-bar" aria-hidden="true">
+                      <span
+                        className="docprev__regen-fill"
+                        style={{ width: `${Math.round(progress[previewKind]!.pct)}%` }}
+                      />
+                    </span>
+                    <span>
+                      重新生成中 · {Math.round(progress[previewKind]!.pct)}% · {progress[previewKind]!.stage}
+                    </span>
+                  </div>
+                )}
+
+                {renderPreviewBody()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
