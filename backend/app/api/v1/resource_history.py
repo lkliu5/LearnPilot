@@ -1,9 +1,11 @@
 """我的资源库·生成历史（接口文档第 19 章）。
 
-- GET  /resource/history       按当前用户分页列出其资源生成历史（可按 kind/知识点/时间过滤）
-- POST /resource/history/log   追加一条生成埋点（供前端为「无独立后端生成接口」的形态补埋点：
-                               思维导图 mindmap / 代码实操 code；讲义/视频/图解由各自生成接口
-                               在后端旁路自动埋点，此接口 upsert 幂等、重复调用安全）
+- GET    /resource/history          按当前用户分页列出其资源生成历史（可按 kind/知识点/时间过滤）
+- POST   /resource/history/log      追加一条生成埋点（供前端为「无独立后端生成接口」的形态补埋点：
+                                    思维导图 mindmap / 代码实操 code；讲义/视频/图解由各自生成接口
+                                    在后端旁路自动埋点，此接口 upsert 幂等、重复调用安全）
+- POST   /resource/history/rename   重命名一条资产的展示标题（CRUD·改；按 user 校验归属）
+- DELETE /resource/history/{logId}  删除一条资产（CRUD·删；连带已落库产物；按 user 校验归属）
 
 均需登录；user 归属取自 JWT（get_current_user），与 ResourceCache 全局缓存无关。
 """
@@ -14,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.envelope import success
+from app.core.envelope import fail, success
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.services import generation_log as generation_log_service
@@ -30,6 +32,13 @@ class HistoryLogRequest(BaseModel):
     difficulty: str = ""
     title: str | None = None
     resourceRef: str | None = Field(default=None)
+
+
+class HistoryRenameRequest(BaseModel):
+    """重命名资产标题请求（接口文档 19.3）。仅改展示标题，不改类型/归属。"""
+
+    id: int
+    title: str = Field(..., min_length=1, max_length=256)
 
 
 @router.get("/resource/history")
@@ -74,3 +83,28 @@ async def resource_history_log(
         resource_ref=body.resourceRef,
     )
     return success({"logged": True})
+
+
+@router.post("/resource/history/rename")
+async def resource_history_rename(
+    body: HistoryRenameRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """重命名资源库资产标题（接口文档 19.3，CRUD·改）。非本人/不存在 → 1004。"""
+    item = generation_log_service.rename(db, user.id, body.id, body.title)
+    if item is None:
+        return fail(code=1004, message="资源不存在或无权操作", status_code=404)
+    return success(item)
+
+
+@router.delete("/resource/history/{log_id}")
+async def resource_history_delete(
+    log_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除资源库资产（接口文档 19.4，CRUD·删；连带其已落库产物）。非本人/不存在 → 1004。"""
+    if not generation_log_service.delete(db, user.id, log_id):
+        return fail(code=1004, message="资源不存在或无权操作", status_code=404)
+    return success({"id": log_id, "deleted": True})

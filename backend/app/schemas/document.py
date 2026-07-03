@@ -12,10 +12,15 @@ from pydantic import BaseModel, Field
 
 
 class _DocGenBase(BaseModel):
-    """基于文档的生成请求基类：单篇 documentId（必填、向后兼容）+ 可选多篇 documentIds。"""
+    """基于文档的生成请求基类：单篇 documentId（必填、向后兼容）+ 可选多篇 documentIds。
+
+    产物落库（增补，向后兼容）：可选 ``regenerate``——缺省 ``false`` 时「查看」优先读已落库
+    产物、命中不重生成；显式 ``true`` 时强制重跑生成并覆盖产物、刷新时间（「重新生成」动作）。
+    """
 
     documentId: str = Field(..., min_length=1)
     documentIds: list[str] | None = Field(default=None)
+    regenerate: bool = Field(default=False)
 
     def doc_ids(self) -> list[str]:
         """归一为文档 id 列表：优先 documentIds（去空），否则回退 [documentId]。"""

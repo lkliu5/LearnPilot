@@ -339,6 +339,15 @@ class GenerationLog(Base):
     source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # builtin|document
     doc_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 文档来源 id
     doc_title: Mapped[str | None] = mapped_column(String(256), nullable=True)  # 文档标题（展示）
+    # 产物落库（新增，向后兼容）：把生成产物的**实际内容**随资产行一并持久化，让「查看」
+    # 直接读已存产物渲染、**不再调用生成接口重跑 RAG+大模型**（消除 ~25s 等待与内容不一致、
+    # 部署后重复烧 API）。文本类产物（讲义 markdown / 图解 mermaid / 思维导图 / 练习题 /
+    # 闪卡 / 视频分镜脚本）存本列 JSON；视频 mp4 等大文件仍走文件系统 + URL（artifact 内存
+    # videoUrl 引用）。内置课程资源 artifact=NULL（其产物由无用户归属的 ResourceCache 全局
+    # 缓存承载、命中即读、本就 0 重复生成）；文档学习资源落本列。「重新生成」显式覆盖本列 +
+    # 刷新 artifact_updated_at/created_at。artifact=NULL 表示尚未物化（旧行/内置行）。
+    artifact: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # 产物实际内容（完整响应体）
+    artifact_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # 产物最近落库/刷新时间
 
 
 class Document(Base):

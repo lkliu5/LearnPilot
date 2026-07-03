@@ -135,8 +135,10 @@ async def gen_lecture(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成讲义（接口文档 20.5.1；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_lecture, db, user.id, body.doc_ids(), body.difficulty)
+    """基于文档生成讲义（接口文档 20.5.1；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(
+        gen.generate_lecture, db, user.id, body.doc_ids(), body.difficulty, body.regenerate
+    )
 
 
 @router.post("/document/generate/video")
@@ -145,8 +147,10 @@ async def gen_video(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成视频分镜（接口文档 20.5.2；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_video, db, user.id, body.doc_ids(), body.difficulty)
+    """基于文档生成视频分镜（接口文档 20.5.2；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(
+        gen.generate_video, db, user.id, body.doc_ids(), body.difficulty, body.regenerate
+    )
 
 
 @router.post("/document/generate/diagram")
@@ -155,8 +159,8 @@ async def gen_diagram(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成 Mermaid 图解（接口文档 20.5.3；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_diagram, db, user.id, body.doc_ids())
+    """基于文档生成 Mermaid 图解（接口文档 20.5.3；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(gen.generate_diagram, db, user.id, body.doc_ids(), body.regenerate)
 
 
 @router.post("/document/generate/mindmap")
@@ -165,8 +169,8 @@ async def gen_mindmap(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成思维导图（接口文档 20.5.4；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_mindmap, db, user.id, body.doc_ids())
+    """基于文档生成思维导图（接口文档 20.5.4；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(gen.generate_mindmap, db, user.id, body.doc_ids(), body.regenerate)
 
 
 @router.post("/document/generate/quiz")
@@ -175,8 +179,10 @@ async def gen_quiz(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成练习题（接口文档 20.6；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_quiz, db, user.id, body.doc_ids(), body.count)
+    """基于文档生成练习题（接口文档 20.6；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(
+        gen.generate_quiz, db, user.id, body.doc_ids(), body.count, body.regenerate
+    )
 
 
 @router.post("/document/generate/flashcards")
@@ -185,8 +191,10 @@ async def gen_flashcards(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """基于文档生成闪卡（接口文档 20.7；支持 documentIds 多篇统一生成）。"""
-    return _guarded_generate(gen.generate_flashcards, db, user.id, body.doc_ids(), body.count)
+    """基于文档生成闪卡（接口文档 20.7；支持 documentIds 多篇统一生成）。regenerate=true 强制重生成。"""
+    return _guarded_generate(
+        gen.generate_flashcards, db, user.id, body.doc_ids(), body.count, body.regenerate
+    )
 
 
 # ---- 和文档对话（严格基于文档、流式即问即答、标出处溯源） -------------------

@@ -556,6 +556,25 @@ def _migrate_genlog_source() -> None:
             conn.execute(text("ALTER TABLE generation_logs ADD COLUMN doc_title VARCHAR(256)"))
 
 
+def _migrate_genlog_artifact() -> None:
+    """产物落库轻量迁移：既有开发库 generation_logs 表缺 artifact/artifact_updated_at 列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。既有行
+    artifact 默认 NULL（= 尚未物化产物，内置行读 ResourceCache、文档旧行首次查看时物化）。
+    """
+    inspector = inspect(engine)
+    if "generation_logs" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("generation_logs")}
+    with engine.begin() as conn:
+        if "artifact" not in columns:
+            conn.execute(text("ALTER TABLE generation_logs ADD COLUMN artifact JSON"))
+        if "artifact_updated_at" not in columns:
+            conn.execute(
+                text("ALTER TABLE generation_logs ADD COLUMN artifact_updated_at DATETIME")
+            )
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
@@ -563,6 +582,7 @@ def init_db() -> None:
     _migrate_path_plan()
     _migrate_mastery_score()
     _migrate_genlog_source()
+    _migrate_genlog_artifact()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

@@ -124,12 +124,17 @@ def record_document(
     *,
     difficulty: str = "",
     title: str | None = None,
+    artifact: dict | None = None,
 ) -> None:
     """文档学习资源埋点（追加式 upsert，与内置课程 record() 平行、互不影响）。
 
     写入同一 GenerationLog 表但带 source="document" + doc_id/doc_title 来源标识，
     进「我的资源库」。去重口径：同一 (user_id, kp_id=doc_id, kind, difficulty)——
     kp_id 复用为 doc_id（不同文档不同 id → 不与内置课程行冲突）。**任何异常都吞掉**。
+
+    产物落库：``artifact`` 传入时把产物**实际内容**（完整响应体）随行持久化——生成/
+    重新生成时写入并刷新 artifact_updated_at，供后续「查看」直接读、不再重跑生成。
+    ``artifact=None``（纯埋点旧调用）不清空既有产物（幂等、向后兼容）。
     """
     if not user_id or not doc_id:
         return
@@ -157,6 +162,9 @@ def record_document(
             row.title = ttl
             row.resource_ref = ref
             row.doc_title = doc_title
+            if artifact is not None:  # 不覆盖既有产物（纯埋点调用）
+                row.artifact = artifact
+                row.artifact_updated_at = now
         else:
             db.add(
                 GenerationLog(
@@ -170,12 +178,115 @@ def record_document(
                     doc_id=doc_id,
                     doc_title=doc_title,
                     created_at=now,
+                    artifact=artifact,
+                    artifact_updated_at=now if artifact is not None else None,
                 )
             )
         db.commit()
     except Exception as exc:  # noqa: BLE001  埋点旁路：失败仅告警，不外抛
         db.rollback()
         logger.warning("[generation_log] 文档埋点失败（已忽略）：%s", exc)
+
+
+def get_document_artifact(
+    db: Session, user_id: str, doc_id: str, kind: str, difficulty: str = ""
+) -> dict | None:
+    """读取已落库的文档学习产物（供「查看」直接渲染，不触发任何生成）。
+
+    按 (user_id, kp_id=doc_id, kind, difficulty, source="document") 定位资产行；
+    命中且 artifact 已物化 → 返回其完整响应体副本，否则 None（调用方回退实时生成）。
+    **归属由 user_id 过滤强约束**：只会返回本人产物，不越权读他人资产。
+    """
+    if not user_id or not doc_id:
+        return None
+    base_kind = (kind or "").strip()
+    diff = difficulty or ""
+    try:
+        row = (
+            db.query(GenerationLog)
+            .filter(
+                GenerationLog.user_id == user_id,
+                GenerationLog.kp_id == doc_id,
+                GenerationLog.kind == base_kind,
+                GenerationLog.difficulty == diff,
+                GenerationLog.source == "document",
+            )
+            .one_or_none()
+        )
+    except Exception as exc:  # noqa: BLE001  读产物失败 → 回退生成（不外抛）
+        logger.warning("[generation_log] 读产物失败（回退生成）：%s", exc)
+        return None
+    if row is None or row.artifact is None:
+        return None
+    return dict(row.artifact)
+
+
+def _row_to_item(db: Session, r: GenerationLog) -> dict[str, Any]:
+    """单行 → 资源库条目（契约 camelCase，供重命名回包；口径与 list_history 一致）。"""
+    is_doc = r.source == "document"
+    kp = None if is_doc else db.get(KnowledgePoint, r.kp_id)
+    return {
+        "id": r.id,
+        "kpId": r.kp_id,
+        "kpName": (r.doc_title or r.kp_id) if is_doc else (kp.name if kp else r.kp_id),
+        "kind": r.kind,
+        "difficulty": r.difficulty,
+        "title": r.title,
+        "resourceRef": r.resource_ref,
+        "source": "document" if is_doc else "builtin",
+        "docId": r.doc_id,
+        "docTitle": r.doc_title,
+        "createdAt": _iso_utc(r.created_at),
+    }
+
+
+def rename(db: Session, user_id: str, log_id: int, title: str) -> dict[str, Any] | None:
+    """重命名一条资源库资产的展示标题（改，CRUD）。归属校验：非本人/不存在 → None。"""
+    row = db.get(GenerationLog, log_id)
+    if row is None or row.user_id != user_id:
+        return None
+    new_title = (title or "").strip()
+    if new_title:
+        row.title = new_title[:256]
+        db.commit()
+    return _row_to_item(db, row)
+
+
+def delete(db: Session, user_id: str, log_id: int) -> bool:
+    """删除一条资源库资产（删，CRUD；连带其已落库产物）。归属校验：非本人/不存在 → False。"""
+    row = db.get(GenerationLog, log_id)
+    if row is None or row.user_id != user_id:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def delete_document_rows(db: Session, user_id: str, doc_id: str) -> int:
+    """删除某文档在资源库的全部资产行（连带产物）——文档被删时旁路清理，避免孤儿资产。
+
+    **best-effort**：失败仅告警、不外抛（绝不拖垮文档删除主链路）。返回清理行数。
+    """
+    if not user_id or not doc_id:
+        return 0
+    try:
+        rows = (
+            db.query(GenerationLog)
+            .filter(
+                GenerationLog.user_id == user_id,
+                GenerationLog.kp_id == doc_id,
+                GenerationLog.source == "document",
+            )
+            .all()
+        )
+        for r in rows:
+            db.delete(r)
+        db.commit()
+        return len(rows)
+    except Exception as exc:  # noqa: BLE001  清理旁路：失败仅告警
+        db.rollback()
+        logger.warning("[generation_log] 文档资产清理失败（已忽略）：%s", exc)
+        return 0
 
 
 def _iso_utc(dt: datetime | None) -> str | None:

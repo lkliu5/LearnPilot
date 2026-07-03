@@ -156,12 +156,26 @@ def sources_of(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 # ---- 讲义（复用生成 Agent + 逐句接地防幻觉） --------------------------------
 def generate_lecture(
-    db: Session, user_id: str, doc_ids: list[str], difficulty: str = "初级"
+    db: Session,
+    user_id: str,
+    doc_ids: list[str],
+    difficulty: str = "初级",
+    regenerate: bool = False,
 ) -> dict[str, Any]:
-    """基于文档生成自适应讲义。复用 generator_agent（RAG 驱动）+ sentence_grounding（防幻觉）。"""
-    docs = resolve_docs(db, user_id, doc_ids)
+    """基于文档生成自适应讲义。复用 generator_agent（RAG 驱动）+ sentence_grounding（防幻觉）。
+
+    产物落库：非 ``regenerate`` 时**先读已落库产物**、命中直接返回（「查看」秒开、0 生成
+    调用、内容与生成时一致）；未命中或显式 ``regenerate=True`` 才实时生成并写入/覆盖产物。
+    """
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "lecture", difficulty
+        )
+        if cached is not None:
+            return cached
+    docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
 
@@ -188,7 +202,9 @@ def generate_lecture(
         "sources": sources_of(chunks),
         "hallucinationRate": grounding["hallucinationRate"],
     }
-    generation_log.record_document(db, user_id, primary.id, title, "lecture", difficulty=difficulty)
+    generation_log.record_document(
+        db, user_id, primary.id, title, "lecture", difficulty=difficulty, artifact=payload
+    )
     return payload
 
 
@@ -208,25 +224,48 @@ def generate_overview(db: Session, user_id: str, doc_id: str) -> dict[str, Any]:
 
 
 # ---- 图解（复用 LLMClient.generate_diagram，文档内容驱动） ------------------
-def generate_diagram(db: Session, user_id: str, doc_ids: list[str]) -> dict[str, Any]:
+def generate_diagram(
+    db: Session, user_id: str, doc_ids: list[str], regenerate: bool = False
+) -> dict[str, Any]:
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "diagram"
+        )
+        if cached is not None:
+            return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     chunks = retrieve(docs, f"{title} 结构 流程 关系")
     payload = get_llm().generate_diagram(f"doc:{primary.id}", title, _summary(chunks))
-    generation_log.record_document(db, user_id, primary.id, title, "diagram")
-    return {"docId": primary.id, "docIds": [d.id for d in docs], "mermaid": payload["mermaid"], "sources": sources_of(chunks)}
+    result = {
+        "docId": primary.id,
+        "docIds": [d.id for d in docs],
+        "mermaid": payload["mermaid"],
+        "sources": sources_of(chunks),
+    }
+    generation_log.record_document(db, user_id, primary.id, title, "diagram", artifact=result)
+    return result
 
 
 # ---- 思维导图（从文档标题/结构确定性抽取，内容来自文档） --------------------
-def generate_mindmap(db: Session, user_id: str, doc_ids: list[str]) -> dict[str, Any]:
+def generate_mindmap(
+    db: Session, user_id: str, doc_ids: list[str], regenerate: bool = False
+) -> dict[str, Any]:
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "mindmap"
+        )
+        if cached is not None:
+            return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     markdown = _build_mindmap(docs, title)
     markdown = content_safety.guard(markdown, where="document_mindmap")
-    generation_log.record_document(db, user_id, primary.id, title, "mindmap")
-    return {"docId": primary.id, "docIds": [d.id for d in docs], "markdown": markdown}
+    result = {"docId": primary.id, "docIds": [d.id for d in docs], "markdown": markdown}
+    generation_log.record_document(db, user_id, primary.id, title, "mindmap", artifact=result)
+    return result
 
 
 def _build_mindmap(docs: list[Document], title: str) -> str:
@@ -274,11 +313,21 @@ def _build_mindmap(docs: list[Document], title: str) -> str:
 
 # ---- 视频分镜（复用 LLMClient.generate_video_script + 铺帧） ----------------
 def generate_video(
-    db: Session, user_id: str, doc_ids: list[str], difficulty: str = "初级"
+    db: Session,
+    user_id: str,
+    doc_ids: list[str],
+    difficulty: str = "初级",
+    regenerate: bool = False,
 ) -> dict[str, Any]:
-    docs = resolve_docs(db, user_id, doc_ids)
     if difficulty not in LECTURE_DIFFICULTIES:
         raise InvalidDifficulty(difficulty)
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "video", difficulty
+        )
+        if cached is not None:
+            return cached
+    docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     chunks = retrieve(docs, f"{title} 讲解 要点")
@@ -293,8 +342,7 @@ def generate_video(
             {"frame": frame, "title": s["title"], "points": list(s["points"]), "narration": s["narration"]}
         )
         narration.append({"frame": frame, "text": s["narration"]})
-    generation_log.record_document(db, user_id, primary.id, title, "video", difficulty=difficulty)
-    return {
+    result = {
         "docId": primary.id,
         "docIds": [d.id for d in docs],
         "difficulty": difficulty,
@@ -308,29 +356,57 @@ def generate_video(
         "durationInFrames": len(scenes) * _SCENE_FRAMES,
         "sources": sources_of(chunks),
     }
+    generation_log.record_document(
+        db, user_id, primary.id, title, "video", difficulty=difficulty, artifact=result
+    )
+    return result
 
 
 # ---- 练习题（复用 LLMClient.generate_doc_quiz + audit_practice 审核） -------
 def generate_quiz(
-    db: Session, user_id: str, doc_ids: list[str], count: int = 5
+    db: Session, user_id: str, doc_ids: list[str], count: int = 5, regenerate: bool = False
 ) -> dict[str, Any]:
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "quiz"
+        )
+        if cached is not None:
+            return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     chunks = retrieve(docs, f"{title} 重点 考点", top_k=_RETRIEVE_TOP_K)
     result = get_llm().generate_doc_quiz(title, _contexts(chunks), count=count)
-    generation_log.record_document(db, user_id, primary.id, title, "quiz")
-    return {"docId": primary.id, "docIds": [d.id for d in docs], "questions": result["questions"], "sources": sources_of(chunks)}
+    payload = {
+        "docId": primary.id,
+        "docIds": [d.id for d in docs],
+        "questions": result["questions"],
+        "sources": sources_of(chunks),
+    }
+    generation_log.record_document(db, user_id, primary.id, title, "quiz", artifact=payload)
+    return payload
 
 
 # ---- 闪卡（新做，走 LLMClient，mock 确定性兜底） ---------------------------
 def generate_flashcards(
-    db: Session, user_id: str, doc_ids: list[str], count: int = 8
+    db: Session, user_id: str, doc_ids: list[str], count: int = 8, regenerate: bool = False
 ) -> dict[str, Any]:
+    if not regenerate:
+        cached = generation_log.get_document_artifact(
+            db, user_id, doc_ids[0] if doc_ids else "", "flashcard"
+        )
+        if cached is not None:
+            return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     chunks = retrieve(docs, f"{title} 要点 概念", top_k=_RETRIEVE_TOP_K)
     result = get_llm().generate_flashcards(title, _contexts(chunks), count=count)
-    generation_log.record_document(db, user_id, primary.id, title, "flashcard")
-    return {"docId": primary.id, "docIds": [d.id for d in docs], "cards": result["cards"], "sources": sources_of(chunks)}
+    payload = {
+        "docId": primary.id,
+        "docIds": [d.id for d in docs],
+        "cards": result["cards"],
+        "sources": sources_of(chunks),
+    }
+    generation_log.record_document(db, user_id, primary.id, title, "flashcard", artifact=payload)
+    return payload

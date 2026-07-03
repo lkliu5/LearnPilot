@@ -492,12 +492,13 @@ export async function generateOverview(docId: string): Promise<OverviewResult> {
 export async function generateLecture(
   docId: string,
   difficulty = '初级',
-  documentIds?: string[]
+  documentIds?: string[],
+  regenerate = false
 ): Promise<LectureResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ markdown: string; difficulty: string; sources: RawSource[]; hallucinationRate: number }>(
       '/document/generate/lecture',
-      { ...docScopeBody(docId, documentIds), difficulty }
+      { ...docScopeBody(docId, documentIds), difficulty, regenerate }
     )
     return {
       markdown: d.markdown,
@@ -513,7 +514,8 @@ export async function generateLecture(
 export async function generateVideo(
   docId: string,
   difficulty = '初级',
-  documentIds?: string[]
+  documentIds?: string[],
+  regenerate = false
 ): Promise<VideoResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{
@@ -521,7 +523,7 @@ export async function generateVideo(
       difficulty: string
       scenes: { title: string; points: string[]; narration: string }[]
       sources: RawSource[]
-    }>('/document/generate/video', { ...docScopeBody(docId, documentIds), difficulty })
+    }>('/document/generate/video', { ...docScopeBody(docId, documentIds), difficulty, regenerate })
     return {
       title: d.title,
       difficulty: d.difficulty ?? difficulty,
@@ -533,11 +535,15 @@ export async function generateVideo(
   return buildMockVideo(resolveMockScope(docId, documentIds), difficulty)
 }
 
-export async function generateDiagram(docId: string, documentIds?: string[]): Promise<DiagramResult> {
+export async function generateDiagram(
+  docId: string,
+  documentIds?: string[],
+  regenerate = false
+): Promise<DiagramResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ mermaid: string; sources: RawSource[] }>(
       '/document/generate/diagram',
-      docScopeBody(docId, documentIds)
+      { ...docScopeBody(docId, documentIds), regenerate }
     )
     return { mermaid: d.mermaid, sources: toSourceRefs(d.sources) }
   }
@@ -545,20 +551,33 @@ export async function generateDiagram(docId: string, documentIds?: string[]): Pr
   return buildMockDiagram(resolveMockScope(docId, documentIds))
 }
 
-export async function generateMindmap(docId: string, documentIds?: string[]): Promise<MindmapResult> {
+export async function generateMindmap(
+  docId: string,
+  documentIds?: string[],
+  regenerate = false
+): Promise<MindmapResult> {
   if (USE_REAL_API) {
-    const d = await apiPost<{ markdown: string }>('/document/generate/mindmap', docScopeBody(docId, documentIds))
+    const d = await apiPost<{ markdown: string }>('/document/generate/mindmap', {
+      ...docScopeBody(docId, documentIds),
+      regenerate,
+    })
     return { markdown: d.markdown }
   }
   await mockDelay()
   return buildMockMindmap(resolveMockScope(docId, documentIds))
 }
 
-export async function generateQuiz(docId: string, count = 5, documentIds?: string[]): Promise<QuizResult> {
+export async function generateQuiz(
+  docId: string,
+  count = 5,
+  documentIds?: string[],
+  regenerate = false
+): Promise<QuizResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ questions: QuizQuestion[]; sources: RawSource[] }>('/document/generate/quiz', {
       ...docScopeBody(docId, documentIds),
       count,
+      regenerate,
     })
     return { questions: d.questions ?? [], sources: toSourceRefs(d.sources) }
   }
@@ -569,12 +588,14 @@ export async function generateQuiz(docId: string, count = 5, documentIds?: strin
 export async function generateFlashcards(
   docId: string,
   count = 8,
-  documentIds?: string[]
+  documentIds?: string[],
+  regenerate = false
 ): Promise<FlashcardResult> {
   if (USE_REAL_API) {
     const d = await apiPost<{ cards: FlashcardCard[]; sources: RawSource[] }>('/document/generate/flashcards', {
       ...docScopeBody(docId, documentIds),
       count,
+      regenerate,
     })
     return { cards: d.cards ?? [], sources: toSourceRefs(d.sources) }
   }

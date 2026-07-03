@@ -7,7 +7,7 @@
  *
  * 与无用户归属的 ResourceCache 全局缓存不同：这是「当前用户的生成历史」。
  */
-import { apiGet, apiPost, USE_REAL_API } from './api'
+import { apiGet, apiPost, apiRequest, USE_REAL_API } from './api'
 import { KNOWLEDGE_POINTS, kpById } from '../data/knowledgePoints'
 
 /**
@@ -156,4 +156,22 @@ export async function logResourceGeneration(input: {
   } catch (e) {
     console.warn('[resourceHistory] 生成埋点失败（已忽略）', e)
   }
+}
+
+/**
+ * 19.3 重命名资产标题（CRUD·改，仅联调有效）。按 user 校验归属；非本人/不存在 → 抛 ApiError(1004)。
+ * mock 模式 no-op（本地样例不落库），返回传入标题占位。
+ */
+export async function renameResource(id: number, title: string): Promise<ResourceHistoryItem | null> {
+  if (!USE_REAL_API) return null
+  return apiPost<ResourceHistoryItem>('/resource/history/rename', { id, title })
+}
+
+/**
+ * 19.4 删除资产（CRUD·删，连带已落库产物，仅联调有效）。按 user 校验归属；非本人/不存在 → 抛 ApiError(1004)。
+ * mock 模式 no-op。
+ */
+export async function deleteResource(id: number): Promise<void> {
+  if (!USE_REAL_API) return
+  await apiRequest(`/resource/history/${id}`, { method: 'DELETE' })
 }

@@ -24,6 +24,7 @@ from app.rag.chunker import DocumentChunker
 from app.rag.embeddings import get_embedder
 from app.rag.vector_store import drop_collection, get_collection_store
 from app.services import document_parse
+from app.services import generation_log as generation_log_service
 
 logger = logging.getLogger("app.services.document_store")
 
@@ -169,9 +170,14 @@ def get_document(db: Session, user_id: str, doc_id: str) -> dict:
 
 
 def delete_document(db: Session, user_id: str, doc_id: str) -> dict:
-    """删除文档及其专属向量集合。非本人/不存在 → UnknownDocument。"""
+    """删除文档及其专属向量集合。非本人/不存在 → UnknownDocument。
+
+    连带清理该文档在「我的资源库」的资产行（含已落库产物）——避免删文档后残留孤儿资产
+    （旁路 best-effort，不影响文档删除主链路）。
+    """
     doc = require_document(db, user_id, doc_id)
     drop_collection(doc.collection)
     db.delete(doc)
     db.commit()
-    return {"id": doc_id, "deleted": True}
+    removed = generation_log_service.delete_document_rows(db, user_id, doc_id)
+    return {"id": doc_id, "deleted": True, "removedResources": removed}
