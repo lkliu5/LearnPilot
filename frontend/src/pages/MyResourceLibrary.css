@@ -93,28 +93,6 @@
   border-color: var(--accent);
 }
 
-/* ---------- 形态小结 ---------- */
-.reslib-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.reslib-summary__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font-size: var(--text-sm);
-  color: var(--ink-soft);
-}
-.reslib-summary__item strong {
-  color: var(--primary-d);
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- 资产网格 ---------- */
 .reslib-grid {
   display: grid;

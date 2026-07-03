@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
@@ -123,13 +123,6 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
   }, [kindFilter, kpFilter, timeFilter])
 
   const hasFilter = !!(kindFilter || kpFilter || timeFilter)
-
-  /* 各形态计数（当前筛选结果内），用于概览小结 */
-  const kindCounts = useMemo(() => {
-    const m: Partial<Record<ResourceKind, number>> = {}
-    for (const r of records) m[r.kind] = (m[r.kind] ?? 0) + 1
-    return m
-  }, [records])
 
   /* 「在学习页打开」：文档学习资源 → 跳文档学习页；内置课程资源 → 设置资源页落点后跳学习资源页 */
   const openInLearning = (r: ResourceHistoryItem) => {
@@ -285,18 +278,7 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
           </RevealItem>
         ) : (
           <>
-            {/* 形态小结 */}
-            <RevealItem className="reslib-summary">
-              {KIND_FILTERS.filter((f) => f.key).map((f) => (
-                <span key={f.key} className="reslib-summary__item">
-                  <ResourceTypeIcon kind={f.key as ResourceKind} size={18} />
-                  {KIND_LABEL[f.key as ResourceKind]}
-                  <strong>{kindCounts[f.key as ResourceKind] ?? 0}</strong>
-                </span>
-              ))}
-            </RevealItem>
-
-            {/* 资产网格 */}
+            {/* 资产网格（筛选器下方直接是卡片网格） */}
             <RevealItem className="reslib-grid">
               {records.map((r) => (
                 <article
