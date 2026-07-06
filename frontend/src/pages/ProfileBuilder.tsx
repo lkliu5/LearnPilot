@@ -317,7 +317,13 @@ export default function ProfileBuilder({ onNavigate }: { onNavigate?: (page: Pag
 
   return (
     <div className={`profile-builder ${mode !== 'form' ? 'profile-builder--wide' : ''}`}>
-      <PageHeader title="学习者画像诊断" highlight="画像" subtitle={SUBTITLE[mode]} />
+      <PageHeader
+        title="学习者画像诊断"
+        highlight="画像"
+        subtitle={SUBTITLE[mode]}
+        crumb="画像诊断"
+        onBack={() => onNavigate?.('dashboard')}
+      />
 
       {/* ============ 诊断起点：三选一 ============ */}
       {mode === 'choose' && (

@@ -478,6 +478,8 @@ export default function AgentWorkflow({ onNavigate }: { onNavigate?: (page: Page
         title="智能体协同调度大屏"
         highlight="协同调度"
         subtitle="实时查看多智能体工作流执行状态与决策逻辑"
+        crumb="Agent工作流"
+        onBack={() => onNavigate?.('dashboard')}
         badges={[
           ...(liveHint ? [{ label: '联调提示', value: liveHint, tone: 'accent' as const }] : []),
           {

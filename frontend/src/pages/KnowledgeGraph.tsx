@@ -429,6 +429,8 @@ export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: Pag
         tag="Beta"
         subtitle="78 点 / 7 板块 AI 知识体系 · 点板块展开 · 点知识点看详情 · 可缩放 / 拖拽"
         badges={badges}
+        crumb="知识图谱"
+        onBack={() => onNavigate?.('dashboard')}
       />
 
       <RevealGroup>

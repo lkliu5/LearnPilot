@@ -82,6 +82,8 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
         title="个性化学习路径"
         highlight="学习路径"
         subtitle="基于您的学情诊断，为您量身定制的学习路线"
+        crumb="学习路径"
+        onBack={() => onNavigate?.('dashboard')}
         badges={[
           { label: '已完成', value: completedCount },
           { label: '进行中', value: inProgressCount },

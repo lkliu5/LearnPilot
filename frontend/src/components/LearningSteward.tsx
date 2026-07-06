@@ -73,8 +73,8 @@ export function StewardHero(props: StewardHeroProps) {
           </div>
           <p className="steward-hero__desc">
             你好，{userName}。我持续监测你的学习全过程，正协调
-            <strong> 诊断 / 规划 / 生成 / 评估 </strong>
-            四位专家 Agent 为你服务——当前处于 <strong>{overallLevel}</strong> 水平，
+            <strong> 诊断 / 规划 / 生成 / 评估 / 文档学习 </strong>
+            {totalAgents} 位专家 Agent 为你服务——当前处于 <strong>{overallLevel}</strong> 水平，
             {activeAgents}/{totalAgents} 位专家已产出成果。
           </p>
         </div>
@@ -114,76 +114,97 @@ export interface AgentActivityBoardProps {
   onNavigate?: (page: PageType) => void
 }
 
+export interface AgentActivityPanelProps extends AgentActivityBoardProps {
+  /** 附加到卡片容器的布局类（如 dashboard__dual__main） */
+  className?: string
+}
+
+/** 各 Agent 活动汇总（管家看板）单卡：中枢首页「学习监测」段与组合看板共用。 */
+export function AgentActivityPanel({ summary, onNavigate, className }: AgentActivityPanelProps) {
+  return (
+    <div className={`dashboard__card${className ? ` ${className}` : ''}`}>
+      <div className="card-header">
+        <h3>各 Agent 活动汇总</h3>
+        <span className="card-badge">
+          {summary.activeAgents}/{summary.totalAgents} 已产出
+        </span>
+      </div>
+      <div className="card-content">
+        <div className="steward-agents">
+          {summary.agents.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              className={`steward-agent steward-agent--${a.status}`}
+              onClick={() => onNavigate?.(a.page)}
+              title={`前往：${a.role}`}
+            >
+              <span className={`steward-agent__status steward-agent__status--${a.status}`}>
+                <span className="steward-agent__dot" />
+                {STATUS_LABEL[a.status]}
+              </span>
+              <span className="steward-agent__body">
+                <span className="steward-agent__name">{a.name}</span>
+                <span className="steward-agent__action">{a.lastAction}</span>
+              </span>
+              <span className="steward-agent__metric">
+                <span className="steward-agent__metric-num">{a.metric}</span>
+                <span className="steward-agent__metric-label">{a.metricLabel}</span>
+              </span>
+              <span className="steward-agent__chevron" aria-hidden="true">→</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export interface StewardSuggestPanelProps extends AgentActivityBoardProps {
+  className?: string
+}
+
+/** 管家主动建议单卡：中枢首页「管家建议」段与组合看板共用。 */
+export function StewardSuggestPanel({ summary, onNavigate, className }: StewardSuggestPanelProps) {
+  return (
+    <div className={`dashboard__card${className ? ` ${className}` : ''}`}>
+      <div className="card-header">
+        <h3>主动建议</h3>
+        <span className="card-badge">管家</span>
+      </div>
+      <div className="card-content">
+        <div className="steward-suggests">
+          {summary.suggestions.map((s) => (
+            <div key={s.id} className={`steward-suggest steward-suggest--${s.tone}`}>
+              <span className="steward-suggest__icon" aria-hidden="true">
+                {TONE_ICON[s.tone] ?? '✦'}
+              </span>
+              <div className="steward-suggest__body">
+                <p className="steward-suggest__text">{s.text}</p>
+                {s.cta && s.page && (
+                  <button
+                    type="button"
+                    className="steward-suggest__cta"
+                    onClick={() => onNavigate?.(s.page!)}
+                  >
+                    {s.cta} →
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 组合看板（既有签名保持不变）：左 Agent 活动 + 右主动建议。 */
 export function AgentActivityBoard({ summary, onNavigate }: AgentActivityBoardProps) {
   return (
     <div className="dashboard__dual steward-board">
-      {/* 左栏：各 Agent 活动汇总（管家看板） */}
-      <div className="dashboard__card dashboard__dual__main">
-        <div className="card-header">
-          <h3>各 Agent 活动汇总</h3>
-          <span className="card-badge">
-            {summary.activeAgents}/{summary.totalAgents} 已产出
-          </span>
-        </div>
-        <div className="card-content">
-          <div className="steward-agents">
-            {summary.agents.map((a) => (
-              <button
-                key={a.key}
-                type="button"
-                className={`steward-agent steward-agent--${a.status}`}
-                onClick={() => onNavigate?.(a.page)}
-                title={`前往：${a.role}`}
-              >
-                <span className={`steward-agent__status steward-agent__status--${a.status}`}>
-                  <span className="steward-agent__dot" />
-                  {STATUS_LABEL[a.status]}
-                </span>
-                <span className="steward-agent__body">
-                  <span className="steward-agent__name">{a.name}</span>
-                  <span className="steward-agent__action">{a.lastAction}</span>
-                </span>
-                <span className="steward-agent__metric">
-                  <span className="steward-agent__metric-num">{a.metric}</span>
-                  <span className="steward-agent__metric-label">{a.metricLabel}</span>
-                </span>
-                <span className="steward-agent__chevron" aria-hidden="true">→</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 右栏：主动建议 */}
-      <div className="dashboard__card dashboard__dual__side">
-        <div className="card-header">
-          <h3>主动建议</h3>
-          <span className="card-badge">管家</span>
-        </div>
-        <div className="card-content">
-          <div className="steward-suggests">
-            {summary.suggestions.map((s) => (
-              <div key={s.id} className={`steward-suggest steward-suggest--${s.tone}`}>
-                <span className="steward-suggest__icon" aria-hidden="true">
-                  {TONE_ICON[s.tone] ?? '✦'}
-                </span>
-                <div className="steward-suggest__body">
-                  <p className="steward-suggest__text">{s.text}</p>
-                  {s.cta && s.page && (
-                    <button
-                      type="button"
-                      className="steward-suggest__cta"
-                      onClick={() => onNavigate?.(s.page!)}
-                    >
-                      {s.cta} →
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AgentActivityPanel summary={summary} onNavigate={onNavigate} className="dashboard__dual__main" />
+      <StewardSuggestPanel summary={summary} onNavigate={onNavigate} className="dashboard__dual__side" />
     </div>
   )
 }

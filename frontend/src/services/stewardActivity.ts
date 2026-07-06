@@ -18,7 +18,7 @@ import type { LearningEvaluation } from './learningEval'
 export type AgentActivityStatus = 'done' | 'active' | 'idle'
 
 export interface AgentActivity {
-  key: 'diagnosis' | 'planning' | 'generation' | 'evaluation'
+  key: 'diagnosis' | 'planning' | 'generation' | 'evaluation' | 'docLearning'
   /** 专家 Agent 名称 */
   name: string
   /** 职责一句话 */
@@ -66,6 +66,8 @@ export interface StewardInput {
   evaluation: LearningEvaluation
   /** 待提升知识点（来自 overview.weak_topics） */
   weakTopics: { name: string }[]
+  /** 已上传文档数（documentLearning.listDocuments().length），缺省不展示文档学习 Agent 计量 */
+  docCount?: number
 }
 
 /**
@@ -82,6 +84,7 @@ export function synthesizeSteward(input: StewardInput): StewardSummary {
     resourceCount,
     evaluation,
     weakTopics,
+    docCount = 0,
   } = input
 
   const agents: AgentActivity[] = [
@@ -136,6 +139,19 @@ export function synthesizeSteward(input: StewardInput): StewardSummary {
           ? `当前评估「${evaluation.level}」· 综合 ${evaluation.overallScore} 分`
           : '等待学习活动以生成评估',
       page: 'learning-resource',
+    },
+    {
+      key: 'docLearning',
+      name: '文档学习 Agent',
+      role: '自带文档解析与资料生成',
+      status: docCount > 0 ? 'done' : 'idle',
+      metric: docCount,
+      metricLabel: '篇文档',
+      lastAction:
+        docCount > 0
+          ? `已解析 ${docCount} 篇文档，可基于文档生成资料与问答`
+          : '等待上传文档以开启文档学习',
+      page: 'document-learning',
     },
   ]
 

@@ -163,6 +163,8 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
         title="我的资源库"
         highlight="资源库"
         subtitle="你生成过的全部学习资产 · 讲义 / 视频 / 图解 / 思维导图 / 代码 · 可查看与下载"
+        crumb="我的资源库"
+        onBack={() => onNavigate?.('dashboard')}
         badges={[
           { label: '资产总数', value: total },
           { label: '当前展示', value: records.length },

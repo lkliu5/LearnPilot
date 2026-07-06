@@ -1112,6 +1112,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
         title="个性化学习资源"
         highlight="学习资源"
         subtitle="AI 多模态资源包 · 讲义 / 思维导图 / 代码 / 图解 / 测试 · 讲义按难度自适应生成"
+        crumb="学习资源"
+        onBack={() => onNavigate?.('dashboard')}
         actions={
           <button
             type="button"

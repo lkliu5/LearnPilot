@@ -212,9 +212,9 @@ const mainlineItems: MenuItem[] = [
   { id: 'learning-resource', icon: icons.resource, label: '学习资源', description: 'AI讲义·测试题', seq: 3, requires: 'hasGeneratedPath' },
 ]
 
-/** 学情管家（统领性监测入口，单独成组、突出）*/
+/** 学情管家（统领位：中枢首页，置顶第一组）*/
 const stewardItems: MenuItem[] = [
-  { id: 'dashboard', icon: icons.dashboard, label: '学情管家', description: '全程监测 · 主动建议' },
+  { id: 'dashboard', icon: icons.dashboard, label: '学情管家', description: '中枢首页 · 统筹全局' },
 ]
 
 /** 文档学习（与内置课程平行的学习方式，不再埋在工具里）*/
@@ -233,10 +233,10 @@ const toolItems: MenuItem[] = [
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
 ]
 
-/** learner 侧栏分组顺序（信息架构：核心学习 → 学情管家 → 文档学习 → 我的空间 → 工具）*/
+/** learner 侧栏分组顺序（信息架构：学情管家统领置顶 → 核心学习 → 文档学习 → 我的空间 → 工具）*/
 const learnerGroups: { title: string; items: MenuItem[] }[] = [
-  { title: '核心学习', items: mainlineItems },
   { title: '学情管家', items: stewardItems },
+  { title: '核心学习', items: mainlineItems },
   { title: '文档学习', items: docItems },
   { title: '我的空间', items: spaceItems },
   { title: '工具', items: toolItems },

@@ -149,3 +149,46 @@
     width: 100%;
   }
 }
+
+/* ===== 全局返回中枢（← 学情管家 / 当前功能）：层级指示条，置于标题上方整行 ===== */
+.page-header__crumbs {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 12.5px;
+}
+
+.page-header__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--primary-d);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 1px solid rgba(var(--primary-rgb), 0.28);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.page-header__back:hover {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  transform: translateX(-2px);
+}
+.page-header__back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.page-header__crumb-sep {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.page-header__crumb {
+  font-weight: 600;
+  color: var(--ink-soft);
+}

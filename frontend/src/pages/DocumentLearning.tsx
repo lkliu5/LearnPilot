@@ -98,7 +98,7 @@ const STATUS_LABEL: Record<DocumentItem['status'], string> = {
   failed: '失败',
 }
 
-export default function DocumentLearning({ onNavigate: _onNavigate }: { onNavigate?: (page: PageType) => void }) {
+export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const [docs, setDocs] = useState<DocumentItem[]>([])
   const [loadingDocs, setLoadingDocs] = useState(true)
   /** 勾选的文档 id（= 生成 / 问答的合并范围）；单选时行为同现在。 */
@@ -780,6 +780,8 @@ export default function DocumentLearning({ onNavigate: _onNavigate }: { onNaviga
         title="文档学习"
         highlight="文档"
         subtitle="上传你的资料，左栏管理来源与概览、中栏和文档即问即答、右栏一键生成六类学习资源 · 内容严格溯源自文档"
+        crumb="文档学习"
+        onBack={() => onNavigate?.('dashboard')}
         badges={[
           { label: '我的文档', value: docs.length },
           { label: '已就绪', value: readyCount, tone: 'safe' },

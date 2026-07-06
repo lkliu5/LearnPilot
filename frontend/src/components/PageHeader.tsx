@@ -22,6 +22,10 @@ interface PageHeaderProps {
   badges?: HeaderBadge[]
   /** 右侧操作区（可选，如启动/重置按钮）*/
   actions?: ReactNode
+  /** 全局返回中枢：提供则在标题上方渲染「← 学情管家 / 当前功能」层级条（additive，不影响既有页面）*/
+  onBack?: () => void
+  /** 层级指示中当前功能名（缺省用 title）*/
+  crumb?: string
 }
 
 /** 把标题中命中的关键词包成 primary 高亮 span */
@@ -42,7 +46,7 @@ function renderTitle(title: string, highlight?: string | string[]) {
 }
 
 /** 五大主页面共用的标题区：左 锚条+高亮标题(+小标)+副标题，右 状态徽章组 + 操作区 */
-export default function PageHeader({ title, highlight, subtitle, tag, badges, actions }: PageHeaderProps) {
+export default function PageHeader({ title, highlight, subtitle, tag, badges, actions, onBack, crumb }: PageHeaderProps) {
   const hasAside = (badges && badges.length > 0) || actions
 
   return (
@@ -52,6 +56,15 @@ export default function PageHeader({ title, highlight, subtitle, tag, badges, ac
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
+      {onBack && (
+        <nav className="page-header__crumbs" aria-label="返回学情管家">
+          <button type="button" className="page-header__back" onClick={onBack}>
+            <span aria-hidden="true">←</span> 学情管家
+          </button>
+          <span className="page-header__crumb-sep" aria-hidden="true">/</span>
+          <span className="page-header__crumb">{crumb ?? title}</span>
+        </nav>
+      )}
       <div className="page-header__lead">
         <h1 className="page-header__title">
           <span className="page-header__bar" aria-hidden="true" />
