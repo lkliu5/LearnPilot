@@ -21,7 +21,6 @@ import {
 import { setResourceNav } from '../services/resourceNav'
 import type { PageType } from '../App'
 import './KnowledgeGraph.css'
-import './admin/admin.css' // 复用 .akb__toast 轻提示样式
 
 /* ── 纯色工具：HEX 混合，用于「层级 = 明度」着色（入门浅→进阶本色→前沿深） ── */
 function hexToRgb(hex: string): [number, number, number] {
@@ -82,16 +81,6 @@ export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: Pag
   const [activeBoard, setActiveBoard] = useState<string>('ML')
   const [detail, setDetail] = useState<KsPoint | null>(null)
 
-  /* 轻提示（非核心点「去学习」等）*/
-  const [toast, setToast] = useState<string | null>(null)
-  const toastTimer = useRef(0)
-  const showToast = (msg: string) => {
-    setToast(msg)
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 3200)
-  }
-  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
-
   /* resize / 主题变化触发重排（layout:'none' 用容器像素坐标，需按尺寸重算）*/
   const [sizeTick, setSizeTick] = useState(0)
 
@@ -112,13 +101,11 @@ export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: Pag
     setView('board')
     setDetail(p)
   }
+  /* 去学习：核心点直达有序学习流；非核心目录点落资源总览（hub），
+     内容由生成引擎按需生成（78 点全体系可学，resourceNav 已放行体系 kpId）。 */
   const goLearn = (p: KsPoint) => {
-    if (p.isCore) {
-      setResourceNav(p.id, 'flow')
-      onNavigate?.('learning-resource')
-    } else {
-      showToast(`「${p.name}」为体系拓扑点 · 当前 6 个核心点已开通课程与资源生成`)
-    }
+    setResourceNav(p.id, p.isCore ? 'flow' : undefined)
+    onNavigate?.('learning-resource')
   }
 
   /* ── ECharts 渲染（视图/板块/数据/主题/尺寸变化时重建 option）── */
@@ -543,8 +530,13 @@ export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: Pag
                   )}
                 </div>
 
+                {!detail.isCore && (
+                  <p className="kg-detail__gen-hint">
+                    该点的讲义 / 视频 / 图解等资源由生成引擎<strong>按需生成</strong>——点击下方按钮进入生成与学习。
+                  </p>
+                )}
                 <button className="kg-detail__learn" onClick={() => goLearn(detail)}>
-                  {detail.isCore ? '去学习该点 →' : '查看学习资源'}
+                  {detail.isCore ? '去学习该点 →' : '按需生成学习资源 →'}
                 </button>
               </motion.aside>
             )}
@@ -552,18 +544,6 @@ export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: Pag
         </RevealItem>
       </RevealGroup>
 
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            className="akb__toast glass-card"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-          >
-            {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

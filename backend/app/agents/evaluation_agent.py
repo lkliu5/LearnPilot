@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -21,13 +22,29 @@ from sqlalchemy.orm import Session
 from app.core.llm import get_llm
 from app.services import learning_eval
 
+# 叙述层缓存：user_id → (signals 指纹, narrative)。
+# 信号/指标为确定性派生（毫秒级、每次实时计算）；仅 LLM 叙述（真实模式 ~2.5s/次）
+# 按行为指纹缓存——学习行为不变则叙述不必重生成，行为一变指纹即失效自动重算。
+# 进程内存缓存与轻量栈约定一致（TTL 会话同风格），重启即清、无需失效协议。
+_NARRATIVE_CACHE: dict[str, tuple[str, dict[str, Any]]] = {}
+
+
+def _fingerprint(signals: dict[str, Any], provider: str) -> str:
+    return provider + "|" + json.dumps(signals, sort_keys=True, ensure_ascii=False, default=str)
+
 
 def evaluate(db: Session, user_id: str) -> dict[str, Any]:
     """产出该用户的多维学习评估（接口文档 12.2）。"""
     signals = learning_eval.gather_signals(db, user_id)
     metrics = learning_eval.compute_metrics(signals)
     llm = get_llm()
-    narrative = llm.evaluate_learning(signals, metrics)
+    fp = _fingerprint(signals, "mock" if llm.is_mock else llm.provider)
+    cached = _NARRATIVE_CACHE.get(user_id)
+    if cached is not None and cached[0] == fp:
+        narrative = cached[1]
+    else:
+        narrative = llm.evaluate_learning(signals, metrics)
+        _NARRATIVE_CACHE[user_id] = (fp, narrative)
 
     return {
         "overallScore": metrics["overallScore"],

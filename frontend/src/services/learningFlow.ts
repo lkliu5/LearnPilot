@@ -13,6 +13,7 @@
 import { apiGet, apiPost, apiRequest, getToken } from './api'
 import { USE_REAL_API } from './api'
 import { kpById } from '../data/knowledgePoints'
+import { ksPointById } from '../data/knowledgeSystem'
 import type { KPStatus } from '../store/mastery'
 
 /* ---------------- 类型（严格对齐 18 章契约字段名） ---------------- */
@@ -92,7 +93,7 @@ export interface FeynmanDone {
 
 /** nn（神经网络基础）的确定性 mock 线索/骨架；其余知识点用通用骨架按名称填充。 */
 function mockCues(kpId: string, difficulty: string): CornellCues {
-  const name = kpById(kpId)?.name ?? '当前知识点'
+  const name = kpById(kpId)?.name ?? ksPointById(kpId)?.name ?? '当前知识点'
   if (kpId === 'nn') {
     return {
       kpId,

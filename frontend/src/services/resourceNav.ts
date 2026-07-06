@@ -10,6 +10,7 @@
  * - entryTab：一次性（读后即清）。避免侧边栏再次进入资源页时残留落点。
  */
 import { CURRENT_KP_ID, kpById } from '../data/knowledgePoints'
+import { ksPointById } from '../data/knowledgeSystem'
 
 /** 资源页进入模式：flow=费曼+康奈尔有序学习流；browse=8-tab 资源中枢自由浏览。 */
 export type ResourceMode = 'flow' | 'browse'
@@ -21,12 +22,14 @@ let entryMode: ResourceMode | null = null
 
 /**
  * 导航去资源页前调用：指定目标知识点 +（可选）进入意图 +（可选）落点 Tab。未知 kpId 回退默认。
+ * kpId 合法域 = 78 点全体系（6 核心 + 72 体系目录点，后端生成端点对任意在库 kp 可用，
+ * 非核心点内容按需生成）；不在体系内才回退默认。
  * - 「开始学习」→ mode='flow'（有序流，从当前未完成步接着学）
  * - 「查看资源」→ mode='browse'（自由浏览资源中枢，可带落点 Tab）
  * - 省略 mode（如知识图谱点节点）→ 无显式意图，资源页落「资源总览」首屏。
  */
 export function setResourceNav(nextKpId: string, mode?: ResourceMode, nextEntryTab?: string): void {
-  kpId = kpById(nextKpId) ? nextKpId : CURRENT_KP_ID
+  kpId = kpById(nextKpId) || ksPointById(nextKpId) ? nextKpId : CURRENT_KP_ID
   entryMode = mode ?? null
   entryTab = nextEntryTab ?? null
 }

@@ -302,6 +302,7 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                       status={item.status}
                       progress={item.progress}
                       estimatedMinutes={item.estimatedMinutes}
+                      onOpen={() => setSelectedTopic(item.topic)}
                     />
                   </RevealItem>
                 ))}

@@ -14,7 +14,8 @@ import ResourceTypeIcon from '../components/ResourceTypeIcon'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { kpById } from '../data/knowledgePoints'
-import { KP_RESOURCES } from '../data/kpResources'
+import { ksPointById } from '../data/knowledgeSystem'
+import { KP_RESOURCES, genericKpContent } from '../data/kpResources'
 import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
@@ -549,13 +550,19 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
      不再全部落到神经网络；未命中的 kpId 回退到 nn 的精修常量（见下方 mockRes）。 */
   const kpId = getResourceKpId()
   /* mock 模式下当前知识点的本地内容包（讲义三档/测验/导图/图解）。
-     KP_RESOURCES 未收录 nn——nn 沿用本文件下方既有精修常量作为默认兜底。 */
-  const mockRes = KP_RESOURCES[kpId] ?? {
-    lectureByLevel,
-    quiz: quizQuestions,
-    mindmap: mindmapMarkdown,
-    diagram: mermaidChart,
-  }
+     KP_RESOURCES 未收录 nn——nn 沿用本文件下方既有精修常量作为默认兜底；
+     非核心目录点（78 点体系）→ 按名称/简介参数化的通用模板包，不再误落 nn 内容。 */
+  const ksPoint = ksPointById(kpId)
+  const mockRes =
+    KP_RESOURCES[kpId] ??
+    (ksPoint && !ksPoint.isCore
+      ? genericKpContent(ksPoint.name, ksPoint.description)
+      : {
+          lectureByLevel,
+          quiz: quizQuestions,
+          mindmap: mindmapMarkdown,
+          diagram: mermaidChart,
+        })
   /* 进入意图 + 落点 Tab 一次性消费（同一挂载内只读一次，供 view/openId 初值共享）。 */
   const initialMode = useMemo(() => consumeResourceMode(), [])
   const initialTab = useMemo(() => consumeResourceEntryTab(), [])
@@ -657,7 +664,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   const goCheck = useMastery((s) => s.goCheck)
   const markPassed = useMastery((s) => s.markPassed)
   const loadMastery = useMastery((s) => s.load)
-  const kpName = kpById(kpId)?.name ?? '当前知识点'
+  /* 名称解析覆盖 78 点全体系：6 核心走既有注册表，非核心目录点回退体系种子（按需生成开通） */
+  const kpName = kpById(kpId)?.name ?? ksPointById(kpId)?.name ?? '当前知识点'
 
   /* 声明当前辅导上下文 → 供 App 顶层全局 dock / 选中即问就该知识点发起辅导。 */
   useEffect(() => {
@@ -1087,8 +1095,12 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             </div>
             {questions.length > 0 ? (
               <QuizRenderer questions={questions} onSubmitResult={handleQuizResult} grade={quizGrade} passMark={70} />
-            ) : (
+            ) : kpById(kpId) ? (
               <div className="resource-loading">「{kpName}」的分阶测试题准备中，请稍候…</div>
+            ) : (
+              <div className="resource-loading">
+                「{kpName}」为体系拓展点，分阶测试题库暂未覆盖——可先通过讲义 / 图解 / 视频等按需生成的资源学习，测试将随题库扩充开放。
+              </div>
             )}
             {wrongQs.length > 0 && <WeakPointReinforce wrong={wrongQs} />}
           </>

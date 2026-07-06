@@ -709,3 +709,54 @@ export const KP_RESOURCES: Record<string, KpResourceContent> = {
   transformer,
   finetune,
 }
+
+/* ─────────────────── 体系目录点（非核心 72 点）通用模板内容 ─────────────────── */
+
+/**
+ * 非核心目录点的 mock 内容包：按知识点名称/简介参数化生成通用讲义骨架 + 导图 + 图解。
+ * 仅 mock 模式使用（联调下内容由后端生成引擎按该 kpId 真实按需生成）；避免此前
+ * 「未收录 kpId 回退 nn 内容」导致名称与正文不符。分阶测试题库未覆盖非核心点 → quiz 为空，
+ * 资源页对空题目有明确的未开放提示。
+ */
+export function genericKpContent(name: string, description: string): KpResourceContent {
+  const desc = description || `${name} 的核心概念与应用`
+  const lecture = (tone: string, extra: string) => `# ${name}（${tone}）
+
+> 本讲义由**领域知识生成 Agent**按「${tone}」难度生成（演示模式为模板内容；联调模式将基于知识库真实生成）。
+
+## 一、这个知识点讲什么
+
+${desc}
+
+## 二、学习要点
+
+- 理解 ${name} 要解决的问题与适用场景
+- 掌握其核心机制与关键概念
+- ${extra}
+
+## 三、如何继续深入
+
+结合右侧先修关系，先补齐前置知识，再通过图解与外部资源建立直观理解。`
+  return {
+    lectureByLevel: {
+      入门: lecture('入门版', '用直观例子建立第一印象，不深究数学细节'),
+      初级: lecture('初级版', '能向他人复述其工作流程与输入输出'),
+      高级: lecture('高级版', '理解其数学原理、局限与最新进展'),
+    },
+    quiz: [],
+    mindmap: `# ${name}
+## 核心概念
+### ${desc}
+## 关键机制
+## 实践应用
+## 进阶方向
+`,
+    diagram: `flowchart LR
+  A["先修基础"] --> B["${name}"]
+  B --> C["核心机制"]
+  B --> D["典型应用"]
+  C --> E["实践与进阶"]
+  D --> E
+`,
+  }
+}

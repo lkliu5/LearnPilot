@@ -9,9 +9,11 @@ interface LearningPathCardProps {
   progress: number
   /** 会话三·时间线：该步预计时长（分钟） */
   estimatedMinutes?: number
+  /** 点击卡片 / 底部按钮的动作（进入该知识点学习）。缺省保持纯展示。 */
+  onOpen?: () => void
 }
 
-export default function LearningPathCard({ sequence, topic, difficulty, status, progress, estimatedMinutes }: LearningPathCardProps) {
+export default function LearningPathCard({ sequence, topic, difficulty, status, progress, estimatedMinutes, onOpen }: LearningPathCardProps) {
   const difficultyClass = {
     '入门': 'beginner',
     '初级': 'elementary',
@@ -26,9 +28,10 @@ export default function LearningPathCard({ sequence, topic, difficulty, status, 
 
   return (
     <motion.div
-      className={`learning-path-card learning-path-card--${status}`}
+      className={`learning-path-card learning-path-card--${status}${onOpen ? ' learning-path-card--clickable' : ''}`}
       whileHover={{ scale: 1.02, y: -4 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      onClick={onOpen}
     >
       {/* 流光连接线 */}
       {status !== 'pending' && (
@@ -103,7 +106,13 @@ export default function LearningPathCard({ sequence, topic, difficulty, status, 
         )}
 
         {/* 玻璃按钮 */}
-        <button className="learning-path-card__action">
+        <button
+          className="learning-path-card__action"
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen?.()
+          }}
+        >
           {status === 'completed' ? '复习巩固' : status === 'in_progress' ? '继续学习' : '开始学习'}
         </button>
       </div>

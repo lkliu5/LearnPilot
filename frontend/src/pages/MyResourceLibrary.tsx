@@ -171,8 +171,8 @@ export default function MyResourceLibrary({ onNavigate }: { onNavigate?: (page: 
         ]}
       />
 
-      {/* 筛选区：形态 chips + 知识点下拉 + 时间快捷 */}
-      <RevealGroup>
+      {/* 筛选区：形态 chips + 知识点下拉 + 时间快捷（reslib-body 负责筛选区与网格间距） */}
+      <RevealGroup className="reslib-body">
         <RevealItem className="reslib-filters">
           <div className="reslib-filters__row">
             <span className="reslib-filters__label">类型</span>

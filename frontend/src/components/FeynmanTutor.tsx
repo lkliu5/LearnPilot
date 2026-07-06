@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { kpById } from '../data/knowledgePoints'
+import { ksPointById } from '../data/knowledgeSystem'
 import { feynmanStream, type FeynmanGap, type ReviewRef } from '../services/learningFlow'
 import ChatPanel, { type ChatMsg as Msg } from './ChatPanel'
 
@@ -33,7 +34,7 @@ const REVIEW_KIND_LABEL: Record<string, string> = {
 }
 
 export default function FeynmanTutor({ kpId, onReview, onComplete }: FeynmanTutorProps) {
-  const kpName = kpById(kpId)?.name ?? '这个知识点'
+  const kpName = kpById(kpId)?.name ?? ksPointById(kpId)?.name ?? '这个知识点'
   const opening = `轮到你当老师了 🎓。请用你自己的话，把「${kpName}」讲给一个完全没学过的人听——讲得越具体越好。我会顺着你的讲解点评、追问，并帮你找出还没讲清的地方。`
 
   const [msgs, setMsgs] = useState<Msg[]>([{ role: 'agent', text: opening }])

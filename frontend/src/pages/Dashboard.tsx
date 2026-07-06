@@ -19,6 +19,7 @@ import { getResourceHistory } from '../services/resourceHistory'
 import { getLearningPath, type LearningPathData } from '../services/learning'
 import { listDocuments } from '../services/documentLearning'
 import { setResourceNav } from '../services/resourceNav'
+import { swrFetch } from '../services/sessionCache'
 import { synthesizeSteward } from '../services/stewardActivity'
 import { StewardHero, AgentActivityPanel, StewardSuggestPanel } from '../components/LearningSteward'
 import { getUser } from '../services/api'
@@ -155,19 +156,24 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   const portraitTs = usePortrait((s) => s.updatedAt)
   const diagnosed = journeyHasDiagnosed && (USE_REAL_API || portraitDims.length > 0)
 
+  /* 会话缓存 key（带用户维度，登录切换旧缓存自然不命中）。中枢五路数据全部走
+     swrFetch（SWR）：回到首页时先秒回上次数据、后台静默重拉再刷新——消除整页干等；
+     同 key 并发（StrictMode 双挂载等）共享在途请求，不重复打后端。 */
+  const uid = getUser()?.userId ?? 'anon'
+
   /* 联调数据源：GET /dashboard/overview（接口 29）聚合综合分/强弱项/雷达/对标摘要；
      未诊断不请求。掌握度变化时重取，保持"随掌握度联动"行为 */
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   useEffect(() => {
     if (!USE_REAL_API || !diagnosed) return
     let alive = true
-    getDashboardOverview()
-      .then((d) => alive && setOverview(d))
-      .catch((e) => console.error('[dashboard] 加载学情概览失败', e)) // 失败回退本地画像合成
+    swrFetch(`${uid}:hub-overview`, getDashboardOverview, (d) => {
+      if (alive) setOverview(d)
+    }).catch((e) => console.error('[dashboard] 加载学情概览失败', e)) // 失败回退本地画像合成
     return () => {
       alive = false
     }
-  }, [masteryStatus, diagnosed])
+  }, [uid, masteryStatus, diagnosed])
 
   /* 学习过程评估（接口文档 12.2，评估 Agent）：联调取后端真实行为评估；mock 由掌握度合成。
      掌握度变化（做题通过/进度推进）→ 重取，保持评估随学习活动联动。 */
@@ -175,26 +181,30 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   useEffect(() => {
     if (!USE_REAL_API || !diagnosed) return
     let alive = true
-    getLearningEvaluation()
-      .then((d) => alive && setEvaluation(d))
-      .catch((e) => console.error('[dashboard] 加载学习评估失败', e))
+    swrFetch(`${uid}:hub-evaluation`, getLearningEvaluation, (d) => {
+      if (alive) setEvaluation(d)
+    }).catch((e) => console.error('[dashboard] 加载学习评估失败', e))
     return () => {
       alive = false
     }
-  }, [masteryStatus, diagnosed])
+  }, [uid, masteryStatus, diagnosed])
   /* 学情管家·生成 Agent 活动计量：复用我的资源库生成历史（接口 19.1）total 字段。
      mock 返回本地合成条数；联调返回真实累计。仅诊断后拉取，随掌握度变化重取。 */
   const [resourceCount, setResourceCount] = useState(0)
   useEffect(() => {
     if (!diagnosed) return
     let alive = true
-    getResourceHistory({ page: 1, pageSize: 1 })
-      .then((d) => alive && setResourceCount(d.total))
-      .catch((e) => console.warn('[steward] 生成历史计量获取失败（已忽略）', e))
+    swrFetch(
+      `${uid}:hub-resource-count`,
+      () => getResourceHistory({ page: 1, pageSize: 1 }),
+      (d) => {
+        if (alive) setResourceCount(d.total)
+      }
+    ).catch((e) => console.warn('[steward] 生成历史计量获取失败（已忽略）', e))
     return () => {
       alive = false
     }
-  }, [masteryStatus, diagnosed])
+  }, [uid, masteryStatus, diagnosed])
 
   /* 中枢·② 为你规划的路径：复用规划 Agent 的真实路径 + 时间线（6.1 /learning-path）。
      画像变 / 掌握度变 → 重取，与学习路径页同口径；未生成路径不请求、不臆造。 */
@@ -202,25 +212,25 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
   useEffect(() => {
     if (!diagnosed || !hasGeneratedPath) return
     let alive = true
-    getLearningPath()
-      .then((d) => alive && setPath(d))
-      .catch((e) => console.error('[hub] 拉取学习路径失败', e))
+    swrFetch(`${uid}:hub-path`, getLearningPath, (d) => {
+      if (alive) setPath(d)
+    }).catch((e) => console.error('[hub] 拉取学习路径失败', e))
     return () => {
       alive = false
     }
-  }, [diagnosed, hasGeneratedPath, masteryStatus, portraitTs])
+  }, [uid, diagnosed, hasGeneratedPath, masteryStatus, portraitTs])
 
   /* 中枢·文档学习 Agent 计量：复用我的文档列表（20.2），mock 为本地内存表（无文档=0，不臆造）。 */
   const [docCount, setDocCount] = useState(0)
   useEffect(() => {
     let alive = true
-    listDocuments()
-      .then((d) => alive && setDocCount(d.length))
-      .catch((e) => console.warn('[steward] 文档列表获取失败（已忽略）', e))
+    swrFetch(`${uid}:hub-docs`, listDocuments, (d) => {
+      if (alive) setDocCount(d.length)
+    }).catch((e) => console.warn('[steward] 文档列表获取失败（已忽略）', e))
     return () => {
       alive = false
     }
-  }, [])
+  }, [uid])
 
   const masteredIds = useMemo(
     () => KNOWLEDGE_POINTS.filter((k) => masteryStatus[k.id] === 'passed').map((k) => k.id),
@@ -650,6 +660,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: PageType
                         status={l.status}
                         progress={l.progress}
                         estimatedMinutes={l.estimatedMinutes}
+                        onOpen={() => {
+                          // 与「继续学习」同一跳转协议：未完成 → 有序学习流；已完成 → 自由浏览复习
+                          setResourceNav(l.kpId ?? '', l.status === 'completed' ? 'browse' : 'flow')
+                          onNavigate?.('learning-resource')
+                        }}
                       />
                     ))}
                   </div>

@@ -7,12 +7,25 @@
   padding-bottom: 40px;
 }
 
+/* 压缩顶部标题区：页头自带 margin-bottom(32px) 与页面 gap(20px) 叠加导致上部过空，
+   归零后仅保留页面 gap，整体重心上移、留白均衡 */
+.reslib-page .page-header {
+  margin-bottom: 0;
+}
+
+/* 筛选区与卡片网格 / 状态区之间的呼吸间距（此前同组无间隔，贴死拥挤） */
+.reslib-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
 /* ---------- 筛选区 ---------- */
 .reslib-filters {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 12px;
+  padding: 14px 18px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
