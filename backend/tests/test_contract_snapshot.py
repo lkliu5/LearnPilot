@@ -314,13 +314,14 @@ def test_09_job_market_snapshot(client, learner):
 def test_10_learning_path(client, learner):
     data = _data(client.get(f"{API}/learning-path", headers=learner))
     _exact(data, {"lessons", "milestones", "summary"})
-    assert len(data["lessons"]) == 6
-    assert [ls["sequence"] for ls in data["lessons"]] == [1, 2, 3, 4, 5, 6]
+    # 会话三：路径不再固定 6 步——有目标 → 在 78 点树上聚焦细化到合理长度；sequence 连续。
+    assert len(data["lessons"]) >= 6
+    assert [ls["sequence"] for ls in data["lessons"]] == list(range(1, len(data["lessons"]) + 1))
     for lesson in data["lessons"]:
-        # 六字段契约 + 6.3 additive（已诊断用户 GET 返回个性化路径，含 kpId/reason/resources）
+        # 六字段契约 + additive（6.3 kpId/reason/resources、会话三 estimatedMinutes）
         _exact(lesson, {"sequence", "topic", "difficulty", "status",
                         "progress", "description"},
-               optional={"kpId", "reason", "resources"})
+               optional={"kpId", "reason", "resources", "estimatedMinutes"})
         assert lesson["difficulty"] in PATH_DIFFICULTIES
         assert lesson["status"] in LESSON_STATUS
         assert 0 <= lesson["progress"] <= 100
@@ -328,8 +329,9 @@ def test_10_learning_path(client, learner):
         _exact(ms, {"id", "title", "completed", "date"})
         assert isinstance(ms["completed"], bool)
         assert ms["date"] is None or isinstance(ms["date"], str)
+    # C2 additive：narrative（规划叙述）；会话三 additive：timeline（时间线聚合）
     _exact(data["summary"], {"completedCount", "inProgressCount", "overallProgress"},
-           optional={"narrative"})  # C2 additive：整体规划叙述
+           optional={"narrative", "timeline"})
 
 
 def test_11_learning_path_generate(client, learner):
@@ -631,7 +633,7 @@ def test_30_task_polling(client, learner):
     assert task["status"] == "succeeded"
     assert task["error"] is None
     _exact(task["result"], {"lessons"})  # 15.2：路径任务产物 {lessons}
-    assert len(task["result"]["lessons"]) == 6
+    assert len(task["result"]["lessons"]) >= 6  # 会话三：按目标聚焦细化，长度可 > 6
     _data(client.get(f"{API}/tasks/t_nope", headers=learner), code=1004, status=404)
 
 

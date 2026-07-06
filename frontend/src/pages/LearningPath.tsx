@@ -16,6 +16,19 @@ const RECOMMEND_TAB: Record<string, string> = {
   video: 'video', quiz: 'quiz', external: 'external',
 }
 
+/** 分钟 → 人性化时长（会话三·时间线）：<60 显示分钟，否则显示小时（去除 .0）。 */
+function fmtDuration(min?: number): string {
+  if (!min || min <= 0) return ''
+  if (min < 60) return `约 ${min} 分钟`
+  const h = min / 60
+  return `约 ${Number.isInteger(h) ? h : h.toFixed(1)} 小时`
+}
+/** 分钟 → 小时数（用于「已花时长」，去除 .0）。 */
+function toHours(min: number): string {
+  const h = Math.round((min / 60) * 10) / 10
+  return `${Number.isInteger(h) ? h : h.toFixed(1)}`
+}
+
 export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const [viewMode, setViewMode] = useState<'timeline' | 'cards'>('timeline')
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
@@ -37,6 +50,7 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
   const pathData: Lesson[] = data?.lessons ?? []
   const milestones = data?.milestones ?? []
   const narrative = data?.summary.narrative ?? ''
+  const timeline = data?.summary.timeline
 
   const recommendedOf = (l?: Lesson) => l?.resources?.find((r) => r.recommended)
 
@@ -52,6 +66,8 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
   /* 当前应学节点 = 路径中第一个未完成的节点（已按个性化顺序排好，取其 kpId）。 */
   const currentNode = pathData.find((l) => l.status !== 'completed') ?? pathData[pathData.length - 1]
   const currentKpId = currentNode?.kpId
+  /* 当前进度位置：第一个未完成节点即「你在这里 / 下一步」，用于时间线高亮。 */
+  const currentSeq = currentNode && currentNode.status !== 'completed' ? currentNode.sequence : -1
 
   const completedCount = pathData.filter(p => p.status === 'completed').length
   const inProgressCount = pathData.filter(p => p.status === 'in_progress').length
@@ -78,6 +94,40 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
         <motion.div className="path-rationale" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <span className="path-rationale__icon">✦</span>
           <span className="path-rationale__text">{narrative}</span>
+        </motion.div>
+      )}
+
+      {/* 会话三·时间线：整条路径预计周期 / 总时长 / 进度 / 学习节奏建议 */}
+      {timeline && timeline.totalCount > 0 && (
+        <motion.div className="path-timeline" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+          <div className="path-timeline__head">
+            <div className="path-timeline__cycle">
+              <span className="path-timeline__cycle-num">预计 {timeline.cycleWeeks} 周</span>
+              <span className="path-timeline__cycle-sub">学完全程</span>
+            </div>
+            <div className="path-timeline__facts">
+              <span className="path-timeline__fact"><b>{timeline.totalCount}</b> 个知识点</span>
+              <span className="path-timeline__dot">·</span>
+              <span className="path-timeline__fact">共约 <b>{timeline.totalHours}</b> 小时</span>
+              <span className="path-timeline__dot">·</span>
+              <span className="path-timeline__fact">已学 <b>{timeline.learnedCount}/{timeline.totalCount}</b></span>
+            </div>
+          </div>
+          <div className="path-timeline__progress">
+            <div className="path-timeline__bar">
+              <motion.div
+                className="path-timeline__fill"
+                initial={{ width: 0 }}
+                animate={{ width: `${timeline.completionPct}%` }}
+                transition={{ duration: 0.9, ease: 'easeOut' }}
+              />
+            </div>
+            <span className="path-timeline__pct">{timeline.completionPct}%</span>
+          </div>
+          <div className="path-timeline__foot">
+            <span className="path-timeline__spent">已投入约 {toHours(timeline.spentMinutes)} / {timeline.totalHours} 小时</span>
+            <span className="path-timeline__pacing">⏱ {timeline.pacing}</span>
+          </div>
         </motion.div>
       )}
 
@@ -124,7 +174,7 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                 {pathData.map((item) => (
                   <motion.div
                     key={item.sequence}
-                    className={`timeline-item timeline-item--${item.status}`}
+                    className={`timeline-item timeline-item--${item.status}${item.sequence === currentSeq ? ' timeline-item--current' : ''}`}
                     variants={revealItem}
                     onClick={() => setSelectedTopic(item.topic)}
                   >
@@ -144,8 +194,20 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                       )}
                     </div>
                     <div className="timeline-item__content">
+                      {item.sequence === currentSeq && (
+                        <span className="timeline-item__here">▶ 下一步 · 你在这里</span>
+                      )}
                       <div className="timeline-item__header">
                         <h3 className="timeline-item__title">{item.topic}</h3>
+                        {item.estimatedMinutes ? (
+                          <span className="timeline-item__duration" title="预计学习时长（按层级/难度估算）">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 7v5l3 2" />
+                            </svg>
+                            {fmtDuration(item.estimatedMinutes)}
+                          </span>
+                        ) : null}
                         <span className={`difficulty-badge difficulty-badge--${
                           item.difficulty === '入门' ? 'beginner' :
                           item.difficulty === '初级' ? 'elementary' :
@@ -237,6 +299,7 @@ export default function LearningPath({ onNavigate }: { onNavigate?: (page: PageT
                       difficulty={item.difficulty}
                       status={item.status}
                       progress={item.progress}
+                      estimatedMinutes={item.estimatedMinutes}
                     />
                   </RevealItem>
                 ))}

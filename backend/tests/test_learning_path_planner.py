@@ -111,20 +111,27 @@ def _topics(plan: dict) -> list[str]:
 
 
 def test_plan_shape_and_ordering(two_profiles):
-    """每步契约六字段 + additive(kpId/reason/resources)；sequence 连续；理由非空。"""
+    """每步契约六字段 + additive(kpId/reason/resources/estimatedMinutes)；sequence 连续；理由非空。
+
+    会话三：_USER_ZERO 目标「大模型应用」→ 在 78 点树上按 LLM 板块聚焦细化，路径长于 6、
+    裁剪到合理长度（≤ 12）；6 核心仍作为主干包含在内。
+    """
     db = two_profiles
     plan = plan_path(db, user_id=_USER_ZERO, target_job_id="llm-app")
     lessons = plan["lessons"]
-    assert len(lessons) == 6
-    assert [l["sequence"] for l in lessons] == [1, 2, 3, 4, 5, 6]
+    assert 6 <= len(lessons) <= 12                              # 目标聚焦 → 合理长度
+    assert [l["sequence"] for l in lessons] == list(range(1, len(lessons) + 1))
+    assert _KP_IDS <= {l["kpId"] for l in lessons}             # 6 核心主干仍在路径内
     for l in lessons:
         assert _LESSON_CORE <= set(l)               # 契约六字段齐全（向后兼容）
         assert l["status"] in {"completed", "in_progress", "pending"}
         assert 0 <= l["progress"] <= 100
         # additive：每步有 kpId / 非空 reason / 非空 resources（验证项 3、4）
-        assert l["kpId"] in _KP_IDS
+        assert isinstance(l["kpId"], str) and l["kpId"].strip()
         assert isinstance(l["reason"], str) and l["reason"].strip()
         assert l["resources"] and all(r["kpId"] == l["kpId"] for r in l["resources"])
+        # 会话三·时间线：每步预计时长（分钟，按层级/难度估算，约束 45~240）
+        assert 45 <= l["estimatedMinutes"] <= 240
 
 
 def test_two_profiles_yield_different_paths(two_profiles):
@@ -198,15 +205,15 @@ def test_resources_openable(client, two_profiles):
     plan = plan_path(db, user_id=_USER_ZERO, target_job_id="llm-app")
     for step in plan["lessons"]:
         kp = step["kpId"]
-        # 题库（9.1）：真实存在 ≥1 题
-        quiz = client.get(f"{API}/quiz/{kp}", headers=headers)
-        assert quiz.status_code == 200 and quiz.json()["data"]["questions"]
-        # 外部精选（8.6）：真实种子 ≥1 条（data 为资源数组）
-        ext = client.get(f"{API}/resource/external/{kp}", headers=headers)
-        assert ext.status_code == 200 and ext.json()["data"]
-        # 思维导图（8.4）：真实 Markdown
+        # 思维导图（8.4）：任意知识点（含 78 点目录点）按需生成真实 Markdown（可点开）
         mind = client.get(f"{API}/resource/mindmap/{kp}", headers=headers)
         assert mind.status_code == 200 and mind.json()["data"]["markdown"]
+        # 题库（9.1）/ 外部精选（8.6）为种子内容，仅 6 已验证核心点有；目录点按需生成其它形式
+        if kp in _KP_IDS:
+            quiz = client.get(f"{API}/quiz/{kp}", headers=headers)
+            assert quiz.status_code == 200 and quiz.json()["data"]["questions"]
+            ext = client.get(f"{API}/resource/external/{kp}", headers=headers)
+            assert ext.status_code == 200 and ext.json()["data"]
 
 
 # ---- C2：per-KP 能力分驱动顺序 + 偏好驱动资源形式 ------------------------------
@@ -356,3 +363,48 @@ def test_get_path_recomputes_when_portrait_changes(client):
                 db.delete(row)
         db.commit()
         db.close()
+
+
+# ---- 会话三：在 78 点树上按目标聚焦裁剪 + 时间线（周期/时长/进度/节奏） -----------
+
+def test_goal_focus_widens_over_78_tree(two_profiles):
+    """在更大知识树上规划：有目标 → 引入目标板块细化点、路径长于 6；无目标 → 仅 6 核心。"""
+    db = two_profiles
+    # _USER_ZERO 目标「大模型应用」→ 聚焦 LLM 板块 → 纳入非核心 LLM 细化点
+    plan_goal = plan_path(db, user_id=_USER_ZERO, target_job_id="llm-app")
+    kp_ids = [l["kpId"] for l in plan_goal["lessons"]]
+    assert len(kp_ids) > 6, "有明确目标 → 应在 78 点树上细化，路径长于 6 核心"
+    assert len(kp_ids) <= 12, "路径裁剪到合理长度（≤ 12），不铺满 78 点"
+    non_core_llm = [k for k in kp_ids if k not in _KP_IDS and k.startswith("LLM-")]
+    assert non_core_llm, "目标聚焦 LLM → 路径应含 LLM 板块细化点（非核心）"
+    assert len(kp_ids) == len(set(kp_ids)), "路径知识点不重复"
+
+    # _USER_PRIOR 无学习目标 / 无目标岗位 → 回落 6 核心主干（零回归、路径仍 6 步）
+    plan_none = plan_path(db, user_id=_USER_PRIOR)
+    none_ids = {l["kpId"] for l in plan_none["lessons"]}
+    assert len(plan_none["lessons"]) == 6 and none_ids == _KP_IDS
+
+
+def test_timeline_fields_present(two_profiles, client):
+    """时间线：每点预计时长 + 整条路径周期/总时长/进度百分比/节奏建议齐全、自洽。"""
+    db = two_profiles
+    # per-KP：入门较短、前沿较长（层级驱动，估算合理）
+    plan = plan_path(db, user_id=_USER_ZERO, target_job_id="llm-app")
+    mins = {l["kpId"]: l["estimatedMinutes"] for l in plan["lessons"]}
+    assert all(45 <= m <= 240 for m in mins.values())
+    assert mins["ml"] < mins["finetune"], "入门(机器学习概述) 应短于 前沿(参数高效微调)"
+
+    # 整条路径 timeline（经 GET 端点聚合，画像含节奏偏好 → 影响每日节奏）
+    res = client.post(f"{API}/auth/login", json={"username": "learner_001", "password": "123456"})
+    headers = {"Authorization": f"Bearer {res.json()['data']['token']}"}
+    summary = client.get(f"{API}/learning-path", headers=headers).json()["data"]["summary"]
+    tl = summary["timeline"]
+    for key in ("totalCount", "learnedCount", "totalMinutes", "totalHours",
+                "spentMinutes", "completionPct", "pacePerDay", "cycleDays",
+                "cycleWeeks", "pacing"):
+        assert key in tl, f"timeline 缺字段 {key}"
+    lessons = client.get(f"{API}/learning-path", headers=headers).json()["data"]["lessons"]
+    assert tl["totalCount"] == len(lessons)
+    assert tl["totalMinutes"] == sum(l["estimatedMinutes"] for l in lessons)
+    assert 0 <= tl["completionPct"] <= 100
+    assert tl["cycleWeeks"] >= 1 and isinstance(tl["pacing"], str) and tl["pacing"]

@@ -20,7 +20,12 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.agents.planner_agent import plan_path, portrait_fingerprint
+from app.agents.planner_agent import (
+    build_timeline,
+    estimate_minutes,
+    plan_path,
+    portrait_fingerprint,
+)
 from app.core.database import SessionLocal, get_db
 from app.core.envelope import success
 from app.core.security import get_current_user
@@ -28,6 +33,7 @@ from app.core.tasks import Task, submit
 from app.models.entities import Journey, KnowledgePoint, Lesson, User
 from app.schemas.profile import GeneratePathRequest
 from app.services import mastery as mastery_service
+from app.services import student_portrait as portrait_service
 
 router = APIRouter(tags=["learning-path"])
 
@@ -42,15 +48,20 @@ def _seed_lessons(db: Session, user_id: str) -> list[dict[str, Any]]:
     通过阶段测试(passed)→completed；真实学习中→in_progress；否则未开始(pending)。诊断微测
     基线视为未开始。零基础新用户（无 Mastery）→ 全部 pending，绝不出现"已完成"。
     """
-    kp_by_seq = {kp.lesson_seq: kp.id for kp in db.query(KnowledgePoint).all()}
+    kps = db.query(KnowledgePoint).all()
+    kp_by_seq = {kp.lesson_seq: kp.id for kp in kps}
+    level_by_id = {kp.id: kp.level for kp in kps}
     score_map = mastery_service.get_score_map(db, user_id)
     out: list[dict[str, Any]] = []
     for ls in db.query(Lesson).order_by(Lesson.sequence).all():
-        entry = score_map.get(kp_by_seq.get(ls.sequence) or "") or {}
+        kp_id = kp_by_seq.get(ls.sequence) or ""
+        entry = score_map.get(kp_id) or {}
         status, progress = mastery_service.learning_step(entry.get("status"), entry.get("source"))
         out.append({
             "sequence": ls.sequence, "topic": ls.topic, "difficulty": ls.difficulty,
             "status": status, "progress": progress, "description": ls.description,
+            # 会话三·时间线：种子路径同样带每点预计时长（按层级/难度估算）
+            "estimatedMinutes": estimate_minutes(level_by_id.get(kp_id), ls.difficulty),
         })
     return out
 
@@ -67,8 +78,11 @@ def _resolve_lessons(
     if journey is None or not journey.has_diagnosed:
         return _seed_lessons(db, user_id), ""
     current_fp = portrait_fingerprint(db, user_id)
-    if journey.path_plan and journey.path_fingerprint == current_fp:
-        return list(journey.path_plan), journey.path_narrative or ""  # 命中缓存
+    cached = list(journey.path_plan or [])
+    # 缓存命中需同时满足：指纹未变 且 已含会话三时间线字段（旧缓存无 estimatedMinutes → 视为失效重算）。
+    cache_fresh = bool(cached) and all("estimatedMinutes" in ls for ls in cached)
+    if cache_fresh and journey.path_fingerprint == current_fp:
+        return cached, journey.path_narrative or ""  # 命中缓存
     # 画像已变 / 首次 → 实时重算并回填缓存（不改 has_generated_path，正式生成仍走 POST）
     plan = plan_path(db, user_id=user_id, narrate=False)
     journey.path_plan = plan["lessons"]
@@ -100,10 +114,21 @@ def _build_milestones(journey: Journey | None, lessons: list[dict[str, Any]]) ->
     ]
 
 
-def _build_summary(lessons: list[dict[str, Any]], narrative: str = "") -> dict[str, Any]:
+def _pace_option(db: Session, user_id: str) -> str:
+    """取学习节奏偏好类型码 optionKey（learning_pace→overview/deepdive）；缺失返回 ""。"""
+    for d in portrait_service.get_portrait(db, user_id).get("dimensions") or []:
+        if d.get("key") == "learning_pace":
+            return str(d.get("optionKey") or "")
+    return ""
+
+
+def _build_summary(
+    lessons: list[dict[str, Any]], narrative: str = "", pace: str = ""
+) -> dict[str, Any]:
     """汇总进度（接口文档 6.1 summary）。overallProgress = sum(progress)/课程数。
 
     C2 additive：narrative=整体规划叙述（"为你这样规划的理由"，驱动前端路径头部横幅）。
+    会话三 additive：timeline=时间线聚合（预计周期/总时长/进度百分比/节奏建议）。
     """
     completed = sum(1 for ls in lessons if ls["status"] == "completed")
     in_progress = sum(1 for ls in lessons if ls["status"] == "in_progress")
@@ -114,6 +139,7 @@ def _build_summary(lessons: list[dict[str, Any]], narrative: str = "") -> dict[s
         "inProgressCount": in_progress,
         "overallProgress": overall,
         "narrative": narrative,
+        "timeline": build_timeline(lessons, pace),
     }
 
 
@@ -125,11 +151,12 @@ async def get_learning_path(
     """获取个性化学习路径（接口文档 6.1）。已生成则返回个性化路径，否则种子路径。"""
     journey = db.get(Journey, user.id)
     lessons, narrative = _resolve_lessons(db, user.id, journey)
+    pace = _pace_option(db, user.id)
     return success(
         {
             "lessons": lessons,
             "milestones": _build_milestones(journey, lessons),
-            "summary": _build_summary(lessons, narrative),
+            "summary": _build_summary(lessons, narrative, pace),
         }
     )
 

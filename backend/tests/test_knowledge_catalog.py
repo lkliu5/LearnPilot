@@ -141,10 +141,12 @@ def test_dashboard_coverage_denominator_is_6(db):
     assert len(knowledge_catalog.core_kp_ids(db)) == 6
 
 
-def test_planner_path_still_six_steps(db, client, learner_headers):
-    """路径规划收窄到 6 核心：录入 78 点后仍 6 步（不回归为 78 步）。"""
+def test_planner_path_core_trunk_bounded(db, client, learner_headers):
+    """录入 78 点后路径不回归为 78 步：6 核心始终作主干，有目标则聚焦细化到合理长度（≤12）。"""
     from app.agents import planner_agent
 
     user = db.query(User).filter(User.username == "learner_001").one()
     plan = planner_agent.plan_path(db, user_id=user.id, narrate=False)
-    assert len(plan["lessons"]) == 6
+    kp_ids = {l["kpId"] for l in plan["lessons"]}
+    assert set(knowledge_catalog.core_kp_ids(db)) <= kp_ids   # 6 核心主干恒在
+    assert 6 <= len(plan["lessons"]) <= 12                     # 裁剪到合理长度，绝不铺满 78

@@ -551,3 +551,78 @@
   font-size: 0.82rem; color: var(--purple-700);
 }
 .topic-modal__recommend-why { display: block; margin-top: 2px; font-size: 0.74rem; color: var(--gray-500); }
+
+/* ============ 会话三·时间线：整条路径周期 / 总时长 / 进度 / 节奏 ============ */
+.path-timeline {
+  margin: 0 0 var(--space-lg);
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--purple-200);
+  background: linear-gradient(135deg, var(--purple-50), rgba(255, 255, 255, 0.55));
+  box-shadow: var(--shadow-float);
+}
+.path-timeline__head {
+  display: flex; align-items: center; gap: var(--space-md);
+  flex-wrap: wrap; margin-bottom: 10px;
+}
+.path-timeline__cycle {
+  display: flex; flex-direction: column; line-height: 1.15;
+  padding: 4px 14px 4px 0; border-right: 1px solid var(--purple-200);
+}
+.path-timeline__cycle-num {
+  font-size: 1.12rem; font-weight: 800;
+  background: linear-gradient(120deg, var(--primary-500), var(--purple-500));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.path-timeline__cycle-sub { font-size: 0.7rem; color: var(--gray-500); }
+.path-timeline__facts {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 0.82rem; color: var(--gray-600);
+}
+.path-timeline__facts b { color: var(--gray-800); font-weight: 700; }
+.path-timeline__dot { color: var(--gray-300); }
+.path-timeline__progress { display: flex; align-items: center; gap: 10px; }
+.path-timeline__bar {
+  flex: 1; height: 8px; border-radius: var(--radius-full);
+  background: var(--gray-200); overflow: hidden;
+}
+.path-timeline__fill {
+  height: 100%; border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--success-400), var(--primary-500), var(--purple-500));
+}
+.path-timeline__pct { font-size: 0.8rem; font-weight: 700; color: var(--primary-600); min-width: 34px; text-align: right; }
+.path-timeline__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md); flex-wrap: wrap; margin-top: 8px;
+  font-size: 0.76rem; color: var(--gray-500);
+}
+.path-timeline__pacing { color: var(--purple-700); font-weight: 600; }
+
+/* 每步预计时长徽章 */
+.timeline-item__duration {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--primary-50); color: var(--primary-600);
+  border: 1px solid var(--primary-200);
+  font-size: 0.72rem; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+}
+.timeline-item__duration svg { width: 12px; height: 12px; }
+.timeline-item__header { flex-wrap: wrap; }
+
+/* 当前进度位置 / 下一步高亮 */
+.timeline-item__here {
+  display: inline-block; margin-bottom: 8px;
+  padding: 3px 12px; border-radius: 999px;
+  background: linear-gradient(120deg, var(--primary-500), var(--purple-500));
+  color: #fff; font-size: 0.72rem; font-weight: 700;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.32);
+}
+.timeline-item--current .timeline-item__content {
+  border-left: 3px solid var(--primary-500);
+  box-shadow: var(--shadow-float), 0 0 0 2px var(--primary-200);
+}
+
+@media (max-width: 640px) {
+  .path-timeline__cycle { border-right: none; padding-right: 0; }
+  .path-timeline__foot { flex-direction: column; align-items: flex-start; gap: 4px; }
+}

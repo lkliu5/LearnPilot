@@ -7,9 +7,11 @@ interface LearningPathCardProps {
   difficulty: string
   status: 'completed' | 'in_progress' | 'pending'
   progress: number
+  /** 会话三·时间线：该步预计时长（分钟） */
+  estimatedMinutes?: number
 }
 
-export default function LearningPathCard({ sequence, topic, difficulty, status, progress }: LearningPathCardProps) {
+export default function LearningPathCard({ sequence, topic, difficulty, status, progress, estimatedMinutes }: LearningPathCardProps) {
   const difficultyClass = {
     '入门': 'beginner',
     '初级': 'elementary',
@@ -17,6 +19,10 @@ export default function LearningPathCard({ sequence, topic, difficulty, status, 
     '高级': 'advanced',
     '精通': 'expert'
   }[difficulty] || 'intermediate'
+
+  const duration = estimatedMinutes && estimatedMinutes > 0
+    ? (estimatedMinutes < 60 ? `约 ${estimatedMinutes} 分钟` : `约 ${Number.isInteger(estimatedMinutes / 60) ? estimatedMinutes / 60 : (estimatedMinutes / 60).toFixed(1)} 小时`)
+    : ''
 
   return (
     <motion.div
@@ -49,6 +55,17 @@ export default function LearningPathCard({ sequence, topic, difficulty, status, 
             {difficulty}
           </span>
         </div>
+
+        {/* 会话三·时间线：预计学习时长 */}
+        {duration && (
+          <div className="learning-path-card__duration">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            {duration}
+          </div>
+        )}
 
         {/* 状态 */}
         <div className="learning-path-card__status">

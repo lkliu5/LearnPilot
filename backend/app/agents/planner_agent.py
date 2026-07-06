@@ -86,6 +86,29 @@ _KIND_LABEL: dict[str, str] = {
 _STYLE_LABEL: dict[str, str] = {"visual": "图像型", "textual": "文字型", "example": "案例型"}
 _PACE_LABEL: dict[str, str] = {"overview": "快速概览型", "deepdive": "稳步细钻型"}
 
+# ── 时间线（会话三·新增）：每个知识点「预计时长」按层级 level 主导 + 展示难度微调估算 ──
+# 层级基线（分钟）：入门较短、进阶居中、前沿较长（题面「入门较短、前沿较长」）。
+_LEVEL_BASE_MIN: dict[str, int] = {"入门": 60, "进阶": 120, "前沿": 180}
+# 展示难度（5 档，随基础分自适应）微调：难度越高多花些时间，反之略减。
+_DIFF_DELTA_MIN: dict[str, int] = {"入门": -15, "初级": 0, "中级": 15, "高级": 30, "精通": 45}
+_MIN_FLOOR, _MIN_CEIL = 45, 240  # 单点时长约束在 45 分钟 ~ 4 小时，四舍五入到 15 分钟
+# 目录点（无种子 Lesson 难度）→ 由层级映射基础难度档，再经 _adapt_difficulty 自适应。
+_LEVEL_TO_DIFF: dict[str, str] = {"入门": "入门", "进阶": "中级", "前沿": "高级"}
+_LEVEL_RANK: dict[str, int] = {"入门": 0, "进阶": 1, "前沿": 2}
+
+# ── 目标/岗位 → 聚焦板块（会话三·在 78 点树上按目标裁剪出合理长度路径） ──
+# 学习目标 / 目标岗位文本命中关键词 → 该板块细化点纳入规划（无命中 → 回落 6 核心主干）。
+_BOARD_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("LLM", ("大模型", "llm", "语言模型", "nlp", "自然语言", "gpt", "chatgpt", "文本", "prompt", "提示词", "rag")),
+    ("GEN", ("生成式", "生成模型", "扩散", "diffusion", "aigc", "文生图", "绘画", "stable diffusion", "sora", "图像生成")),
+    ("AGT", ("智能体", "agent", "多智能体", "langchain", "工作流编排", "autogpt", "autogen")),
+    ("CV", ("计算机视觉", "视觉", "图像识别", "目标检测", "图像分割", "opencv", "yolo")),
+    ("RLX", ("强化学习", "reinforcement", "决策", "博弈", "机器人控制")),
+    ("DL", ("深度学习", "神经网络", "deep learning", "cnn", "rnn", "卷积")),
+    ("ML", ("机器学习", "数据分析", "数据挖掘", "特征工程", "回归", "聚类", "数据科学")),
+]
+_MAX_PATH_STEPS = 12  # 路径合理长度上限（6 核心主干 + 目标板块细化点，题面示例约 12 点）
+
 
 def _foundation_score(dims: list[dict[str, Any]]) -> int | None:
     """从画像维度取 knowledge_base 基础分（0-100）；缺失返回 None（中性）。"""
@@ -223,6 +246,125 @@ def _build_resources(
     return resources
 
 
+# ── 会话三：在 78 点知识树上按目标聚焦裁剪 + 时间线估算 ──────────────────────────
+
+def _focus_boards(goal_text: str, job_name: str) -> list[str]:
+    """据学习目标 + 目标岗位文本匹配聚焦板块（最多 2，去重保序）。
+
+    无命中 → 空列表 → 规划回落 6 已验证核心主干（与既有行为一致、零回归）。
+    """
+    hay = f"{goal_text} {job_name}".lower()
+    boards: list[str] = []
+    for board, kws in _BOARD_KEYWORDS:
+        if board in boards:
+            continue
+        if any(kw.lower() in hay for kw in kws):
+            boards.append(board)
+        if len(boards) >= 2:
+            break
+    return boards
+
+
+def _prereq_closure(seed_ids: set[str], all_kp: dict[str, Any]) -> set[str]:
+    """先修传递闭包：使选中的知识点在路径中可学（补齐其先修）。纯图遍历、确定性。"""
+    closed = set(seed_ids)
+    stack = list(seed_ids)
+    while stack:
+        cur = stack.pop()
+        kp = all_kp.get(cur)
+        for pre in (list(kp.prerequisites or []) if kp is not None else []):
+            if pre in all_kp and pre not in closed:
+                closed.add(pre)
+                stack.append(pre)
+    return closed
+
+
+def _select_kps(
+    db: Session, focus_boards: list[str], core: list[KnowledgePoint]
+) -> list[KnowledgePoint]:
+    """选出参与规划的知识点集合（会话三）。
+
+    - 无聚焦（无目标/岗位关键词）→ 仅 6 核心主干（与既有 6 步路径**完全一致**，零回归）；
+    - 有聚焦 → 6 核心 + 目标板块细化点 + 其先修闭包，按「聚焦优先 / 层级由浅入深 /
+      先修序」排序后裁剪到 `_MAX_PATH_STEPS`，得到合理长度、可学的个性化路径。
+    排序骨架仍交由 plan_path 的能力打分（本函数只决定"纳入哪些点"，不决定最终顺序）。
+    """
+    if not focus_boards:
+        return core
+    core_ids = {kp.id for kp in core}
+    all_rows = db.query(KnowledgePoint).all()
+    all_kp: dict[str, Any] = {kp.id: kp for kp in all_rows}
+    in_focus = {kp.id for kp in all_rows if kp.category in focus_boards}
+    closure = _prereq_closure(core_ids | in_focus, all_kp)
+    extension = [i for i in closure if i not in core_ids]
+
+    def _rank(kp_id: str) -> tuple[int, int, int]:
+        kp = all_kp[kp_id]
+        return (
+            0 if kp_id in in_focus else 1,          # 目标板块点优先于跨板块补进的先修点
+            _LEVEL_RANK.get(kp.level or "", 1),     # 由浅入深（入门→进阶→前沿）
+            kp.lesson_seq,                          # 先修骨架兜底
+        )
+
+    extension.sort(key=_rank)
+    keep = extension[: max(0, _MAX_PATH_STEPS - len(core))]
+    keep_set = set(keep)
+    return list(core) + [all_kp[i] for i in extension if i in keep_set]
+
+
+def estimate_minutes(level: str | None, difficulty: str | None) -> int:
+    """单个知识点「预计时长」（分钟）：层级基线 + 展示难度微调，约束 45m~4h、取整 15m。
+
+    合理估算规则（非真实计时）：入门约 1 小时、进阶约 2 小时、前沿约 3 小时，随展示
+    难度（随基础分自适应的 5 档）小幅上下浮动，使「入门较短、前沿较长」且因画像而略变。
+    """
+    base = _LEVEL_BASE_MIN.get(level or "", 120)
+    delta = _DIFF_DELTA_MIN.get(difficulty or "", 0)
+    raw = max(_MIN_FLOOR, min(_MIN_CEIL, base + delta))
+    return int(round(raw / 15) * 15)
+
+
+def build_timeline(lessons: list[dict[str, Any]], pace: str = "") -> dict[str, Any]:
+    """整条路径「时间线」聚合（会话三·additive）：周期/总时长/进度/节奏建议。
+
+    - totalCount/learnedCount：知识点总数 / 已学（真实通过 completed）数；
+    - totalMinutes/totalHours：预计总时长；spentMinutes：已花时长（completed 计满、
+      in_progress 按进度折算）；completionPct：时长加权完成度；
+    - pacePerDay/cycleDays/cycleWeeks：按学习节奏偏好（快速概览 2/天，其余 1/天）推周期；
+    - pacing：学习节奏文案（如「建议每天 1-2 个知识点，预计 2 周学完」）。
+    """
+    import math
+
+    total_count = len(lessons)
+    total_min = sum(int(ls.get("estimatedMinutes") or 0) for ls in lessons)
+    learned = sum(1 for ls in lessons if ls.get("status") == "completed")
+    spent = int(round(sum(
+        int(ls.get("estimatedMinutes") or 0) * (int(ls.get("progress") or 0) / 100)
+        for ls in lessons
+    )))
+    completion = round(spent / total_min * 100) if total_min else 0
+    per_day = 2 if pace == "overview" else 1
+    cycle_days = max(1, math.ceil(total_count / per_day)) if total_count else 0
+    cycle_weeks = max(1, math.ceil(cycle_days / 7)) if cycle_days else 0
+    per_label = "1-2" if per_day >= 2 else "1"
+    pacing = (
+        f"建议每天 {per_label} 个知识点，预计 {cycle_weeks} 周（约 {cycle_days} 天）学完。"
+        if total_count else "完成学情诊断后即可生成个性化学习节奏建议。"
+    )
+    return {
+        "totalCount": total_count,
+        "learnedCount": learned,
+        "totalMinutes": total_min,
+        "totalHours": round(total_min / 60, 1),
+        "spentMinutes": spent,
+        "completionPct": completion,
+        "pacePerDay": per_day,
+        "cycleDays": cycle_days,
+        "cycleWeeks": cycle_weeks,
+        "pacing": pacing,
+    }
+
+
 def plan_path(
     db: Session, *, user_id: str, target_job_id: str | None = None, narrate: bool = True
 ) -> dict[str, Any]:
@@ -251,9 +393,11 @@ def plan_path(
     job_name = journey.target_job_name if journey else None
     demand = _job_demand(db, target_job_id, job_name)
 
-    # 会话一录入 78 点体系后，路径规划仍**收窄到 6 已验证基准点**（不回归为 78 步）；
-    # 在更大知识树上的细化规划由后续「路径细化」会话承接（见 CC 指令包会话三）。
-    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
+    # 会话三：在 78 点知识树上按「学习目标/目标岗位」聚焦板块细化规划——
+    # 6 核心主干 + 目标板块细化点（先修闭包、裁剪到合理长度）；无目标 → 仅 6 核心（零回归）。
+    core = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
+    focus = _focus_boards(_dim_value(dims, "learning_goal"), job_name or "")
+    kps = _select_kps(db, focus, core)
     # 基础难度/描述取自全局种子课程（按 lesson_seq == Lesson.sequence 对应）
     lessons_by_seq = {ls.sequence: ls for ls in db.query(Lesson).all()}
 
@@ -317,7 +461,8 @@ def plan_path(
     for order, entry in enumerate(scored, start=1):
         kp: KnowledgePoint = entry["kp"]
         seed = lessons_by_seq.get(kp.lesson_seq)
-        base_diff = seed.difficulty if seed is not None else "初级"
+        # 6 核心取种子 Lesson 难度；目录细化点（无种子）按层级映射基础难度档。
+        base_diff = seed.difficulty if seed is not None else _LEVEL_TO_DIFF.get(kp.level or "", "初级")
         difficulty = _adapt_difficulty(base_diff, foundation)
         # 「已完成」只来自真实通过测验（passed）；诊断微测基线视为未开始（微测≠学完）
         status, progress = mastery_service.learning_step(entry["status"], entry["source"])
@@ -332,6 +477,8 @@ def plan_path(
             "description": description,
             # ---- additive（接口文档 6.3 增量，向后兼容） ----
             "kpId": kp.id,
+            # 会话三·时间线：该步预计时长（分钟，按层级/难度估算）
+            "estimatedMinutes": estimate_minutes(kp.level, difficulty),
             "reason": "",  # 由 LLMClient.plan_path 回填
             # 资源形式按偏好画像（认知风格/学习节奏）重排，首项为默认推荐（C2）
             "resources": _build_resources(kp.id, kp.name, difficulty, style, pace),
