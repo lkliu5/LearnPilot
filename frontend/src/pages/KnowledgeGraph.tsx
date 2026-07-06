@@ -1,213 +1,555 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useChartTokens, withAlpha, type ChartTokens } from '../utils/chartTheme'
+import { useChartTokens, withAlpha } from '../utils/chartTheme'
 import PageHeader from '../components/PageHeader'
 import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery } from '../store/mastery'
-import { kpByGraphNode } from '../data/knowledgePoints'
 import { USE_REAL_API } from '../services/api'
-import { getKnowledgeGraph, type KnowledgeGraphData } from '../services/graph'
+import { getKnowledgeSystem } from '../services/knowledgeSystem'
+import {
+  KNOWLEDGE_SYSTEM_SEED,
+  BOARD_META,
+  BOARD_BY_CODE,
+  LEVEL_ORDER,
+  LEVELS,
+  deriveBoardSummaries,
+  type KnowledgeSystemData,
+  type KsPoint,
+  type KsLevel,
+} from '../data/knowledgeSystem'
 import { setResourceNav } from '../services/resourceNav'
 import type { PageType } from '../App'
 import './KnowledgeGraph.css'
-import './admin/admin.css' // 复用 .akb__toast 轻提示样式（AdminKB/AdminPrompts 同形态），零新增样式
+import './admin/admin.css' // 复用 .akb__toast 轻提示样式
 
-/* 掌握状态 → 类别（颜色随主题，从令牌取）*/
-const categories = [
-  { name: '已掌握' },
-  { name: '学习中' },
-  { name: '待学习' },
-  { name: '知识盲区' },
-]
+/* ── 纯色工具：HEX 混合，用于「层级 = 明度」着色（入门浅→进阶本色→前沿深） ── */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+function shadeLevel(color: string, level: KsLevel, dark: boolean): string {
+  const [r, g, b] = hexToRgb(color)
+  const toward = (tr: number, tg: number, tb: number, t: number) =>
+    `rgb(${Math.round(r + (tr - r) * t)}, ${Math.round(g + (tg - g) * t)}, ${Math.round(b + (tb - b) * t)})`
+  if (level === '入门') return toward(255, 255, 255, dark ? 0.28 : 0.46) // 浅
+  if (level === '前沿') return dark ? toward(255, 255, 255, 0.14) : toward(20, 22, 18, 0.2) // 深/亮
+  return color // 进阶：本色
+}
 
-/* 类别色板（4 类）：已掌握=primary · 学习中=primary-d · 待学习=ink-soft · 知识盲区=accent(告警) */
-const catColors = (t: ChartTokens) => [t.primary, t.primaryD, t.inkSoft, t.accent]
+/* 视图状态机 */
+type View = 'boards' | 'board'
 
-/* AI 领域知识点（节点）—— category 对应掌握状态，value=掌握度 */
-const nodes = [
-  { id: 'ml', name: '机器学习基础', category: 0, value: 92 },
-  { id: 'nn', name: '神经网络基础', category: 0, value: 85 },
-  { id: 'dl', name: '深度学习原理', category: 1, value: 65 },
-  { id: 'cnn', name: 'CNN架构', category: 2, value: 30 },
-  { id: 'rnn', name: 'RNN架构', category: 2, value: 28 },
-  { id: 'attn', name: '注意力机制', category: 3, value: 18 },
-  { id: 'transformer', name: 'Transformer', category: 3, value: 15 },
-  { id: 'bertgpt', name: 'BERT与GPT', category: 2, value: 22 },
-  { id: 'finetune', name: '大模型微调', category: 2, value: 12 },
-  { id: 'prompt', name: 'Prompt工程', category: 1, value: 58 },
-  { id: 'rag', name: 'RAG检索增强', category: 2, value: 35 },
-  { id: 'agent', name: 'AI Agent开发', category: 2, value: 20 },
-]
-
-/* 依赖关系（边）：source 是 target 的前置知识 */
-const links = [
-  { source: 'ml', target: 'nn' },
-  { source: 'nn', target: 'dl' },
-  { source: 'dl', target: 'cnn' },
-  { source: 'dl', target: 'rnn' },
-  { source: 'dl', target: 'attn' },
-  { source: 'attn', target: 'transformer' },
-  { source: 'rnn', target: 'transformer' },
-  { source: 'transformer', target: 'bertgpt' },
-  { source: 'bertgpt', target: 'finetune' },
-  { source: 'transformer', target: 'prompt' },
-  { source: 'bertgpt', target: 'rag' },
-  { source: 'rag', target: 'agent' },
-  { source: 'prompt', target: 'agent' },
-  { source: 'finetune', target: 'agent' },
-]
+/* 布局节点（像素坐标，layout:'none'） */
+interface LayoutNode {
+  id: string
+  x: number
+  y: number
+}
 
 export default function KnowledgeGraph({ onNavigate }: { onNavigate?: (page: PageType) => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const chart = useRef<echarts.ECharts | null>(null)
   const t = useChartTokens()
-  const colors = catColors(t)
   const masteryStatus = useMastery((s) => s.status)
 
-  /* 节点点击轻提示（非核心 6 节点）：复用 AdminKB toast 形态，3.2s 自动消失 */
-  const [toast, setToast] = useState<string | null>(null)
-  const toastTimerRef = useRef(0)
-  const showToast = (msg: string) => {
-    setToast(msg)
-    window.clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 3200)
-  }
-  useEffect(() => () => window.clearTimeout(toastTimerRef.current), [])
-
-  /* 联调数据源：GET /knowledge-graph（接口 26），节点 category/value 由后端权威推导；
-     mock 模式不请求，保持本地种子 + 前端派生。掌握度变化时重取，着色随 useMastery 实时刷新 */
-  const [remote, setRemote] = useState<KnowledgeGraphData | null>(null)
+  /* 数据源：真实模式请求 10.2；mock / 失败回退种子（78 点齐全，先修/层级完整）*/
+  const [data, setData] = useState<KnowledgeSystemData>(KNOWLEDGE_SYSTEM_SEED)
   useEffect(() => {
     if (!USE_REAL_API) return
     let alive = true
-    getKnowledgeGraph()
-      .then((g) => alive && setRemote(g))
-      .catch((e) => console.error('[knowledge-graph] 加载图谱失败', e)) // 失败保留本地种子兜底
+    getKnowledgeSystem()
+      .then((d) => alive && d?.points?.length && setData(d))
+      .catch((e) => console.error('[knowledge-system] 加载体系失败，回退种子', e))
     return () => {
       alive = false
     }
   }, [masteryStatus])
 
-  /* 节点类别/掌握度由 mastery 派生：通过→已掌握(0)/100；学习中·待检验→学习中(1)；否则种子
-     （仅 mock 模式使用；联调以后端推导为准，不再前端自行着色）*/
-  const derived = nodes.map((n) => {
-    const kp = kpByGraphNode(n.id)
-    const ms = kp ? masteryStatus[kp.id] : undefined
-    if (ms === 'passed') return { ...n, category: 0, value: 100 }
-    if (ms === 'learning' || ms === 'pending-check') return { ...n, category: 1, value: Math.min(n.value, 60) }
-    return n
-  })
-  const enodes = USE_REAL_API && remote ? remote.nodes : derived
-  const elinks = USE_REAL_API && remote ? remote.links : links
-  const ecats = USE_REAL_API && remote ? remote.categories : categories
-  const statusCounts = ecats.map((c, i) => ({
-    name: c.name,
-    count: enodes.filter((n) => n.category === i).length,
-  }))
+  const points = data.points
+  const pointMap = useMemo(() => new Map(points.map((p) => [p.id, p])), [points])
+  const boardSummaries = useMemo(
+    () => (data.boards.length ? deriveBoardSummaries(points) : []),
+    [points, data.boards.length]
+  )
+  const coverageByBoard = useMemo(
+    () => new Map((data.coverage ?? []).map((c) => [c.board, c])),
+    [data.coverage]
+  )
 
-  useEffect(() => {
-    if (!ref.current) return
-    if (!chart.current) chart.current = echarts.init(ref.current)
+  /* 视图状态 */
+  const [view, setView] = useState<View>('boards')
+  const [activeBoard, setActiveBoard] = useState<string>('ML')
+  const [detail, setDetail] = useState<KsPoint | null>(null)
 
-    const option: echarts.EChartsOption = {
-      tooltip: {
-        formatter: (p: any) =>
-          p.dataType === 'node'
-            ? `<b>${p.data.name}</b><br/>状态：${ecats[p.data.category].name}<br/>掌握度：${p.data.value}%`
-            : '',
-        backgroundColor: withAlpha(t.surface, 0.94),
-        borderColor: withAlpha(t.primary, 0.25),
-        textStyle: { color: t.ink, fontSize: 12 },
-      },
-      legend: [{
-        data: ecats.map((c) => c.name),
-        bottom: 8,
-        textStyle: { color: t.inkSoft, fontSize: 12 },
-        itemWidth: 12,
-        itemHeight: 12,
-      }],
-      animationDuration: 1200,
-      animationEasingUpdate: 'quinticInOut',
-      series: [{
-        type: 'graph',
-        layout: 'force',
-        roam: true,
-        draggable: true,
-        categories: ecats.map((c, i) => ({ name: c.name, itemStyle: { color: colors[i] } })),
-        data: enodes.map((n) => ({
-          id: n.id,
-          name: n.name,
-          category: n.category,
-          value: n.value,
-          symbolSize: 26 + n.value * 0.32,
-          /* 标签移到节点下方、落在浅色画布上的深色 --ink 文字，不受节点颜色影响 */
-          label: { show: true, position: 'bottom', distance: 6, color: t.ink, fontSize: 11, fontWeight: 600 },
-          itemStyle: {
-            shadowBlur: 14,
-            shadowColor: withAlpha(colors[n.category], 0.4),
-            borderColor: t.surface,
-            borderWidth: 1.5,
-          },
-        })),
-        links: elinks.map((l) => ({
-          source: l.source,
-          target: l.target,
-          lineStyle: { color: withAlpha(t.inkSoft, 0.4), width: 1.4, curveness: 0.12 },
-        })),
-        lineStyle: { opacity: 0.6 },
-        emphasis: {
-          focus: 'adjacency',
-          lineStyle: { width: 3, color: withAlpha(t.primary, 0.7) },
-          label: { fontWeight: 700 },
-        },
-        force: { repulsion: 320, edgeLength: 110, gravity: 0.08 },
-        labelLayout: { hideOverlap: true },
-      }],
+  /* 轻提示（非核心点「去学习」等）*/
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef(0)
+  const showToast = (msg: string) => {
+    setToast(msg)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3200)
+  }
+  useEffect(() => () => window.clearTimeout(toastTimer.current), [])
+
+  /* resize / 主题变化触发重排（layout:'none' 用容器像素坐标，需按尺寸重算）*/
+  const [sizeTick, setSizeTick] = useState(0)
+
+  const openBoard = (code: string) => {
+    setActiveBoard(code)
+    setView('board')
+    setDetail(null)
+  }
+  const backToBoards = () => {
+    setView('boards')
+    setDetail(null)
+  }
+  /* 打开某点详情（跨板块先修点亦可跳转：切到其板块并选中）*/
+  const openPoint = (id: string) => {
+    const p = pointMap.get(id)
+    if (!p) return
+    setActiveBoard(p.category)
+    setView('board')
+    setDetail(p)
+  }
+  const goLearn = (p: KsPoint) => {
+    if (p.isCore) {
+      setResourceNav(p.id, 'flow')
+      onNavigate?.('learning-resource')
+    } else {
+      showToast(`「${p.name}」为体系拓扑点 · 当前 6 个核心点已开通课程与资源生成`)
     }
-    chart.current.setOption(option)
+  }
 
-    /* 节点点击：核心 6 节点（注册表命中，ml/nn/dl/cnn/transformer/finetune）→ 经
-       resourceNav 通道跳转对应知识点资源页（与学习路径页同款导航）；其余节点 → 轻提示。
-       effect 随主题/掌握度重跑，先 off 再 on 防止处理器堆叠 */
-    chart.current.off('click')
-    chart.current.on('click', (p) => {
-      if ((p as { dataType?: string }).dataType !== 'node') return
-      const node = p.data as { id: string; name: string }
-      const kp = kpByGraphNode(node.id)
-      if (kp) {
-        setResourceNav(kp.id)
-        onNavigate?.('learning-resource')
-      } else {
-        showToast(`「${node.name}」暂未开通课程，作为领域拓扑参考`)
+  /* ── ECharts 渲染（视图/板块/数据/主题/尺寸变化时重建 option）── */
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (!chart.current) chart.current = echarts.init(el)
+    const c = chart.current
+    const W = el.clientWidth || 900
+    const H = el.clientHeight || 520
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const passed = (id: string) => masteryStatus[id] === 'passed'
+
+    const baseTooltip = {
+      backgroundColor: withAlpha(t.surface, 0.96),
+      borderColor: withAlpha(t.primary, 0.25),
+      borderWidth: 1,
+      textStyle: { color: t.ink, fontSize: 12 },
+      extraCssText: 'border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);',
+    }
+
+    let option: echarts.EChartsOption
+
+    if (view === 'boards') {
+      /* ── 第一层：7 板块概览 ── */
+      const padX = 96
+      const xs = BOARD_META.map((b) => b.pos[0])
+      const minX = Math.min(...xs)
+      const maxX = Math.max(...xs)
+      const yScale = Math.min(H * 0.3, 150)
+      const nodes = BOARD_META.map((b) => {
+        const sum = boardSummaries.find((s) => s.code === b.code)
+        const total = sum?.total ?? 0
+        const cov = coverageByBoard.get(b.code)
+        const px = padX + ((b.pos[0] - minX) / (maxX - minX || 1)) * (W - 2 * padX)
+        const py = H / 2 + b.pos[1] * yScale
+        return {
+          id: b.code,
+          name: b.name,
+          x: px,
+          y: py,
+          symbolSize: 58 + total * 2.6,
+          itemStyle: {
+            color: b.color,
+            borderColor: withAlpha('#ffffff', dark ? 0.28 : 0.7),
+            borderWidth: 2,
+            shadowBlur: 20,
+            shadowColor: withAlpha(b.color, 0.42),
+          },
+          label: {
+            show: true,
+            position: 'inside' as const,
+            formatter: `{s|${b.short}}\n{n|${total}}`,
+            rich: {
+              s: { color: '#fff', fontSize: 17, fontWeight: 800, lineHeight: 20, align: 'center' as const },
+              n: { color: withAlpha('#ffffff', 0.85), fontSize: 12, fontWeight: 600, align: 'center' as const },
+            },
+          },
+          _tt: cov
+            ? `<b>${b.name}</b><br/>知识点 ${total} · 层级 ${sum ? Object.entries(sum.levels).filter(([, v]) => v).map(([k, v]) => `${k}${v}`).join(' / ') : ''}<br/>覆盖 ${Math.round((cov.coveragePct || 0) * 100)}%（已测 ${cov.tested} · 推断 ${cov.inferred}）`
+            : `<b>${b.name}</b><br/>知识点 ${total}<br/>点击展开板块内知识点`,
+        }
+      })
+      /* 跨板块聚合依赖：prereq 所属板块 → 该点板块 */
+      const agg = new Map<string, number>()
+      points.forEach((p) => {
+        p.prerequisites.forEach((pre) => {
+          const src = pointMap.get(pre)?.category
+          if (src && src !== p.category) {
+            const key = `${src}>${p.category}`
+            agg.set(key, (agg.get(key) ?? 0) + 1)
+          }
+        })
+      })
+      const links = [...agg.entries()].map(([key, count]) => {
+        const [s, d] = key.split('>')
+        return {
+          source: s,
+          target: d,
+          lineStyle: {
+            color: withAlpha(BOARD_BY_CODE[s]?.color ?? t.inkSoft, dark ? 0.5 : 0.42),
+            width: 1 + Math.min(count, 6) * 0.6,
+            curveness: 0.18,
+          },
+        }
+      })
+
+      option = {
+        tooltip: { ...baseTooltip, formatter: (p: any) => (p.dataType === 'node' ? p.data._tt : '') },
+        animationDuration: 700,
+        animationEasingUpdate: 'quinticInOut',
+        series: [
+          {
+            type: 'graph',
+            layout: 'none',
+            roam: true,
+            draggable: true,
+            data: nodes,
+            links,
+            edgeSymbol: ['none', 'arrow'],
+            edgeSymbolSize: 7,
+            emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+            lineStyle: { opacity: 0.85 },
+          } as any,
+        ],
       }
-    })
 
-    const onResize = () => chart.current?.resize()
+      c.setOption(option, true)
+      c.off('click')
+      c.on('click', (p: any) => {
+        if (p.dataType === 'node') openBoard(p.data.id)
+      })
+    } else {
+      /* ── 第二层：板块内知识点（层级分列 + 先修连线 + 跨板块先修 ghost）── */
+      const board = BOARD_BY_CODE[activeBoard]
+      const inBoard = points.filter((p) => p.category === activeBoard)
+      const inIds = new Set(inBoard.map((p) => p.id))
+
+      /* 跨板块 ghost：被本板块点依赖、但不属于本板块的先修点 */
+      const ghostIds = new Set<string>()
+      inBoard.forEach((p) =>
+        p.prerequisites.forEach((pre) => {
+          if (!inIds.has(pre) && pointMap.has(pre)) ghostIds.add(pre)
+        })
+      )
+      const ghosts = [...ghostIds].map((id) => pointMap.get(id)!)
+      const hasGhost = ghosts.length > 0
+
+      const padL = 70
+      const padR = 60
+      const padT = 54
+      const padB = 58
+      const ghostLaneW = hasGhost ? 120 : 0
+      const levelZoneL = padL + ghostLaneW
+      const levelZoneR = W - padR
+      const colX = (lvl: KsLevel) => levelZoneL + (LEVEL_ORDER[lvl] / 2) * (levelZoneR - levelZoneL)
+
+      const layout = new Map<string, LayoutNode>()
+
+      /* 网格放置一组同列节点：超过 6 个自动分子列，避免竖向糊成一条 */
+      const placeColumn = (items: KsPoint[], cx: number, laneW: number) => {
+        const n = items.length
+        if (!n) return
+        const maxPerCol = 6
+        const cols = Math.ceil(n / maxPerCol)
+        const rows = Math.ceil(n / cols)
+        const colGap = cols > 1 ? Math.min(laneW, 150) / cols : 0
+        const startX = cx - (colGap * (cols - 1)) / 2
+        const top = padT
+        const bottom = H - padB
+        items.forEach((it, k) => {
+          const cc = Math.floor(k / rows)
+          const rr = k % rows
+          const rowsInCol = cc < cols - 1 ? rows : n - rows * (cols - 1)
+          const y = rowsInCol > 1 ? top + ((bottom - top) * rr) / (rowsInCol - 1) : (top + bottom) / 2
+          layout.set(it.id, { id: it.id, x: startX + cc * colGap, y })
+        })
+      }
+
+      LEVELS.forEach((lvl) => {
+        const group = inBoard.filter((p) => p.level === lvl)
+        const laneW = (levelZoneR - levelZoneL) / 2.4
+        placeColumn(group, colX(lvl), laneW)
+      })
+
+      /* ghost 竖排在最左泳道 */
+      ghosts.forEach((g, i) => {
+        const top = padT
+        const bottom = H - padB
+        const y = ghosts.length > 1 ? top + ((bottom - top) * i) / (ghosts.length - 1) : (top + bottom) / 2
+        layout.set(g.id, { id: g.id, x: padL, y })
+      })
+
+      const boardNodes = inBoard.map((p) => {
+        const pos = layout.get(p.id)!
+        const fill = shadeLevel(board.color, p.level, dark)
+        const isPassed = passed(p.id)
+        return {
+          id: p.id,
+          name: p.name,
+          x: pos.x,
+          y: pos.y,
+          symbolSize: p.isCore ? 40 : 30,
+          itemStyle: {
+            color: fill,
+            borderColor: isPassed ? t.primary : p.isCore ? withAlpha(t.ink, dark ? 0.5 : 0.35) : withAlpha('#ffffff', dark ? 0.2 : 0.6),
+            borderWidth: isPassed ? 3 : p.isCore ? 2.4 : 1.4,
+            shadowBlur: 12,
+            shadowColor: withAlpha(board.color, 0.4),
+          },
+          label: {
+            show: true,
+            position: 'bottom' as const,
+            distance: 5,
+            color: t.ink,
+            fontSize: 11,
+            fontWeight: p.isCore ? 700 : 500,
+            width: 92,
+            overflow: 'truncate' as const,
+          },
+          _p: p,
+          _tt: `<b>${p.name}</b> <span style="opacity:.6">${p.code}</span><br/>层级：${p.level}${p.isCore ? ' · 核心点' : ''}${isPassed ? ' · 已掌握' : ''}<br/>${p.description}`,
+        }
+      })
+
+      const ghostNodes = ghosts.map((g) => {
+        const pos = layout.get(g.id)!
+        const gc = BOARD_BY_CODE[g.category]?.color ?? t.inkSoft
+        return {
+          id: g.id,
+          name: `${g.name}`,
+          x: pos.x,
+          y: pos.y,
+          symbolSize: 22,
+          itemStyle: {
+            color: withAlpha(gc, dark ? 0.28 : 0.2),
+            borderColor: withAlpha(gc, 0.7),
+            borderWidth: 1.4,
+            borderType: 'dashed' as const,
+          },
+          label: {
+            show: true,
+            position: 'bottom' as const,
+            distance: 4,
+            color: t.inkSoft,
+            fontSize: 10,
+            formatter: `${g.name}\n{b|${BOARD_BY_CODE[g.category]?.short ?? g.category}}`,
+            rich: { b: { color: withAlpha(gc, 0.95), fontSize: 9, fontWeight: 700 } },
+          },
+          _ghost: true,
+          _tt: `<b>${g.name}</b>（跨板块先修 · ${BOARD_BY_CODE[g.category]?.name ?? g.category}）<br/>点击跳转其所属板块`,
+        }
+      })
+
+      const visIds = new Set<string>([...inIds, ...ghostIds])
+      const links: any[] = []
+      inBoard.forEach((p) => {
+        p.prerequisites.forEach((pre) => {
+          if (!visIds.has(pre)) return
+          const cross = !inIds.has(pre)
+          links.push({
+            source: pre,
+            target: p.id,
+            lineStyle: {
+              color: withAlpha(cross ? BOARD_BY_CODE[pointMap.get(pre)!.category]?.color ?? t.inkSoft : t.inkSoft, cross ? 0.5 : dark ? 0.4 : 0.32),
+              width: cross ? 1.6 : 1.3,
+              type: cross ? ('dashed' as const) : ('solid' as const),
+              curveness: 0.08,
+            },
+          })
+        })
+      })
+
+      option = {
+        tooltip: { ...baseTooltip, formatter: (p: any) => (p.dataType === 'node' ? p.data._tt : '') },
+        animationDuration: 600,
+        animationEasingUpdate: 'quinticInOut',
+        series: [
+          {
+            type: 'graph',
+            layout: 'none',
+            roam: true,
+            draggable: true,
+            data: [...ghostNodes, ...boardNodes],
+            links,
+            edgeSymbol: ['none', 'arrow'],
+            edgeSymbolSize: 6,
+            emphasis: { focus: 'adjacency', label: { fontWeight: 700 }, lineStyle: { width: 2.6, color: withAlpha(board.color, 0.75) } },
+            lineStyle: { opacity: 0.9 },
+            labelLayout: { hideOverlap: true },
+          } as any,
+        ],
+      }
+
+      c.setOption(option, true)
+      c.off('click')
+      c.on('click', (p: any) => {
+        if (p.dataType !== 'node') return
+        if (p.data._ghost) openPoint(p.data.id)
+        else if (p.data._p) setDetail(p.data._p as KsPoint)
+      })
+    }
+
+    const onResize = () => {
+      c.resize()
+      setSizeTick((s) => s + 1)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, masteryStatus, remote])
+  }, [t, view, activeBoard, data, masteryStatus, sizeTick])
+
+  /* 头部徽章 */
+  const passedCore = points.filter((p) => p.isCore && masteryStatus[p.id] === 'passed').length
+  const badges = [
+    { label: '知识点', value: points.length },
+    { label: '板块', value: BOARD_META.length },
+    { label: '已掌握核心', value: `${passedCore}/6`, dot: t.primary },
+  ]
+  const active = BOARD_BY_CODE[activeBoard]
+  const activeCov = coverageByBoard.get(activeBoard)
 
   return (
     <div className="kg-page">
-      {/* 统一标题区：锚条 + 高亮 + Beta + 掌握度类别徽章（带主题色点）*/}
       <PageHeader
         title="知识图谱"
         highlight="知识图谱"
         tag="Beta"
-        subtitle="AI 领域知识拓扑 · 按你的掌握度着色 · 可拖拽 / 缩放"
-        badges={statusCounts.map((s, i) => ({ label: s.name, value: s.count, dot: colors[i] }))}
+        subtitle="78 点 / 7 板块 AI 知识体系 · 点板块展开 · 点知识点看详情 · 可缩放 / 拖拽"
+        badges={badges}
       />
 
       <RevealGroup>
         <RevealItem className="kg-card">
+          {/* 面包屑 / 视图切换条 */}
+          <div className="kg-bar">
+            {view === 'boards' ? (
+              <>
+                <span className="kg-bar__crumb kg-bar__crumb--here">全部板块</span>
+                <span className="kg-bar__hint">点击任一板块气泡展开其知识点</span>
+              </>
+            ) : (
+              <>
+                <button className="kg-back" onClick={backToBoards}>← 全部板块</button>
+                <span className="kg-bar__sep">/</span>
+                <span className="kg-bar__crumb kg-bar__crumb--here" style={{ color: active?.color }}>
+                  <span className="kg-bar__dot" style={{ background: active?.color }} />
+                  {active?.name}
+                </span>
+                {activeCov && (
+                  <span className="kg-bar__cov">覆盖 {Math.round((activeCov.coveragePct || 0) * 100)}%</span>
+                )}
+                <span className="kg-legend">
+                  {LEVELS.map((lv) => (
+                    <span key={lv} className="kg-legend__item">
+                      <span
+                        className="kg-legend__dot"
+                        style={{ background: shadeLevel(active?.color ?? t.primary, lv, false) }}
+                      />
+                      {lv}
+                    </span>
+                  ))}
+                </span>
+              </>
+            )}
+          </div>
+
           <div className="kg-graph" ref={ref} />
-          <p className="kg-hint">提示：连线表示「前置 → 进阶」依赖关系；悬停节点查看掌握度，拖拽可调整布局。</p>
+
+          {/* 板块快选条（第一层始终可见，点击=展开；名称常驻，不靠 hover）*/}
+          {view === 'boards' && (
+            <div className="kg-chips">
+              {boardSummaries.map((s) => {
+                const meta = BOARD_BY_CODE[s.code]
+                const cov = coverageByBoard.get(s.code)
+                return (
+                  <button key={s.code} className="kg-chip" onClick={() => openBoard(s.code)}>
+                    <span className="kg-chip__dot" style={{ background: meta?.color }} />
+                    <span className="kg-chip__name">{meta?.name}</span>
+                    <span className="kg-chip__count">{s.total}</span>
+                    {cov && <span className="kg-chip__cov">{Math.round((cov.coveragePct || 0) * 100)}%</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <p className="kg-hint">
+            {view === 'boards'
+              ? '提示：气泡大小 = 板块知识点数量；板块间连线表示跨板块先修依赖。'
+              : '提示：从左到右为「入门 → 进阶 → 前沿」；实线为板块内先修，虚线为跨板块先修（点击虚线源节点可跳转）。'}
+          </p>
+
+          {/* 第三层：知识点详情面板 */}
+          <AnimatePresence>
+            {detail && (
+              <motion.aside
+                className="kg-detail glass-card"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 40 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              >
+                <button className="kg-detail__close" onClick={() => setDetail(null)} aria-label="关闭">×</button>
+                <div className="kg-detail__tags">
+                  <span className="kg-detail__code" style={{ background: withAlpha(BOARD_BY_CODE[detail.category]?.color ?? t.primary, 0.16), color: BOARD_BY_CODE[detail.category]?.color }}>
+                    {detail.code}
+                  </span>
+                  <span className="kg-detail__lv">{detail.level}</span>
+                  {detail.isCore && <span className="kg-detail__core">核心点</span>}
+                  {masteryStatus[detail.id] === 'passed' && <span className="kg-detail__done">已掌握</span>}
+                </div>
+                <h3 className="kg-detail__name">{detail.name}</h3>
+                <p className="kg-detail__board" style={{ color: BOARD_BY_CODE[detail.category]?.color }}>
+                  {BOARD_BY_CODE[detail.category]?.name}
+                </p>
+                <p className="kg-detail__desc">{detail.description}</p>
+
+                <div className="kg-detail__block">
+                  <span className="kg-detail__label">先修知识点</span>
+                  {detail.prerequisites.length ? (
+                    <div className="kg-detail__pres">
+                      {detail.prerequisites.map((id) => {
+                        const pre = pointMap.get(id)
+                        const c = BOARD_BY_CODE[pre?.category ?? '']?.color ?? t.inkSoft
+                        return (
+                          <button
+                            key={id}
+                            className="kg-detail__pre"
+                            style={{ borderColor: withAlpha(c, 0.5), color: c }}
+                            onClick={() => openPoint(id)}
+                          >
+                            {pre?.name ?? id}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <span className="kg-detail__none">无（入门起点）</span>
+                  )}
+                </div>
+
+                <button className="kg-detail__learn" onClick={() => goLearn(detail)}>
+                  {detail.isCore ? '去学习该点 →' : '查看学习资源'}
+                </button>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </RevealItem>
       </RevealGroup>
 
-      {/* 非核心节点点击轻提示（复用 AdminKB toast 形态与样式） */}
       <AnimatePresence>
         {toast && (
           <motion.div
