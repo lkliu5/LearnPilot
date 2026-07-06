@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.entities import Journey, KnowledgePoint, Mastery
+from app.models.entities import Journey, Mastery
 
 # 掌握状态枚举（接口文档 2.2，连字符形式，全局唯一来源）
 STATUS_LEARNING = "learning"
@@ -179,7 +179,10 @@ def derive_current_step(
         return "diagnose"
     if not journey.has_generated_path:
         return "generate-path"
-    core_ids = [kp.id for kp in db.query(KnowledgePoint).all()]
+    # 「全部完成 → review」以 6 已验证基准点为准（体系扩到 78 点不改旅程推导）
+    from app.services import knowledge_catalog
+
+    core_ids = knowledge_catalog.core_kp_ids(db)
     if core_ids and all(status_map.get(kid) == STATUS_PASSED for kid in core_ids):
         return "review"
     return "learn"

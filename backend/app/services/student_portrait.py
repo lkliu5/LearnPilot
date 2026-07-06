@@ -107,7 +107,7 @@ def _seed_ability_baseline(
     重做时由 diagnostic 基线、真实 quiz 由 quiz 高置信覆盖同一行（重做即覆盖、不分叉）。
     单一 knowledge_base 概览分按知识点均匀铺基线（缺更细粒度数据时的保守基线）。
     """
-    from app.models.entities import KnowledgePoint  # 局部导入避免模块级环依赖
+    from app.services import knowledge_catalog  # 局部导入避免模块级环依赖
     from app.services import mastery as mastery_service
 
     kb = next(
@@ -117,7 +117,8 @@ def _seed_ability_baseline(
     if kb is None:
         return
     confidence = min(float(kb.get("confidence") or 0.5), 0.5)  # 自陈基线封顶低置信
-    for kp in db.query(KnowledgePoint).all():
+    # 自陈基线仍只铺到 6 已验证基准点（不给 72 目录点写 Mastery，避免污染掌握度）
+    for kp in knowledge_catalog.core_kps(db):
         mastery_service.set_baseline(
             db, user_id, kp.id, score=kb["score"], confidence=confidence, source="manual"
         )

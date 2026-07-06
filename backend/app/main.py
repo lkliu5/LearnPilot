@@ -25,6 +25,7 @@ from app.api.v1 import (
     health,
     job_market,
     knowledge_graph,
+    knowledge_system,
     learning,
     learning_path,
     mastery,
@@ -98,6 +99,8 @@ app.include_router(admin_users.router, prefix=settings.api_prefix)
 # B6：P1 特色——岗位市场 / 知识图谱 / 学情概览（Reinforce 在 quiz、External 在 resource）
 app.include_router(job_market.router, prefix=settings.api_prefix)
 app.include_router(knowledge_graph.router, prefix=settings.api_prefix)
+# 会话一：78 点 / 7 板块知识体系目录 + 板块级覆盖（新增端点，向后兼容）
+app.include_router(knowledge_system.router, prefix=settings.api_prefix)
 app.include_router(dashboard.router, prefix=settings.api_prefix)
 # B7-a：多智能体工作流实时通道（execute / 轮询 / WS 推送；Tutor SSE 与 Video 在 resource）
 app.include_router(workflow.router, prefix=settings.api_prefix)

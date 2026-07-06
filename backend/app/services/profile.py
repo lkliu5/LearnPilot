@@ -19,8 +19,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import ABILITY_DIMENSIONS, get_llm
-from app.models.entities import Journey, KnowledgePoint, User
+from app.models.entities import Journey, User
 from app.schemas.profile import DiagnosisCompleteRequest, NarrativeRequest
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 
 # 图片扩展名（mock 阶段不做真实 OCR，仅登记材料 + 标注 source=ocr）
@@ -175,7 +176,8 @@ def ability_portrait(db: Session, user: User) -> dict[str, Any]:
     轴值回落 0（不臆造高分）。
     """
     score_map = mastery_service.get_score_map(db, user.id)
-    kps = sorted(db.query(KnowledgePoint).all(), key=lambda k: k.lesson_seq)
+    # 能力雷达固定 6 轴（接口文档 4.4）：仍取 6 已验证基准点（体系扩到 78 点不改）
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     values = [_axis_value(score_map.get(kp.id)) for kp in kps]
     # 防御：知识点数与固定 6 维不齐时对齐到 6 维（补 0 / 截断），保证契约稳定
     if len(values) < len(ABILITY_DIMENSIONS):

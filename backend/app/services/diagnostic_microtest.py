@@ -19,7 +19,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import _PORTRAIT_LABELS
-from app.models.entities import KnowledgePoint, QuizQuestion
+from app.models.entities import QuizQuestion
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services.quiz import _is_correct, _list_questions
 
@@ -39,7 +40,9 @@ def select_microtest(db: Session) -> list[dict[str, Any]]:
     返回 [{questionId, kpId, kpName, questionText, options, type}]，由浅入深排列，
     供编排层逐题"有选择性地抛出"（引导式微测）。题库缺该知识点客观题则跳过。
     """
-    kps = sorted(db.query(KnowledgePoint).all(), key=lambda k: k.lesson_seq)
+    # 诊断微测**只对 6 已验证基准点**出题（复用现有题库，不为 78 点全出题）；其余 72
+    # 目录点靠先修推断覆盖（见 knowledge_catalog.infer_prerequisite_closure）。
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     picked: list[dict[str, Any]] = []
     for kp in kps:
         question = _first_objective(db, kp.id)

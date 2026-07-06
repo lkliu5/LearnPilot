@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.llm import PATH_DIFFICULTIES, get_llm
 from app.models.entities import JobSnapshot, Journey, KnowledgePoint, Lesson
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services import student_portrait as portrait_service
 
@@ -250,7 +251,9 @@ def plan_path(
     job_name = journey.target_job_name if journey else None
     demand = _job_demand(db, target_job_id, job_name)
 
-    kps = db.query(KnowledgePoint).order_by(KnowledgePoint.lesson_seq).all()
+    # 会话一录入 78 点体系后，路径规划仍**收窄到 6 已验证基准点**（不回归为 78 步）；
+    # 在更大知识树上的细化规划由后续「路径细化」会话承接（见 CC 指令包会话三）。
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     # 基础难度/描述取自全局种子课程（按 lesson_seq == Lesson.sequence 对应）
     lessons_by_seq = {ls.sequence: ls for ls in db.query(Lesson).all()}
 

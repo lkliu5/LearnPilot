@@ -27,7 +27,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import PREFERENCE_DIM_KEYS
-from app.models.entities import Journey, KnowledgePoint, StudentPortrait, User
+from app.models.entities import Journey, StudentPortrait, User
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services import profile as profile_service
 
@@ -84,7 +85,8 @@ def overview(db: Session, user: User) -> dict[str, Any]:
     # 能力雷达：与 4.4 同源（Mastery 实测能力分驱动，按知识点 lesson_seq 升序）
     ability = profile_service.ability_portrait(db, user)
     score_map = mastery_service.get_score_map(db, user.id)
-    kps = sorted(db.query(KnowledgePoint).all(), key=lambda k: k.lesson_seq)
+    # 能力雷达/优势盲区仍以 6 已验证基准点为轴（与 4.4 同源；体系扩到 78 点不改）
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     scored = [
         {"name": name, "mastery": value, "tested": _is_tested(score_map.get(kp.id))}
         for name, value, kp in zip(ability["dimensions"], ability["values"], kps)
@@ -116,7 +118,8 @@ def overview(db: Session, user: User) -> dict[str, Any]:
     preferences = _preferences(dimensions)
 
     # 知识图谱覆盖率 / 已学资源：真实 Mastery 派生（已通过核心知识点占比 / 计数）。
-    core_kp_ids = [kp.id for kp in db.query(KnowledgePoint).all()]
+    # 分母恒为 6 已验证基准点（体系扩到 78 点不虚增分母、不稀释覆盖率）。
+    core_kp_ids = knowledge_catalog.core_kp_ids(db)
     status_map = mastery_service.get_status_map(db, user.id)
     passed_core = sum(
         1 for kid in core_kp_ids if status_map.get(kid) == mastery_service.STATUS_PASSED

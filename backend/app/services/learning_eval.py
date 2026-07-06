@@ -21,11 +21,11 @@ from sqlalchemy.orm import Session
 
 from app.models.entities import (
     Journey,
-    KnowledgePoint,
     LearningNote,
     LearningStepProgress,
     QuizAttempt,
 )
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 
 # 趋势判定阈值（后半程均分 - 前半程均分）
@@ -49,7 +49,8 @@ def _trend(scores: list[int]) -> str:
 
 def gather_signals(db: Session, user_id: str) -> dict[str, Any]:
     """汇总该用户的学习行为信号（全部真实数据派生）。"""
-    kps = db.query(KnowledgePoint).order_by(KnowledgePoint.lesson_seq).all()
+    # 核心覆盖/统计仍以 6 已验证基准点为口径（体系扩到 78 点不改变学习评估分母）
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     kp_name = {kp.id: kp.name for kp in kps}
     total_core = len(kps)
 

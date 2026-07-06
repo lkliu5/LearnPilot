@@ -376,6 +376,17 @@ def _seed_knowledge_points(db: Session) -> None:
         )
 
 
+def _seed_catalog(db: Session) -> None:
+    """录入《AI知识体系设计-v3》78 点体系（幂等）。
+
+    须在 _seed_knowledge_points 之后：先建好 6 核心别名行，再由 catalog.seed 补其体系
+    元信息并新增其余 72 点（见 knowledge_catalog.seed）。**只录结构与元信息、不录内容。**
+    """
+    from app.services import knowledge_catalog
+
+    knowledge_catalog.seed(db)
+
+
 def _seed_lessons(db: Session) -> None:
     for seq, topic, diff, status, progress, desc in _LESSONS:
         if db.get(Lesson, seq) is not None:
@@ -556,6 +567,30 @@ def _migrate_genlog_source() -> None:
             conn.execute(text("ALTER TABLE generation_logs ADD COLUMN doc_title VARCHAR(256)"))
 
 
+def _migrate_kp_catalog() -> None:
+    """知识体系录入轻量迁移：既有开发库 knowledge_points 表缺体系元信息列时补齐。
+
+    create_all 只建新表不加列；SQLite 支持 ADD COLUMN，幂等（先查 PRAGMA）。既有 6
+    核心行 is_core 默认 1（DEFAULT 1）→ 保持「已验证基准」；code/category/level 空、
+    prerequisites NULL，由 knowledge_catalog.seed 幂等回填。
+    """
+    inspector = inspect(engine)
+    if "knowledge_points" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("knowledge_points")}
+    with engine.begin() as conn:
+        if "code" not in columns:
+            conn.execute(text("ALTER TABLE knowledge_points ADD COLUMN code VARCHAR(16) DEFAULT ''"))
+        if "category" not in columns:
+            conn.execute(text("ALTER TABLE knowledge_points ADD COLUMN category VARCHAR(16) DEFAULT ''"))
+        if "level" not in columns:
+            conn.execute(text("ALTER TABLE knowledge_points ADD COLUMN level VARCHAR(16) DEFAULT ''"))
+        if "prerequisites" not in columns:
+            conn.execute(text("ALTER TABLE knowledge_points ADD COLUMN prerequisites JSON"))
+        if "is_core" not in columns:
+            conn.execute(text("ALTER TABLE knowledge_points ADD COLUMN is_core BOOLEAN DEFAULT 1"))
+
+
 def _migrate_genlog_artifact() -> None:
     """产物落库轻量迁移：既有开发库 generation_logs 表缺 artifact/artifact_updated_at 列时补齐。
 
@@ -583,11 +618,13 @@ def init_db() -> None:
     _migrate_mastery_score()
     _migrate_genlog_source()
     _migrate_genlog_artifact()
+    _migrate_kp_catalog()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         _seed_users(db)
         _seed_knowledge_points(db)
+        _seed_catalog(db)
         _seed_lessons(db)
         _seed_quiz_questions(db)
         _seed_job_snapshots(db)

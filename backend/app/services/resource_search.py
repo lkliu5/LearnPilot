@@ -17,7 +17,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.llm import get_llm
-from app.models.entities import ExternalResource, KnowledgePoint
+from app.models.entities import ExternalResource
+from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services import resource as resource_service
 from app.services import web_search
@@ -26,7 +27,8 @@ from app.services import web_search
 def _derive_weak_points(db: Session, user_id: str, kp_id: str) -> list[str]:
     """缺省薄弱点：该用户未通过的核心知识点名（含当前 kp），最多 4 个。"""
     status_map = mastery_service.get_status_map(db, user_id)
-    kps = db.query(KnowledgePoint).order_by(KnowledgePoint.lesson_seq).all()
+    # 缺省薄弱点仍在 6 已验证基准点内派生（体系扩到 78 点不改变默认薄弱点口径）
+    kps = sorted(knowledge_catalog.core_kps(db), key=lambda k: k.lesson_seq)
     weak = [
         kp.name
         for kp in kps

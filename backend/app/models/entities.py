@@ -50,15 +50,35 @@ class User(Base):
 
 
 class KnowledgePoint(Base):
-    """知识点（接口文档 2.1）。固定 6 核心知识点。"""
+    """知识点（接口文档 2.1）。
+
+    原「固定 6 核心知识点」扩充为《AI知识体系设计-v3》78 点 / 7 板块完整体系（催化剂
+    会话·录入）：**只录结构与元信息，内容由生成引擎按需产出**。新增列全部为**追加、
+    向后兼容**（既有 6 核心行经迁移默认落 is_core=1、保留其已生成内容与测试基准）：
+
+    - code：体系编码（如 ML-1 / DL-6 / GEN-4），全 78 点唯一；6 核心行映射到体系点
+      （ml→ML-1 / nn→DL-1 / dl→DL-4 / cnn→DL-6 / transformer→LLM-2 / finetune→LLM-5）。
+    - category：所属板块码（ML/DL/CV/LLM/GEN/AGT/RLX，共 7 板块）。
+    - level：层级（入门|进阶|前沿）。
+    - prerequisites：先修知识点 **id 列表**（种子时由体系 code 解析为 id，跨板块交叉亦然）。
+    - is_core：是否为「已验证基准」6 核心点（有题库/资源/测试）。诊断微测、能力雷达、
+      学习路径、掌握度覆盖率等既有链路一律**按 is_core 收窄**到这 6 点（不因扩充回归）；
+      其余 72 点为体系目录（供知识图谱浏览 + 先修推断），不进既有 6 点闭环。
+    """
 
     __tablename__ = "knowledge_points"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # 如 nn
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # 如 nn / ML-2
     name: Mapped[str] = mapped_column(String(64))
-    lesson_seq: Mapped[int] = mapped_column(Integer)  # 对外 lessonSeq
+    lesson_seq: Mapped[int] = mapped_column(Integer)  # 对外 lessonSeq（体系目录点取高位序，排在 6 核心之后）
     graph_node_id: Mapped[str] = mapped_column(String(32))  # 对外 graphNodeId
     description: Mapped[str] = mapped_column(Text, default="")  # 供 8.1 知识点元信息
+    # ── 体系元信息（追加列，向后兼容；见类 docstring） ──
+    code: Mapped[str] = mapped_column(String(16), default="")  # 体系编码 ML-1 等
+    category: Mapped[str] = mapped_column(String(16), default="")  # 板块码 ML/DL/CV/LLM/GEN/AGT/RLX
+    level: Mapped[str] = mapped_column(String(16), default="")  # 入门|进阶|前沿
+    prerequisites: Mapped[list] = mapped_column(JSON, default=list)  # 先修 kp id 列表
+    is_core: Mapped[bool] = mapped_column(Boolean, default=True)  # 6 已验证基准点=True
 
 
 class Lesson(Base):
