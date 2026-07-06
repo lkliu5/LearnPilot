@@ -38,3 +38,21 @@ Thumbs.db
 .playwright-mcp/
 backend/zhixue.db.bak
 *.db.bak
+
+# Dev-server 运行日志（本地起 uvicorn / vite 的产物，不入库）
+_dev_uvicorn.err
+_dev_uvicorn.out
+_dev_vite.err
+_dev_vite.out
+_vite_dev.log
+vite-dev.log
+.devserver.err.log
+.devserver.out.log
+frontend/probe-remotion/run*.log
+
+# 临时导出 / 调试 dump（如知识体系 _ks_dump.json）
+*_dump.json
+
+# 根目录临时验证截图（仅根级散图；不影响 frontend/ 内的正式图片资源）
+/*.png
+/*.jpg

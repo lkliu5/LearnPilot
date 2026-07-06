@@ -1,7 +1,0 @@
-[probe] bundling...
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: Unable to snapshot resolve dependencies
-[probe] bundle done in 5.0s
-Downloading Chrome Headless Shell https://www.remotion.dev/chrome-headless-shell
-Customize this behavior by adding a onBrowserDownload function to selectComposition().
-Downloading from: https://storage.googleapis.com/chrome-for-testing-public/149.0.7790.0/win64/chrome-headless-shell-win64.zip
-EXIT:1

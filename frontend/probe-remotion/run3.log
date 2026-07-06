@@ -1,4 +1,0 @@
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: Unable to snapshot resolve dependencies
-[probe] bundle 5.6s
-[probe] render 6.4s -> F:\软件杯\frontend\probe-remotion\out-audio.mp4
-EXIT:0
