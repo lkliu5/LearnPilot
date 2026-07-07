@@ -25,3 +25,5 @@ edge-tts
 # 缺失则视频渲染能力判为不可用、自动降级回实时 Player+TTS，不影响其余全链路。渲染器为 Node 侧
 # @remotion/renderer（见 frontend/package.json），经 subprocess 调用，无需系统 ffmpeg。
 mutagen
+# 模型管理（接口文档 21.3+）：用户自建模型配置的 api_key 对称加密落库（Fernet）
+cryptography

@@ -396,6 +396,44 @@ class Document(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 
+class UserModelConfig(Base):
+    """用户自建生成模型配置（接口文档 21.3+，模型管理独立页）。
+
+    每行 = 某用户界面添加的一个 OpenAI 兼容模型接入（魔搭 / deepseek / 其他 openai
+    兼容端点）。**按 user 隔离**：user_id 为隔离键（无外键耦合，随既有约定），任何
+    读写/使用均校验归属。api_key 经 app/core/crypto.py Fernet **加密落库**（本表无
+    明文 key）；api_key_last4 仅存后四位供界面脱敏回显（****abcd）。
+    """
+
+    __tablename__ = "user_model_configs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # umc_xxx
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    label: Mapped[str] = mapped_column(String(64))  # 界面显示名
+    provider: Mapped[str] = mapped_column(String(16))  # openai|modelscope|deepseek（均 OpenAI 兼容）
+    base_url: Mapped[str] = mapped_column(String(256))
+    model_id: Mapped[str] = mapped_column(String(128))  # 上游 API 的 model 参数
+    api_key_encrypted: Mapped[str] = mapped_column(Text)  # Fernet token，非明文
+    api_key_last4: Mapped[str] = mapped_column(String(8), default="")  # 脱敏回显用
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class UserModelChoice(Base):
+    """用户「当前模型」选择（接口文档 21.2 per-user 语义扩展）。
+
+    仅当用户把**自建配置**设为当前时落一行（model_key = umc_xxx）——该选择只影响
+    本人后续生成（A 的 key 绝不会被 B 用到）。切回内置模型时删除本行（内置模型
+    切换维持既有进程级运行态语义，向后兼容 §21.2）。
+    """
+
+    __tablename__ = "user_model_choices"
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_key: Mapped[str] = mapped_column(String(128))  # 自建配置 id（umc_xxx）
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class QuizAttempt(Base):
     """测验作答历史埋点（C-fix 批3：学习过程评估行为数据层）。
 

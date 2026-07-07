@@ -178,6 +178,20 @@ const icons = {
       <path d="M18.5 15.8v1.7l1.1.7" stroke="url(#icon-doc)" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   ),
+  /* 模型管理：AI 芯片（多模型接入 + 切换） */
+  modelManage: (
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="icon-model" x1="0" y1="0" x2="24" y2="24">
+          <stop stopColor="#c4b5fd" />
+          <stop offset="1" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      <rect x="6" y="6" width="12" height="12" rx="2.4" fill="url(#icon-model)" opacity="0.9" />
+      <rect x="9.2" y="9.2" width="5.6" height="5.6" rx="1.2" fill="#fff" opacity="0.85" />
+      <path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="url(#icon-model)" strokeWidth="1.6" strokeLinecap="round" opacity="0.75" />
+    </svg>
+  ),
   /* 我的资源库：分层资产盒（多形态资源归档） */
   myResources: (
     <svg viewBox="0 0 24 24" fill="none">
@@ -232,6 +246,7 @@ const spaceItems: MenuItem[] = [
 const toolItems: MenuItem[] = [
   { id: 'workflow', icon: icons.workflow, label: 'Agent工作流', description: 'AI协同可视化' },
   { id: 'knowledge-graph', icon: icons.knowledgeGraph, label: '知识图谱', description: '可视化拓扑', beta: true },
+  { id: 'model-management', icon: icons.modelManage, label: '模型管理', description: '多模型接入 · 切换' },
 ]
 
 /** learner 侧栏分组顺序（信息架构：学情管家统领置顶 → 核心学习 → 文档学习 → 我的空间 → 工具）*/

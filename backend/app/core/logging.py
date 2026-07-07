@@ -16,12 +16,16 @@ import re
 _PHONE_RE = re.compile(r"(?<!\d)(1[3-9]\d)\d{4}(\d{4})(?!\d)")
 # 邮箱
 _EMAIL_RE = re.compile(r"([A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]*([A-Za-z0-9])(@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})")
+# API Key（模型管理 21.3+ 红线兜底）：sk-/ms- 开头的令牌串（DeepSeek/魔搭等常见形态）。
+# 主防线是「不打含 key 的日志 + llm_userconf.redact 清洗异常串」，此处为过滤器级兜底。
+_API_KEY_RE = re.compile(r"\b(sk|ms)-[A-Za-z0-9\-_]{8,}\b")
 
 
 def mask_pii(text: str) -> str:
-    """对单个字符串做手机号/邮箱掩码。"""
+    """对单个字符串做手机号/邮箱/API Key 掩码。"""
     text = _PHONE_RE.sub(r"\g<1>****\g<2>", text)
     text = _EMAIL_RE.sub(_mask_email, text)
+    text = _API_KEY_RE.sub(lambda m: f"{m.group(1)}-****{m.group(0)[-4:]}", text)
     return text
 
 

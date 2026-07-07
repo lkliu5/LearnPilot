@@ -19,6 +19,7 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -113,3 +114,31 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="无权限：需要管理员角色")
     return user
+
+
+# ---- 用户上下文（模型管理 21.3+：per-user 当前模型） -----------------------
+
+class UserContextMiddleware(BaseHTTPMiddleware):
+    """把请求者 user_id 绑定到 contextvar（model_registry per-user overlay 解析用）。
+
+    best-effort：仅解 JWT 取 sub（不查库、不拦截），无/无效 token → 绑 None。
+    在 call_next **之前** set，下游端点/由请求派生的 asyncio 任务继承同一上下文
+    ——生成接口签名零改动即可按用户分发模型（与 envelope.TraceIdMiddleware 同机制）。
+    鉴权语义完全不变：get_current_user 仍是唯一的认证依赖。
+    """
+
+    async def dispatch(self, request, call_next):  # type: ignore[override]
+        from app.core import model_registry  # 局部导入避免启动期循环依赖
+
+        user_id: str | None = None
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            try:
+                user_id = _decode_token(auth[7:]).get("sub")
+            except jwt.PyJWTError:
+                user_id = None
+        token = model_registry.bind_user(user_id)
+        try:
+            return await call_next(request)
+        finally:
+            model_registry.unbind_user(token)

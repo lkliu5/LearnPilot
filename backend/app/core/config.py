@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     modelscope_base_url: str = "https://api-inference.modelscope.cn/v1"
     modelscope_models: str = "ZhipuAI/GLM-4.6,Qwen/Qwen3-32B,deepseek-ai/DeepSeek-V3.1"
 
+    # 模型管理·用户自建模型配置（接口文档 21.3+）：api_key 对称加密落库（Fernet）。
+    # - model_key_secret：加密密钥材料（生产必须经 .env 配置专用随机串）；缺省为空 →
+    #   从 jwt_secret 派生（零配置可跑，demo 兜底；README 注明生产要求）。
+    # - model_test_timeout_seconds：「测试连通性」单次上游调用超时（短于生成超时，
+    #   让界面快速得到成功/失败反馈）。
+    model_key_secret: str = ""
+    model_test_timeout_seconds: float = 20.0
+
     # 内容安全过滤（app/core/content_safety.py）：所有 LLM 生成文本返回前统一过滤。
     # - enabled：总开关（默认开）；
     # - model_check：可选的模型级二次校验（真实 provider 下用 LLMClient 通道做轻量

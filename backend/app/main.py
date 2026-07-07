@@ -47,6 +47,7 @@ from app.core.envelope import (
 )
 from app.core.init_db import init_db
 from app.core.logging import setup_logging
+from app.core.security import UserContextMiddleware
 
 
 @asynccontextmanager
@@ -71,6 +72,9 @@ app.add_middleware(
 
 # traceId 注入（CORS 之后添加 → 请求时先于 CORS 执行，保证响应头写入）
 app.add_middleware(TraceIdMiddleware)
+
+# 用户上下文注入（模型管理 21.3+：per-user 当前模型解析；best-effort，不改鉴权语义）
+app.add_middleware(UserContextMiddleware)
 
 # 统一信封异常处理
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)

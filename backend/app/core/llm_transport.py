@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from app.core import llm_deepseek, llm_modelscope, model_registry
+from app.core import llm_deepseek, llm_modelscope, llm_userconf, model_registry
 from app.core.llm_deepseek import LLMGenerationError
 
 logger = logging.getLogger("app.core.llm_transport")
@@ -39,10 +39,16 @@ def chat(
     system: str | None = None,
     history: list[dict[str, str]] | None = None,
 ) -> str:
-    """按当前模型分发的 chat 补全。魔搭失败自动回落默认 DeepSeek（优雅降级）。"""
+    """按当前模型分发的 chat 补全。魔搭/自建配置失败自动回落默认 DeepSeek（优雅降级）。"""
     spec = model_registry.current()
     kwargs = _optional_kwargs(system, history)
-    if spec.provider == "modelscope":
+    if spec.source == "custom":
+        try:
+            return llm_userconf.chat(prompt, spec=spec, **kwargs)
+        except LLMGenerationError as exc:
+            # exc 信息已在 llm_userconf 做 key 脱敏清洗
+            logger.warning("自建模型 %s 调用失败，回落默认 DeepSeek：%s", spec.id, exc)
+    elif spec.provider == "modelscope":
         try:
             return llm_modelscope.chat(prompt, model=spec.model_id, **kwargs)
         except LLMGenerationError as exc:
@@ -57,13 +63,24 @@ def chat_stream(
 ):
     """按当前模型分发的流式补全。
 
-    魔搭**开流失败 / 未产出任何内容前失败** → 回落默认 DeepSeek 流；
+    魔搭/自建配置**开流失败 / 未产出任何内容前失败** → 回落默认 DeepSeek 流；
     已产出部分内容后中断 → 原样抛 LLMGenerationError（不能重复回放，
     由既有 SSE error 事件兜底），绝不静默截断。
     """
     spec = model_registry.current()
     kwargs = _optional_kwargs(system, history)
-    if spec.provider == "modelscope":
+    if spec.source == "custom":
+        got_content = False
+        try:
+            for delta in llm_userconf.chat_stream(prompt, spec=spec, **kwargs):
+                got_content = True
+                yield delta
+            return
+        except LLMGenerationError as exc:
+            if got_content:
+                raise
+            logger.warning("自建模型 %s 流式失败（未产出内容），回落默认 DeepSeek：%s", spec.id, exc)
+    elif spec.provider == "modelscope":
         got_content = False
         try:
             for delta in llm_modelscope.chat_stream(prompt, model=spec.model_id, **kwargs):

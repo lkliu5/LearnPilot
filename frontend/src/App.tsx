@@ -12,6 +12,7 @@ import LearningResource from './pages/LearningResource'
 import DocumentLearning from './pages/DocumentLearning'
 import MyResourceLibrary from './pages/MyResourceLibrary'
 import KnowledgeGraph from './pages/KnowledgeGraph'
+import ModelManagement from './pages/ModelManagement'
 import AdminKB from './pages/admin/AdminKB'
 import AdminPrompts from './pages/admin/AdminPrompts'
 import AdminMetrics from './pages/admin/AdminMetrics'
@@ -32,6 +33,7 @@ export type PageType =
   | 'my-resources'
   | 'workflow'
   | 'knowledge-graph'
+  | 'model-management'
   | 'admin-kb'
   | 'admin-prompts'
   | 'admin-metrics'
@@ -152,6 +154,8 @@ function App() {
         return <AgentWorkflow onNavigate={navigate} />
       case 'knowledge-graph':
         return <KnowledgeGraph onNavigate={navigate} />
+      case 'model-management':
+        return <ModelManagement onNavigate={navigate} />
       case 'admin-kb':
         return <AdminKB />
       case 'admin-prompts':

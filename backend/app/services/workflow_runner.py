@@ -23,6 +23,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core import model_registry
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.entities import WorkflowTrace
@@ -243,6 +244,9 @@ def _worker(
         if not final:
             _delay()
 
+    # 后台线程上下文为空：显式绑定发起用户 → 生成经 llm_transport 时按其
+    # 「当前模型」（含自建配置 overlay）分发（模型管理 21.3+；线程私有，无需恢复）
+    model_registry.bind_user(user_id)
     db = SessionLocal()
     try:
         # 起跑帧（诊断 running）已在 __init__ 置入快照；留一个轮询观察窗
