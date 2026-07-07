@@ -5,6 +5,7 @@ import { useJourney } from '../store/journey'
 import { useMastery } from '../store/mastery'
 import { usePortrait } from '../store/portrait'
 import { getUser } from '../services/api'
+import { fetchModelRegistry, switchModel, type ModelRegistry } from '../services/models'
 import ChangePasswordForm from './ChangePasswordForm'
 import './Sidebar.css'
 
@@ -264,6 +265,42 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
   /* 设置面板内「修改密码」表单展开态 */
   const [pwOpen, setPwOpen] = useState(false)
   const userWrapRef = useRef<HTMLDivElement>(null)
+
+  /* 设置面板「生成模型」切换（接口文档 21）：打开面板时拉取注册表，切换即生效 */
+  const [modelReg, setModelReg] = useState<ModelRegistry | null>(null)
+  const [modelBusy, setModelBusy] = useState(false)
+  const [modelErr, setModelErr] = useState('')
+  useEffect(() => {
+    if (!settingsOpen) return
+    let cancelled = false
+    fetchModelRegistry()
+      .then((reg) => {
+        if (!cancelled) {
+          setModelReg(reg)
+          setModelErr('')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setModelErr('模型列表加载失败，请稍后重试')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [settingsOpen])
+
+  const onSwitchModel = async (modelId: string) => {
+    if (!modelReg || modelBusy || modelId === modelReg.current) return
+    setModelBusy(true)
+    try {
+      setModelReg(await switchModel(modelId))
+      setModelErr('')
+    } catch {
+      setModelErr('切换失败，仍使用原模型')
+    } finally {
+      setModelBusy(false)
+    }
+  }
+  const currentModel = modelReg?.models.find((m) => m.isCurrent) ?? null
 
   useEffect(() => {
     if (!menuOpen) return
@@ -574,6 +611,37 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+
+            {/* 生成模型切换（接口文档 21）：讲义/练习等所有生成走所选模型，失败自动回落 */}
+            <div className="settings-panel__section">
+              <div className="settings-panel__row">
+                <div className="settings-panel__row-text">
+                  <span className="settings-panel__row-label">生成模型</span>
+                  <span className="settings-panel__row-value">
+                    {modelErr || (currentModel ? `当前：${currentModel.label}` : '加载中…')}
+                  </span>
+                </div>
+                {modelReg && (
+                  <select
+                    className="settings-panel__model-select"
+                    value={modelReg.current}
+                    disabled={modelBusy}
+                    onChange={(e) => onSwitchModel(e.target.value)}
+                    aria-label="选择生成模型"
+                  >
+                    {modelReg.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                        {m.available ? '' : '（未配 Key·自动回落）'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <p className="settings-panel__model-hint">
+                切换后，讲义 / 练习 / 图解等所有生成将走该模型；模型不可用时自动回落默认模型，不影响使用。
+              </p>
             </div>
 
             <p className="settings-panel__note">更多设置项（通知 / 主题 / 隐私）将于后续版本陆续开放。</p>

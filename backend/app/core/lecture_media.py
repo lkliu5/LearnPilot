@@ -192,6 +192,60 @@ _DOMAIN_RELEVANCE: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]
         ("gradient", "descent", "optimization", "loss", "minimum", "convex"),
         (),
     ),
+    # —— GEN 生成式扩散板块（配图为辅、图解为主）：注意顺序——更具体的条目在前，
+    # 通配「扩散」在最后，避免「潜在扩散 LDM / Stable Diffusion」落到泛化条目。
+    # 「diffusion」歧义极强（物理扩散/渗透/创新扩散理论），负词从严（宁缺毋滥）。
+    (
+        ("controlnet",),
+        ("ControlNet Stable Diffusion", "ControlNet neural network architecture"),
+        ("controlnet", "stable diffusion", "diffusion", "neural", "generative", "image"),
+        (),
+    ),
+    (
+        ("stable diffusion", "文生图", "潜在扩散", "ldm"),
+        ("Stable Diffusion architecture diagram", "Latent diffusion model",
+         "Stable Diffusion generated"),
+        ("stable diffusion", "latent diffusion", "diffusion model", "text-to-image",
+         "generative", "denois", "neural"),
+        ("osmosis", "molecul", "gas diffusion", "innovation", "heat", "membrane"),
+    ),
+    (
+        ("u-net", "unet", "去噪网络"),
+        ("U-Net architecture", "U-Net convolutional neural network"),
+        ("u-net", "unet", "convolution", "segmentation", "architecture", "neural",
+         "encoder", "decoder"),
+        (),
+    ),
+    (
+        ("vae", "变分自编码", "autoencoder", "自编码"),
+        ("Variational autoencoder diagram", "Autoencoder structure neural network"),
+        ("autoencoder", "variational", "latent", "neural", "encoder", "decoder",
+         "reconstruction"),
+        (),
+    ),
+    (
+        ("gan", "生成对抗", "adversarial"),
+        ("Generative adversarial network diagram", "GAN machine learning architecture"),
+        ("adversarial", "gan", "generator", "discriminator", "neural", "generative",
+         "deep learning"),
+        (),
+    ),
+    (
+        ("生成式模型", "生成模型", "generative model"),
+        ("Generative model machine learning", "Generative artificial intelligence diagram"),
+        ("generative", "machine learning", "neural", "gan", "diffusion", "autoencoder",
+         "model"),
+        (),
+    ),
+    (
+        ("扩散", "diffusion", "ddpm", "去噪"),
+        ("Denoising diffusion probabilistic model", "Diffusion model machine learning",
+         "Diffusion model generative AI"),
+        ("diffusion model", "denois", "ddpm", "generative", "machine learning",
+         "neural", "latent", "stable diffusion"),
+        ("osmosis", "brownian", "molecul", "gas", "heat", "innovation", "chemical",
+         "membrane", "physics", "cell", "solvent"),
+    ),
 )
 
 # 未命中领域规格时的最小跨域噪声排除（仅挡最明确的无关图，避免过度抑制）。

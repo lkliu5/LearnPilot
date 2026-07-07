@@ -29,6 +29,7 @@ from app.api.v1 import (
     learning,
     learning_path,
     mastery,
+    models,
     profile,
     quiz,
     resource,
@@ -86,6 +87,7 @@ app.include_router(learning_path.router, prefix=settings.api_prefix)
 app.include_router(tasks.router, prefix=settings.api_prefix)
 # B2-b：Mastery & Journey / Resource / Quiz
 app.include_router(mastery.router, prefix=settings.api_prefix)
+app.include_router(models.router, prefix=settings.api_prefix)
 app.include_router(resource.router, prefix=settings.api_prefix)
 app.include_router(resource_history.router, prefix=settings.api_prefix)
 app.include_router(quiz.router, prefix=settings.api_prefix)

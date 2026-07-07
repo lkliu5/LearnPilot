@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     llm_temperature: float = 0.3
 
+    # 模型管理（界面切换生成模型，接口文档 21 additive）：接入魔搭 ModelScope API-Inference。
+    # 魔搭推理 API 兼容 OpenAI 协议——复用现有 OpenAI SDK 调用方式，仅需 base_url +
+    # MODELSCOPE_API_KEY + 模型名（app/core/llm_modelscope.py）。
+    # - modelscope_api_key：魔搭访问令牌（modelscope.cn 个人中心生成，经 .env 注入）；
+    #   缺省为空 → 魔搭模型标记「未配 Key」，调用时自动回落默认 DeepSeek / mock（绝不崩）；
+    # - modelscope_models：注册表中的魔搭在线模型清单（逗号分隔 model_id，可经 .env 覆盖）。
+    # 「当前模型」运行态见 app/core/model_registry.py，默认 = 既有 DeepSeek，默认行为不变。
+    modelscope_api_key: str = ""
+    modelscope_base_url: str = "https://api-inference.modelscope.cn/v1"
+    modelscope_models: str = "ZhipuAI/GLM-4.6,Qwen/Qwen3-32B,deepseek-ai/DeepSeek-V3.1"
+
     # 内容安全过滤（app/core/content_safety.py）：所有 LLM 生成文本返回前统一过滤。
     # - enabled：总开关（默认开）；
     # - model_check：可选的模型级二次校验（真实 provider 下用 LLMClient 通道做轻量

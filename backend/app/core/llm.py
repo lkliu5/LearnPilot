@@ -27,7 +27,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from app.core import llm_deepseek
+from app.core import llm_transport
 from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
 
@@ -605,6 +605,181 @@ _DIAGRAM_TEMPLATES: dict[str, str] = {
         "      DPO\n"
         "      更合规无害\n"
     ),
+    # —— GEN 生成式模型与扩散板块（重点亮点·多图示）：13 个知识点逐一精写论文级图解。
+    # 键 = kp_id（knowledge_catalog GEN-1..GEN-13）；真实模式也**模板优先**（见
+    # generate_diagram），保证板块图解质量确定性达标（教材/论文级标准结构，不抽卡）。
+    "GEN-1": (  # 生成式模型概述：四大家族谱系
+        "mindmap\n"
+        '  root(("生成式模型谱系"))\n'
+        "    显式密度\n"
+        "      自回归 AR\n"
+        "        逐 token 连乘概率\n"
+        "        GPT 系列\n"
+        "      VAE\n"
+        "        变分下界 ELBO\n"
+        "      Flow 流模型\n"
+        "        可逆变换·精确似然\n"
+        "    隐式密度\n"
+        "      GAN\n"
+        "        生成器-判别器博弈\n"
+        "    迭代去噪\n"
+        "      扩散模型\n"
+        "        DDPM · Score SDE\n"
+        "        当前图像生成主流\n"
+    ),
+    "GEN-2": (  # VAE：编码-重参数化-解码 + 双损失
+        "flowchart LR\n"
+        '  X["输入 x"] --> ENC(["编码器 qφ"])\n'
+        '  ENC --> MU["均值 μ"]\n'
+        '  ENC --> SG["方差 σ²"]\n'
+        '  MU --> RP{{"重参数化<br/>z = μ + σ⊙ε, ε∼N(0,I)"}}\n'
+        "  SG --> RP\n"
+        '  RP --> Z(("潜变量 z"))\n'
+        '  Z --> DEC(["解码器 pθ"])\n'
+        '  DEC --> XH["重建 x̂"]\n'
+        '  XH --> REC["重建损失 ‖x−x̂‖²"]\n'
+        '  PRI["先验 N(0,I)"] -. KL 散度正则 拉近 qφ 与先验 .-> Z\n'
+        "  REC -. 反向传播 联合优化 ELBO .-> ENC\n"
+    ),
+    "GEN-3": (  # GAN：对抗博弈回路
+        "flowchart LR\n"
+        '  N(("噪声 z∼N(0,I)")) --> G(["生成器 G"])\n'
+        '  G --> FAKE["伪样本 G(z)"]\n'
+        '  REAL["真实样本 x"] --> D{{"判别器 D<br/>输出真伪概率"}}\n'
+        "  FAKE --> D\n"
+        '  D --> LD["判别损失<br/>分对真假"]\n'
+        '  D --> LG["生成损失<br/>骗过 D"]\n'
+        "  LD -. 梯度更新 D .-> D\n"
+        "  LG -. 梯度更新 G .-> G\n"
+        '  LG --> EQ(["纳什均衡：G 产出以假乱真样本"])\n'
+    ),
+    "GEN-4": (  # DDPM：前向加噪链 + 反向去噪链
+        "flowchart TD\n"
+        '  subgraph FWD["前向扩散 q：逐步加高斯噪声（固定过程，无参数）"]\n'
+        "    direction LR\n"
+        '    X0["x₀ 清晰图像"] --> X1["x₁"] --> XM["……"] --> XT["x_T ≈ 纯噪声 N(0,I)"]\n'
+        "  end\n"
+        '  subgraph REV["反向去噪 pθ：网络逐步还原（学习目标）"]\n'
+        "    direction LR\n"
+        '    YT["x_T 采样噪声"] --> YM["……"] --> Y1["x₁"] --> Y0["x̂₀ 生成图像"]\n'
+        "  end\n"
+        "  XT -. 训练：εθ 预测每步所加噪声 .-> YT\n"
+        '  Y0 -. 目标 L = E‖ε − εθ(xₜ,t)‖² .-> X0\n'
+    ),
+    "GEN-5": (  # 扩散的数学基础：核心公式推导链
+        "flowchart TD\n"
+        '  A["单步加噪<br/>q(xₜ|xₜ₋₁) = N(√(1−βₜ)·xₜ₋₁, βₜI)"] --> B["任意步闭式采样<br/>xₜ = √ᾱₜ·x₀ + √(1−ᾱₜ)·ε"]\n'
+        '  B --> C["变分下界 ELBO<br/>分解为逐步 KL 项"]\n'
+        '  C --> D["简化训练目标<br/>L_simple = E‖ε − εθ(xₜ,t)‖²"]\n'
+        '  D --> E["反向采样均值<br/>由 xₜ 与 εθ 反解 xₜ₋₁"]\n'
+        '  E -.-> F(["得分匹配视角<br/>εθ 等价于估计 ∇log p(xₜ)"])\n'
+    ),
+    "GEN-6": (  # U-Net 去噪网络：编码-瓶颈-解码 + 跳连
+        "flowchart TD\n"
+        '  X["含噪图 xₜ ⊕ 时间嵌入 t"] --> E1["下采样块 64×64"]\n'
+        '  E1 --> E2["下采样块 32×32"]\n'
+        '  E2 --> E3["下采样块 16×16"]\n'
+        '  E3 --> MID{{"瓶颈层<br/>ResBlock + 自注意力"}}\n'
+        '  MID --> D3["上采样块 16×16"]\n'
+        '  D3 --> D2["上采样块 32×32"]\n'
+        '  D2 --> D1["上采样块 64×64"]\n'
+        '  D1 --> OUT["预测噪声 εθ(xₜ,t)"]\n'
+        "  E3 -. 跳跃连接 拼接特征 .-> D3\n"
+        "  E2 -. 跳跃连接 拼接特征 .-> D2\n"
+        "  E1 -. 跳跃连接 拼接特征 .-> D1\n"
+    ),
+    "GEN-7": (  # 条件扩散与 CFG 引导：双路预测合成
+        "flowchart TD\n"
+        '  XT["当前状态 xₜ"] --> CP & UP\n'
+        '  C["条件 c：文本 / 类别"] --> CP(["条件预测 εθ(xₜ,t,c)"])\n'
+        '  NO["空条件 ∅（训练时随机丢弃条件）"] --> UP(["无条件预测 εθ(xₜ,t,∅)"])\n'
+        '  CP --> MIX{{"CFG 合成<br/>ε̃ = εᵤ + w·(εc − εᵤ)"}}\n'
+        "  UP --> MIX\n"
+        '  MIX --> STEP["去噪一步 → xₜ₋₁"]\n'
+        '  W["引导强度 w"] -. w 越大越贴合条件·多样性下降 .-> MIX\n'
+    ),
+    "GEN-8": (  # 潜在扩散 LDM：像素空间 ↔ 潜空间
+        "flowchart LR\n"
+        '  X["像素图像<br/>512×512×3"] --> ENC(["VAE 编码器 E"])\n'
+        '  ENC --> Z["潜表示 z<br/>64×64×4（约 48× 压缩）"]\n'
+        '  Z --> DIFF{{"扩散过程在潜空间进行<br/>U-Net + 交叉注意力"}}\n'
+        '  COND["条件：文本 / 布局 / 图像"] -. 交叉注意力注入 .-> DIFF\n'
+        '  DIFF --> ZH["去噪潜码 ẑ"]\n'
+        '  ZH --> DEC(["VAE 解码器 D"])\n'
+        '  DEC --> OUT["生成图像 x̂"]\n'
+        "  Z -. 计算量大幅降低：高效训练与采样 .-> DIFF\n"
+    ),
+    "GEN-9": (  # Stable Diffusion 文生图 pipeline
+        "flowchart TD\n"
+        '  P["文本提示词 Prompt"] --> CLIP(["CLIP 文本编码器"])\n'
+        '  CLIP --> EMB["文本嵌入序列"]\n'
+        '  NZ["初始潜噪声 z_T"] --> UNET\n'
+        '  subgraph LOOP["潜空间去噪循环 ×20∼50 步"]\n'
+        "    direction TB\n"
+        '    UNET["U-Net 预测噪声 + CFG 引导"] --> SCH{{"采样调度器<br/>DDIM / DPM-Solver"}}\n'
+        "    SCH -. zₜ 迭代到 zₜ₋₁ .-> UNET\n"
+        "  end\n"
+        "  EMB -. 交叉注意力 注入每步 .-> UNET\n"
+        '  SCH --> Z0["去噪潜码 z₀"]\n'
+        '  Z0 --> VAE(["VAE 解码器"])\n'
+        '  VAE --> IMG["输出图像 512×512"]\n'
+    ),
+    "GEN-10": (  # ControlNet：冻结主干 + 可训练副本 + 零卷积
+        "flowchart TD\n"
+        '  COND["控制条件图<br/>边缘 / 深度 / 姿态骨架"] --> TC\n'
+        '  subgraph CN["ControlNet（可训练）"]\n'
+        "    direction TB\n"
+        '    TC["SD 编码器的可训练副本"] --> ZC["零卷积 zero-conv<br/>初始输出为 0"]\n'
+        "  end\n"
+        '  P["文本提示词"] --> SD\n'
+        '  subgraph SD["Stable Diffusion U-Net（权重冻结）"]\n'
+        "    direction TB\n"
+        '    FE["冻结编码器块"] --> FD["冻结解码器块"]\n'
+        "  end\n"
+        "  ZC -. 控制残差 逐层相加 .-> FD\n"
+        '  FD --> OUT["受控生成<br/>构图 / 姿态 / 结构可控"]\n'
+        "  ZC -. 训练初期不干扰原模型 .-> SD\n"
+    ),
+    "GEN-11": (  # 扩散加速采样：三条提速路线
+        "flowchart LR\n"
+        '  SLOW["DDPM 原始采样<br/>1000 步马尔可夫链·分钟级"] --> WHY{{"瓶颈：步数多 = 生成慢"}}\n'
+        '  WHY --> DDIM(["DDIM<br/>非马尔可夫·确定性跳步<br/>50 步"])\n'
+        '  WHY --> DPM(["DPM-Solver<br/>概率流 ODE 高阶求解<br/>10∼20 步"])\n'
+        '  WHY --> DIST(["蒸馏 / 一致性模型<br/>LCM · Turbo<br/>1∼4 步"])\n'
+        '  DDIM --> Q["质量-速度权衡"]\n'
+        "  DPM --> Q\n"
+        "  DIST --> Q\n"
+        "  Q -. 步数越少越快·细节保真略降 .-> WHY\n"
+    ),
+    "GEN-12": (  # 视频与 3D 扩散：从图像基座延伸
+        "flowchart TD\n"
+        '  BASE["图像扩散基座<br/>Stable Diffusion 等"] --> VID(["视频扩散<br/>时间注意力·帧间一致性"])\n'
+        '  BASE --> TD3(["3D 生成<br/>SDS 蒸馏 NeRF / 3D 高斯"])\n'
+        '  VID --> V1["文生视频<br/>Sora · SVD"]\n'
+        '  TD3 --> D1["文生 3D<br/>DreamFusion 等"]\n'
+        '  V1 --> CH{{"共性挑战"}}\n'
+        "  D1 --> CH\n"
+        '  CH --> C1["时序 / 多视角一致性"]\n'
+        '  CH --> C2["物理合理性"]\n'
+        '  CH --> C3["算力与数据成本"]\n'
+    ),
+    "GEN-13": (  # 应用与伦理：应用-风险-治理三支
+        "mindmap\n"
+        '  root(("扩散模型应用与伦理"))\n'
+        "    应用价值\n"
+        "      文生图 / 视频创作\n"
+        "      设计与游戏素材\n"
+        "      医学影像重建增强\n"
+        "      科研数据增广\n"
+        "    风险\n"
+        "      深度伪造 Deepfake\n"
+        "      版权与训练数据争议\n"
+        "      偏见与刻板印象放大\n"
+        "    治理\n"
+        "      内容水印与溯源 C2PA\n"
+        "      模型卡与使用政策\n"
+        "      法规合规审查\n"
+    ),
 }
 
 
@@ -1091,7 +1266,7 @@ class LLMClient:
             "（显式负证据不是「未体现」，省略会被默认值虚高）；"
             "禁止编造材料中不存在的经历。"
         )
-        raw = llm_deepseek.chat(f"材料文本：\n{text}", system=system)
+        raw = llm_transport.chat(f"材料文本：\n{text}", system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("画像抽取输出无法解析为契约 JSON")
@@ -1212,7 +1387,7 @@ class LLMClient:
             "materials": materials,
             "targetJob": target_job,
         }
-        raw = llm_deepseek.chat(
+        raw = llm_transport.chat(
             json.dumps(payload, ensure_ascii=False), system=system
         )
         data = _extract_json(raw)
@@ -1353,7 +1528,7 @@ class LLMClient:
             "referenceAnswer": reference_answer,
             "studentAnswer": answer,
         }
-        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        raw = llm_transport.chat(json.dumps(payload, ensure_ascii=False), system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict) or "score" not in data:
             raise LLMGenerationError("简答评分输出无法解析为契约 JSON")
@@ -1468,7 +1643,7 @@ class LLMClient:
             "节奏与难度调整、笔记/费曼等方法；禁止编造未提供的数据。"
         )
         payload = {"signals": signals, "metrics": metrics}
-        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        raw = llm_transport.chat(json.dumps(payload, ensure_ascii=False), system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("学习评估输出无法解析为契约 JSON")
@@ -1561,7 +1736,7 @@ class LLMClient:
             "所有内容必须紧扣该知识点主题，禁止跑题到其它领域；只输出 JSON，不要额外说明。"
         )
         prompt = f"知识点：{kp_name}\n难度档：{difficulty}\n知识点说明：{description or kp_name}"
-        raw = llm_deepseek.chat(prompt, system=system)
+        raw = llm_transport.chat(prompt, system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("视频分镜脚本输出无法解析为契约 JSON")
@@ -1605,6 +1780,11 @@ class LLMClient:
           或上游异常时**回落确定性主题模板**，保证图解始终可渲染（不向路由抛 2001）。
         """
         self._ensure_supported()
+        # GEN 板块（重点亮点·多图示）：精写论文级模板**优先于真实生成**——
+        # 该板块图解质量为验收硬指标，确定性模板保证教材级标准结构（不抽卡）；
+        # 其余板块维持原行为（真实生成优先，失败回落模板），不动已验收链路。
+        if kp_id.startswith("GEN-") and kp_id in _DIAGRAM_TEMPLATES:
+            return {"mermaid": _DIAGRAM_TEMPLATES[kp_id]}
         if self.is_mock:
             return {"mermaid": self._mock_diagram(kp_id, kp_name, description)}
         try:
@@ -1647,7 +1827,7 @@ class LLMClient:
             "5) 只输出 Mermaid 源码。"
         )
         prompt = f"知识点：{kp_name}\n知识点说明：{description or kp_name}"
-        raw = llm_deepseek.chat(prompt, system=system)
+        raw = llm_transport.chat(prompt, system=system)
         return _clean_mermaid(raw)
 
     # ---- 文档学习：闪卡 + 文档练习题（平行链路，复用 LLMClient mock/real 双模 + 内容安全） ----
@@ -1708,7 +1888,7 @@ class LLMClient:
         )
         joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
         prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
-        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        data = _extract_json(llm_transport.chat(prompt, system=system))
         raw_cards = data.get("cards") if isinstance(data, dict) else None
         cards: list[dict[str, str]] = []
         for c in raw_cards or []:
@@ -1768,7 +1948,7 @@ class LLMClient:
         )
         joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
         prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
-        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        data = _extract_json(llm_transport.chat(prompt, system=system))
         if not isinstance(data, dict) or not str(data.get("summary") or "").strip():
             raise LLMGenerationError("文档概览输出无法解析为契约 JSON")
         kp = data.get("keyPoints")
@@ -1840,7 +2020,7 @@ class LLMClient:
         )
         joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
         prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
-        data = _extract_json(llm_deepseek.chat(prompt, system=system))
+        data = _extract_json(llm_transport.chat(prompt, system=system))
         raw = data.get("questions") if isinstance(data, dict) else None
         questions: list[dict[str, Any]] = []
         for idx, q in enumerate(raw or [], start=1):
@@ -1935,7 +2115,7 @@ class LLMClient:
                 if last_issues
                 else ""
             )
-            raw = llm_deepseek.chat(prompt + feedback, system=system)
+            raw = llm_transport.chat(prompt + feedback, system=system)
             cards, last_issues = self._clean_reinforcement(raw, wrong_questions)
             if not last_issues:
                 return cards
@@ -2006,7 +2186,7 @@ class LLMClient:
         if self.is_mock:
             reply, suggestions = _mock_tutor_reply(message)
             return {"reply": reply, "suggestions": suggestions}
-        reply = llm_deepseek.chat(
+        reply = llm_transport.chat(
             message, system=_TUTOR_SYSTEM.format(kp_name=kp_name), history=history
         )
         return {"reply": reply, "suggestions": []}
@@ -2021,7 +2201,7 @@ class LLMClient:
         """
         self._ensure_supported()
         if not self.is_mock:
-            return llm_deepseek.chat_stream(
+            return llm_transport.chat_stream(
                 message, system=_TUTOR_SYSTEM.format(kp_name=kp_name), history=history
             )
         reply, _suggestions = _mock_tutor_reply(message)
@@ -2065,7 +2245,7 @@ class LLMClient:
                 f"文档标题：{source_title}\n文档片段（回答只能依据这些片段）：\n"
                 f"{joined or '（未检索到相关片段）'}\n\n用户问题：{message}"
             )
-            return llm_deepseek.chat_stream(
+            return llm_transport.chat_stream(
                 prompt, system=_DOC_CHAT_SYSTEM.format(source_title=source_title), history=history
             )
         answer = _mock_doc_answer(source_title, contexts, message)
@@ -2110,7 +2290,7 @@ class LLMClient:
             f"type 只能取 {list(REMEDIAL_TYPES)}（图解/例题/短视频/补充讲义片段），"
             "每种最多 1 项；title 简短、expect 说明预计内容；禁止编造与问题点无关的资源。"
         )
-        raw = llm_deepseek.chat(f"学生困惑：{question}", system=system)
+        raw = llm_transport.chat(f"学生困惑：{question}", system=system)
         data = _extract_json(raw)
         point = ""
         suggestions: list[dict[str, Any]] = []
@@ -2195,7 +2375,7 @@ class LLMClient:
                 '并给出分步解析，仅输出 JSON：{"title": "...", "statement": "...", "solution": "..."}。'
                 "statement 为题干、solution 为分步解析，紧扣问题点，简体中文。"
             )
-            raw = llm_deepseek.chat(f"问题点：{problem_point}", system=system)
+            raw = llm_transport.chat(f"问题点：{problem_point}", system=system)
             data = _extract_json(raw)
             if not isinstance(data, dict) or not str(data.get("statement") or "").strip():
                 raise LLMGenerationError("例题输出无法解析为契约 JSON")
@@ -2209,7 +2389,7 @@ class LLMClient:
             '讲义片段（Markdown），仅输出 JSON：{"title": "...", "markdown": "..."}。'
             "markdown 用二级标题分节、紧扣问题点、200-400 字，简体中文。"
         )
-        raw = llm_deepseek.chat(f"问题点：{problem_point}", system=system)
+        raw = llm_transport.chat(f"问题点：{problem_point}", system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict) or not str(data.get("markdown") or "").strip():
             raise LLMGenerationError("讲义片段输出无法解析为契约 JSON")
@@ -2307,7 +2487,7 @@ class LLMClient:
             "**url 必须原样取自候选列表，禁止编造或改写链接**；按 relevance 降序，最多 8 条。"
         )
         payload = {"knowledgePoint": kp_name, "weakPoints": weak_points, "candidates": listing}
-        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        raw = llm_transport.chat(json.dumps(payload, ensure_ascii=False), system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise LLMGenerationError("资源聚合输出无法解析为契约 JSON")
@@ -2422,7 +2602,7 @@ class LLMClient:
             "每条 points 2-4 个；所有内容必须紧扣该知识点主题、简体中文、不要跑题；只输出 JSON。"
         )
         prompt = f"知识点：{kp_name}\n难度档：{difficulty}\n知识点说明：{description or kp_name}"
-        raw = llm_deepseek.chat(prompt, system=system)
+        raw = llm_transport.chat(prompt, system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("康奈尔线索输出无法解析为契约 JSON")
@@ -2572,7 +2752,7 @@ class LLMClient:
             f"知识点：{kp_name}\n知识点说明：{description or kp_name}\n"
             f"学生讲解：{explanation}"
         )
-        raw = llm_deepseek.chat(prompt, system=system, history=history)
+        raw = llm_transport.chat(prompt, system=system, history=history)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("费曼评估输出无法解析为契约 JSON")
@@ -2651,7 +2831,7 @@ class LLMClient:
             "且 confidence≤0.6；无法从文本判断的维度一律不要输出（禁止编造）。"
         )
         payload = {"studentMessage": message, "knownContext": context or {}}
-        raw = llm_deepseek.chat(
+        raw = llm_transport.chat(
             json.dumps(payload, ensure_ascii=False), system=system
         )
         data = _extract_json(raw)
@@ -2767,7 +2947,7 @@ class LLMClient:
             "每条不超过 50 字；不得改变给定顺序，只解释顺序；只输出 JSON。"
         )
         payload = {"profile": profile, "steps": steps}
-        raw = llm_deepseek.chat(json.dumps(payload, ensure_ascii=False), system=system)
+        raw = llm_transport.chat(json.dumps(payload, ensure_ascii=False), system=system)
         data = _extract_json(raw)
         if not isinstance(data, dict):
             raise LLMGenerationError("路径规划输出无法解析为契约 JSON")
@@ -2817,14 +2997,14 @@ class LLMClient:
     def _deepseek_complete(self, prompt: str, agent_id: str) -> dict[str, Any]:
         """真实 Agent 补全：只发渲染后 prompt + 按 agent 类型的输出约束。"""
         if agent_id == "generation":
-            text = llm_deepseek.chat(
+            text = llm_transport.chat(
                 prompt,
                 system="你是领域知识讲义生成专家。直接输出 Markdown 讲义正文，"
                 "不要输出讲义之外的解释或前后缀。",
             )
             return {"markdown": _strip_md_fence(text)}
         if agent_id == "diagnosis":
-            text = llm_deepseek.chat(
+            text = llm_transport.chat(
                 prompt,
                 system='请仅输出 JSON：{"weakKpIds": ["知识点id"], '
                 '"summary": "一句话诊断摘要", "reasoning": "诊断依据"}',

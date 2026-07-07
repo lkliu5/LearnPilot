@@ -326,7 +326,7 @@ def model_double_check(text: str) -> Verdict:
     if not settings.content_safety_model_check:
         return Verdict()
     try:
-        from app.core import llm_deepseek  # 延迟导入，避免循环依赖 & 无 Key 环境 import 报错
+        from app.core import llm_transport  # 延迟导入，避免循环依赖 & 无 Key 环境 import 报错；经分发通道随「当前模型」走
 
         system = (
             "你是中文内容安全审核员。判断给定文本是否包含以下任一明确违规内容："
@@ -334,7 +334,7 @@ def model_double_check(text: str) -> Verdict:
             "注意：讨论『网络攻击』『漏洞』『战争史』『计算机病毒』等学术/教学内容属正常，不算违规。"
             '仅输出 JSON：{"violation": true或false, "category": "political|porn|violence_terror|illegal_harmful|abuse_discrimination|none"}。'
         )
-        raw = llm_deepseek.chat(text[:1000], system=system)
+        raw = llm_transport.chat(text[:1000], system=system)
         m = re.search(r"\{.*\}", raw, re.S)
         if not m:
             return Verdict()

@@ -787,6 +787,29 @@
   overflow: hidden;
 }
 
+/* 生成模型切换（接口文档 21） */
+.settings-panel__model-select {
+  max-width: 48%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-300);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--gray-800);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-panel__model-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.settings-panel__model-hint {
+  margin: -2px 4px 0;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: var(--gray-500);
+}
+
 .settings-panel__note {
   margin-top: 18px;
   font-size: 0.72rem;
