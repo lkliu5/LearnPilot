@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { Suspense, useState } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
@@ -8,10 +8,12 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 import type { SourceRef } from './SourceTrace'
 import { weaveCitations } from '../utils/citations'
+import InlineErrorBoundary, { lazySafe } from './InlineErrorBoundary'
 import './MarkdownRenderer.css'
 
-// 讲义内嵌图解：```mermaid 围栏复用既有 MermaidDiagram 渲染（懒加载，避免无图解页引入 mermaid）。
-const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
+// 讲义内嵌图解：```mermaid 围栏复用既有 MermaidDiagram 渲染（懒加载，避免无图解页引入 mermaid；
+// lazySafe：chunk 拉取失败只降级该图，不上抛打崩整个视图）。
+const MermaidDiagram = lazySafe(() => import('./MermaidDiagram'), '知识图解')
 
 /**
  * 数学公式定界符归一化：把 LaTeX 原生定界符统一成 remark-math 认得的 `$`/`$$`。
@@ -97,6 +99,11 @@ export default function MarkdownRenderer({
   const normalized = normalizeMathDelimiters(withCites)
   return (
     <div className="markdown-body">
+      {/* 解析/渲染级兜底：万一 markdown 管线本身抛错，降级为可读的原文纯文本，不打崩视图 */}
+      <InlineErrorBoundary
+        label="讲义正文"
+        fallback={<pre className="md-raw-fallback">{content}</pre>}
+      >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
@@ -106,9 +113,11 @@ export default function MarkdownRenderer({
             const match = /language-(\w+)/.exec(className || '')
             if (match && match[1] === 'mermaid') {
               return (
-                <Suspense fallback={<div className="mermaid-loading">图解加载中…</div>}>
-                  <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
-                </Suspense>
+                <InlineErrorBoundary label="知识图解">
+                  <Suspense fallback={<div className="mermaid-loading">图解加载中…</div>}>
+                    <MermaidDiagram chart={String(children).replace(/\n$/, '')} />
+                  </Suspense>
+                </InlineErrorBoundary>
               )
             }
             return match ? (
@@ -151,6 +160,7 @@ export default function MarkdownRenderer({
       >
         {normalized}
       </ReactMarkdown>
+      </InlineErrorBoundary>
     </div>
   )
 }

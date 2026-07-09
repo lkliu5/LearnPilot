@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PageType } from '../App'
 import PageHeader from '../components/PageHeader'
@@ -37,11 +37,14 @@ import {
   type VideoResult,
 } from '../services/documentLearning'
 import { setTutorContext } from '../services/tutorBus'
+import InlineErrorBoundary, { lazySafe } from '../components/InlineErrorBoundary'
 import './DocumentLearning.css'
 
-const MindMap = lazy(() => import('../components/MindMap'))
-const MermaidDiagram = lazy(() => import('../components/MermaidDiagram'))
-const VideoLecture = lazy(() => import('../components/VideoLecture'))
+/* lazySafe + 元素级 InlineErrorBoundary：单个产物组件 chunk 拉取失败 / 渲染抛错只降级该块，
+   不再沿树上抛到 PageErrorBoundary 打崩整个文档学习视图（实测崩溃堆栈即源于此路径）。 */
+const MindMap = lazySafe(() => import('../components/MindMap'), '思维导图')
+const MermaidDiagram = lazySafe(() => import('../components/MermaidDiagram'), '知识图解')
+const VideoLecture = lazySafe(() => import('../components/VideoLecture'), '讲解视频')
 
 const Loading = () => <div className="resource-loading">资源加载中…</div>
 
@@ -994,7 +997,8 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.25 }}
                     >
-                      {renderOutput()}
+                      {/* 元素级兜底：单个产物渲染异常只降级该产物块，左/中栏与操作区照常 */}
+                      <InlineErrorBoundary label={kindLabel(activeKind)}>{renderOutput()}</InlineErrorBoundary>
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1113,7 +1117,10 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
                   </div>
                 )}
 
-                {renderPreviewBody()}
+                {/* 元素级兜底：预览弹层内单个产物渲染异常只降级弹层内容，弹层与页面照常 */}
+                <InlineErrorBoundary key={previewKind} label={kindLabel(previewKind)}>
+                  {renderPreviewBody()}
+                </InlineErrorBoundary>
               </div>
             </motion.div>
           </motion.div>
