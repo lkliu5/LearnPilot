@@ -1176,6 +1176,7 @@
 }
 
 .rescard {
+  position: relative; /* 供底部生成进度条绝对定位 */
   display: flex;
   flex-direction: column;
   text-align: left;
@@ -1371,6 +1372,163 @@
   color: var(--ink);
 }
 .aux-chip:disabled { cursor: progress; opacity: 0.7; }
+
+/* ----- 资源卡·生成进度反馈（复用文档学习形态卡那套「生成中 · N% · 阶段 + 底部进度条」体验） ----- */
+.rescard--busy {
+  cursor: progress;
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+}
+.rescard--busy .rescard__desc,
+.rescard--busy .rescard__cta {
+  color: var(--primary-600);
+  font-weight: 600;
+}
+.rescard__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(var(--primary-rgb), 0.15);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+}
+.rescard__progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-d));
+  transition: width 0.35s ease;
+}
+
+/* ----- 导学对话·醒目主入口横幅（苏格拉底式启发导学 = 核心方法论，不再埋在底部工具行） ----- */
+.tutor-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 20px;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--primary) 14%, var(--bg-card)),
+    color-mix(in srgb, var(--primary) 5%, var(--bg-card)) 55%,
+    var(--bg-card)
+  );
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+.tutor-banner:hover {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--line));
+  box-shadow: var(--shadow-glass-hover);
+  transform: translateY(-2px);
+}
+.tutor-banner__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-full);
+  font-size: 1.4rem;
+  background: rgba(var(--primary-rgb), 0.16);
+  border: 1px solid rgba(var(--primary-rgb), 0.28);
+}
+.tutor-banner__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tutor-banner__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+.tutor-banner__tag {
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  color: var(--primary-600);
+  background: rgba(var(--primary-rgb), 0.14);
+  border: 1px solid rgba(var(--primary-rgb), 0.26);
+}
+.tutor-banner__desc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.tutor-banner__cta {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(120deg, var(--primary), var(--primary-d));
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .tutor-banner {
+    flex-wrap: wrap;
+  }
+  .tutor-banner__cta {
+    margin-left: 62px;
+  }
+}
+
+/* ----- 讲义详情顶部·导学对话召唤条（学讲义时明显可见「有 AI 导师可启发式对话」） ----- */
+.lecture-tutor-cue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid rgba(var(--primary-rgb), 0.28);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-50);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.lecture-tutor-cue:hover {
+  border-color: rgba(var(--primary-rgb), 0.5);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+}
+.lecture-tutor-cue__icon {
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+}
+.lecture-tutor-cue__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.lecture-tutor-cue__text strong {
+  color: var(--primary-600);
+}
+.lecture-tutor-cue__cta {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-600);
+  white-space: nowrap;
+}
 
 /* ----- 详情过场：遮罩 + 详情卡 ----- */
 .rescard-overlay {

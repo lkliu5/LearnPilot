@@ -37,6 +37,7 @@ import {
   type VideoResult,
 } from '../services/documentLearning'
 import { setTutorContext } from '../services/tutorBus'
+import { GEN_STAGES, VIDEO_STAGES, useStagedProgress } from '../components/genStatus'
 import InlineErrorBoundary, { lazySafe } from '../components/InlineErrorBoundary'
 import './DocumentLearning.css'
 
@@ -51,10 +52,8 @@ const Loading = () => <div className="resource-loading">资源加载中…</div>
 type Kind = 'lecture' | 'video' | 'diagram' | 'mindmap' | 'quiz' | 'flashcards'
 const LEVELS = ['入门', '初级', '中级', '高级', '精通'] as const
 
-/** 客户端阶段化进度文案：普通形态 4 段，视频（长任务）5 段更慢推进，给出「进行到哪一步」的明确反馈。 */
-const GEN_STAGES = ['检索文档片段', '组织知识结构', '生成内容', '排版与渲染'] as const
-const VIDEO_STAGES = ['检索文档片段', '编写分镜脚本', '生成同步旁白', '合成视频画面', '渲染输出'] as const
-type GenProgress = { pct: number; stage: string }
+/* 客户端阶段化进度（生成中 · N% · 阶段 + 进度条）已抽为共享原语 useStagedProgress
+   （components/genStatus.tsx），与学习资源页共用同一套推进机制。 */
 
 /** 预览弹层头部主题浅底（与「我的资源库」预览一致，深浅主题下均为柔和浅色，文字用 --ink）。 */
 const KIND_HEAD: Record<Kind, string> = {
@@ -122,10 +121,9 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
   const [genErr, setGenErr] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string>('初级')
 
-  /** 各形态的客户端生成进度（阶段文案 + 百分比），驱动按钮进度条 / 弹层重生成进度。 */
-  const [progress, setProgress] = useState<Partial<Record<Kind, GenProgress>>>({})
-  /** 进度推进定时器句柄（按形态）；卸载 / 结束时清理，避免泄漏。 */
-  const progressTimers = useRef<Partial<Record<Kind, number>>>({})
+  /** 各形态的客户端生成进度（阶段文案 + 百分比），驱动按钮进度条 / 弹层重生成进度。
+      共享原语 useStagedProgress（与学习资源页同一套），卸载自动清理定时器。 */
+  const { progress, startProgress: startStaged, stopProgress } = useStagedProgress<Kind>()
 
   /** 大预览弹层：当前打开的形态（null = 关闭）。内容直接读已落库产物 bag，不重新生成。 */
   const [previewKind, setPreviewKind] = useState<Kind | null>(null)
@@ -299,55 +297,9 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
 
   /* ---------------- 生成进度（客户端阶段化推进，给出明确「进行中 · 到哪一步」反馈） ---------------- */
 
-  /** 启动某形态的阶段化进度：向 92% 缓动逼近（留 8% 待真正返回时补满），视频推进更慢、阶段更多。 */
-  const startProgress = (kind: Kind) => {
-    const stages = kind === 'video' ? VIDEO_STAGES : GEN_STAGES
-    setProgress((prev) => ({ ...prev, [kind]: { pct: 6, stage: stages[0] } }))
-    const existing = progressTimers.current[kind]
-    if (existing) window.clearInterval(existing)
-    progressTimers.current[kind] = window.setInterval(() => {
-      setProgress((prev) => {
-        const cur = prev[kind]?.pct ?? 6
-        const ease = kind === 'video' ? 0.08 : 0.16
-        const next = Math.min(92, cur + Math.max(1.4, (92 - cur) * ease))
-        const si = Math.min(stages.length - 1, Math.floor((next / 92) * stages.length))
-        return { ...prev, [kind]: { pct: next, stage: stages[si] } }
-      })
-    }, kind === 'video' ? 620 : 430)
-  }
-  /** 结束进度：成功先补满 100% 再淡出清除；失败直接清除。 */
-  const stopProgress = (kind: Kind, ok: boolean) => {
-    const t = progressTimers.current[kind]
-    if (t) {
-      window.clearInterval(t)
-      delete progressTimers.current[kind]
-    }
-    if (ok) {
-      setProgress((prev) => ({ ...prev, [kind]: { pct: 100, stage: '完成' } }))
-      window.setTimeout(
-        () =>
-          setProgress((prev) => {
-            const next = { ...prev }
-            delete next[kind]
-            return next
-          }),
-        500
-      )
-    } else {
-      setProgress((prev) => {
-        const next = { ...prev }
-        delete next[kind]
-        return next
-      })
-    }
-  }
-  /* 卸载清理所有进度定时器 */
-  useEffect(
-    () => () => {
-      Object.values(progressTimers.current).forEach((t) => t && window.clearInterval(t))
-    },
-    []
-  )
+  /** 启动某形态的阶段化进度：视频（长任务）5 段更慢推进，其余 4 段（推进逻辑见共享原语）。 */
+  const startProgress = (kind: Kind) =>
+    startStaged(kind, kind === 'video' ? VIDEO_STAGES : GEN_STAGES, { slow: kind === 'video' })
 
   /* ---------------- 生成（基于勾选范围，主文档 primaryId + 合并 scopeIds） ---------------- */
 

@@ -59,6 +59,29 @@
 .trp__item-expect { font-size: 0.76rem; color: var(--gray-500, #64748b); line-height: 1.5; }
 .trp__item-body { flex: 1; min-width: 0; }
 
+/* 逐项·生成中阶段化进度（细进度条 + 「N% · 当前阶段」，替换期望文案位；与文档学习同一套体验） */
+.trp__item-progressline { display: flex; flex-direction: column; gap: 3px; }
+.trp__item-progressbar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gray-100, #f1f5f9);
+  overflow: hidden;
+}
+.trp__item-progressbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--primary-500, #6366f1), var(--purple-500, #a855f7));
+  transition: width 0.4s ease;
+}
+.trp__item-progresstext {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--primary-600, #4f46e5);
+  line-height: 1.5;
+}
+
 /* 逐项状态标签 */
 .trp__chip {
   flex-shrink: 0;

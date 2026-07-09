@@ -19,7 +19,7 @@ import { KP_RESOURCES, genericKpContent } from '../data/kpResources'
 import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
-import { StatusChip, type ItemStatus } from '../components/genStatus'
+import { StatusChip, type ItemStatus, useStagedProgress, VIDEO_STAGES } from '../components/genStatus'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import { logResourceGeneration } from '../services/resourceHistory'
 import '../components/TutorResourcePanel.css'
@@ -451,6 +451,12 @@ const GEN_ICON: Record<GenType, string> = {
   code: '💻',
   external: '🔗',
 }
+/* 生成进度阶段文案（复用文档学习那套 useStagedProgress 阶段化推进机制，见 components/genStatus）：
+   讲义/导图/图解/代码走通用 4 段（检索对象为 RAG 知识库）；视频沿用长任务 5 段；资源推荐按联网聚合语义措辞。 */
+const RES_STAGES = ['检索知识库', '组织知识结构', '生成内容', '排版与渲染'] as const
+const EXTERNAL_STAGES = ['联网检索资源', '聚合去重', '质量评估', '整理呈现'] as const
+const stagesFor = (t: GenType) => (t === 'video' ? VIDEO_STAGES : t === 'external' ? EXTERNAL_STAGES : RES_STAGES)
+
 const GEN_OPTIONS: { type: GenType; title: string; expect: string }[] = [
   { type: 'lecture', title: '定制讲义', expect: '按你的难度档生成的个性化讲义，RAG 可溯源' },
   { type: 'video', title: '讲解视频', expect: '动画分镜 + 同步旁白的讲解视频' },
@@ -614,6 +620,9 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
   /* 批量「选择性生成」是否已发起（仅 runGeneration 置位）。锁定规则只认它，
      使 hub 首屏「立即查看」的单项按需生成不会误锁资源中枢里其它未生成卡片。 */
   const [genBatchStarted, setGenBatchStarted] = useState(false)
+  /* 各资源类型的生成进度（生成中 · N% · 当前阶段 + 进度条）——复用文档学习的
+     阶段化推进共享原语，驱动 hub 速览卡 / 资源中枢卡片与勾选清单的进度反馈。 */
+  const { progress: genProg, startProgress, stopProgress } = useStagedProgress<GenType>()
   /* 有序学习「上次学习进度」：6 步过程完成数（getSteps，mock/联调同源，非写死）。 */
   const [stepProg, setStepProg] = useState<{ done: number; total: number }>({ done: 0, total: 6 })
 
@@ -706,13 +715,25 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
       }
       return
     }
-    // mock：内容为本地常量，短延时模拟逐项生成过程
+    // mock：内容为本地常量，短延时模拟逐项生成过程（时长仅够阶段化进度走过 2-3 段，视频稍长）
     if (t === 'external') {
       const items = await fetchRecommendations(kpId, kpName, kpName)
       setRecoCount(items.length)
       return
     }
-    await new Promise((r) => window.setTimeout(r, 480))
+    await new Promise((r) => window.setTimeout(r, t === 'video' ? 2600 : 1400))
+  }
+
+  /* 带阶段化进度的单类型生成：hub「立即查看」与批量逐项生成共用（进度条与文档学习页同一套体验）。 */
+  const generateOneWithProgress = async (t: GenType): Promise<void> => {
+    startProgress(t, stagesFor(t), { slow: t === 'video' })
+    try {
+      await generateOne(t)
+      stopProgress(t, true)
+    } catch (e) {
+      stopProgress(t, false)
+      throw e
+    }
   }
 
   /* 逐项生成：勾选项 pending→running→done/error 逐个推进，生成完一项即解锁对应卡片；
@@ -727,7 +748,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     for (const t of chosen) {
       setGenStatus((prev) => ({ ...prev, [t]: 'running' }))
       try {
-        await generateOne(t)
+        await generateOneWithProgress(t)
         setGenStatus((prev) => ({ ...prev, [t]: 'done' }))
       } catch (e) {
         console.error(`[resource] 生成「${t}」失败`, e)
@@ -924,7 +945,7 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     if (st === 'running') return
     setGenStatus((prev) => ({ ...prev, [t]: 'running' }))
     try {
-      await generateOne(t)
+      await generateOneWithProgress(t)
       setGenStatus((prev) => ({ ...prev, [t]: 'done' }))
       doOpen(tab)
     } catch (e) {
@@ -951,12 +972,39 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
     }
   }, [openId])
 
+  /* 导学对话·醒目入口横幅（苏格拉底式启发导学是本产品核心方法论，不再埋在底部工具行）：
+     hub 速览与资源中枢均以整幅横幅呈现，点击直接打开导学对话。 */
+  const tutorBanner = (
+    <button type="button" className="tutor-banner" onClick={() => doOpen('tutor')}>
+      <span className="tutor-banner__icon" aria-hidden="true">💬</span>
+      <span className="tutor-banner__body">
+        <span className="tutor-banner__title">
+          AI 导师 · 导学对话
+          <em className="tutor-banner__tag">苏格拉底式启发引导</em>
+        </span>
+        <span className="tutor-banner__desc">
+          不直接给答案——通过一步步追问，引导你自己想通「{kpName}」。学讲义、看视频卡住时，随时开聊。
+        </span>
+      </span>
+      <span className="tutor-banner__cta">开始导学 →</span>
+    </button>
+  )
+
   /* 单个内容的真实渲染（复用既有 /resource/* 数据与多模态组件）*/
   const renderBody = (id: Tab) => {
     switch (id) {
       case 'lecture':
         return (
           <>
+            {/* 导学对话召唤条（讲义顶部）：学讲义时明显可见「有 AI 导师可启发式对话」 */}
+            <button type="button" className="lecture-tutor-cue" onClick={() => doOpen('tutor')}>
+              <span className="lecture-tutor-cue__icon" aria-hidden="true">💬</span>
+              <span className="lecture-tutor-cue__text">
+                <strong>AI 导师 · 苏格拉底式导学</strong>——不直接给答案，用追问引导你自己想通；学到哪儿卡住，随时切进对话。
+              </span>
+              <span className="lecture-tutor-cue__cta">开始导学 →</span>
+            </button>
+
             {/* 难度自适应再生成（讲义专属操作，归位到讲义详情）*/}
             <div className="level-switch">
               <span className="level-switch__label">难度自适应：</span>
@@ -1225,11 +1273,13 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             {HUB_CARDS.map((c) => {
               const st = genStatus[c.id]
               const busy = st === 'running'
+              const pr = genProg[c.id]
+              const pct = Math.round(pr?.pct ?? 0)
               return (
                 <motion.button
                   key={c.id}
                   type="button"
-                  className="rescard"
+                  className={`rescard ${busy ? 'rescard--busy' : ''}`}
                   onClick={() => void viewResource(c.id)}
                   disabled={busy}
                   whileHover={busy ? undefined : { y: -5 }}
@@ -1249,13 +1299,23 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
                         : c.desc}
                     </span>
                     <span className="rescard__cta">
-                      {busy ? '生成中…' : st === 'done' ? '查看 →' : '立即查看 →'}
+                      {busy && pr
+                        ? `生成中 · ${pct}% · ${pr.stage}`
+                        : st === 'done' ? '查看 →' : '立即查看 →'}
                     </span>
                   </span>
+                  {busy && (
+                    <span className="rescard__progress" aria-hidden="true">
+                      <span className="rescard__progress-fill" style={{ width: `${pct}%` }} />
+                    </span>
+                  )}
                 </motion.button>
               )
             })}
           </RevealItem>
+
+          {/* 导学对话·醒目主入口（苏格拉底式启发导学）：与资源速览并列的主功能，不埋在工具行 */}
+          <RevealItem>{tutorBanner}</RevealItem>
 
           {/* 底部：阶段测试说明条（走完各资源后在有序学习末尾解锁、点亮「已掌握」推进进度） */}
           <RevealItem className="browse-hint">
@@ -1312,24 +1372,39 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               <p className="trp__hint">按需选择，未勾选的不生成；「资源推荐」为 AI 联网聚合，与讲义/视频/图解并列：</p>
 
               <div className="trp__list rescard-genpanel__list">
-                {GEN_OPTIONS.map((o) => (
-                  <label key={o.type} className={`trp__item ${genPicked.has(o.type) ? 'is-picked' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={genPicked.has(o.type)}
-                      disabled={genRunning}
-                      onChange={() => toggleGen(o.type)}
-                    />
-                    <span className="trp__item-icon">
-                      {o.type === 'external' ? GEN_ICON.external : <ResourceTypeIcon kind={o.type} size={26} />}
-                    </span>
-                    <span className="trp__item-body">
-                      <span className="trp__item-title">{o.title}</span>
-                      <span className="trp__item-expect">{o.expect}</span>
-                    </span>
-                    {genStatus[o.type] && <StatusChip status={genStatus[o.type]!} />}
-                  </label>
-                ))}
+                {GEN_OPTIONS.map((o) => {
+                  const pr = genProg[o.type]
+                  const busy = genStatus[o.type] === 'running'
+                  const pct = Math.round(pr?.pct ?? 0)
+                  return (
+                    <label key={o.type} className={`trp__item ${genPicked.has(o.type) ? 'is-picked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={genPicked.has(o.type)}
+                        disabled={genRunning}
+                        onChange={() => toggleGen(o.type)}
+                      />
+                      <span className="trp__item-icon">
+                        {o.type === 'external' ? GEN_ICON.external : <ResourceTypeIcon kind={o.type} size={26} />}
+                      </span>
+                      <span className="trp__item-body">
+                        <span className="trp__item-title">{o.title}</span>
+                        {/* 生成中：期望文案切换为「N% · 当前阶段」+ 细进度条（与文档学习同一套进度体验） */}
+                        {busy && pr ? (
+                          <span className="trp__item-progressline">
+                            <span className="trp__item-progressbar" aria-hidden="true">
+                              <span className="trp__item-progressbar-fill" style={{ width: `${pct}%` }} />
+                            </span>
+                            <span className="trp__item-progresstext">{pct}% · {pr.stage}</span>
+                          </span>
+                        ) : (
+                          <span className="trp__item-expect">{o.expect}</span>
+                        )}
+                      </span>
+                      {genStatus[o.type] && <StatusChip status={genStatus[o.type]!} />}
+                    </label>
+                  )
+                })}
               </div>
 
               <button className="trp__gen" disabled={!genPicked.size || genRunning} onClick={() => void runGeneration()}>
@@ -1357,16 +1432,22 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             </div>
           </RevealItem>
 
+          {/* 导学对话·醒目主入口（苏格拉底式启发导学）：与资源卡并列的主操作，置于内容区顶部 */}
+          <RevealItem>{tutorBanner}</RevealItem>
+
           {/* 学习内容 → 插画卡片网格（点击走 layoutId 过场展开详情；生成完成才解锁）*/}
           <RevealItem className="rescard-grid">
             {RESOURCE_CARDS.map((c) => {
               const st = genStatus[c.id]
               const locked = genLocked(c.id)
+              const pr = genProg[c.id]
+              const busy = st === 'running'
+              const pct = Math.round(pr?.pct ?? 0)
               return (
                 <motion.button
                   key={c.id}
                   type="button"
-                  className={`rescard ${locked ? 'rescard--locked' : ''}`}
+                  className={`rescard ${locked ? 'rescard--locked' : ''} ${busy ? 'rescard--busy' : ''}`}
                   onClick={() => openCard(c.id)}
                   disabled={locked}
                   whileHover={locked ? undefined : { y: -5 }}
@@ -1384,8 +1465,15 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
                       {c.title}
                       {st && <StatusChip status={st} />}
                     </span>
-                    <span className="rescard__desc">{c.desc}</span>
+                    <span className="rescard__desc">
+                      {busy && pr ? `生成中 · ${pct}% · ${pr.stage}` : c.desc}
+                    </span>
                   </span>
+                  {busy && (
+                    <span className="rescard__progress" aria-hidden="true">
+                      <span className="rescard__progress-fill" style={{ width: `${pct}%` }} />
+                    </span>
+                  )}
                 </motion.button>
               )
             })}
@@ -1394,11 +1482,14 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             {(() => {
               const st = genStatus.external
               const locked = genLocked('external')
+              const pr = genProg.external
+              const busy = st === 'running'
+              const pct = Math.round(pr?.pct ?? 0)
               return (
                 <motion.button
                   key="external"
                   type="button"
-                  className={`rescard ${locked ? 'rescard--locked' : ''}`}
+                  className={`rescard ${locked ? 'rescard--locked' : ''} ${busy ? 'rescard--busy' : ''}`}
                   onClick={() => openCard('external')}
                   disabled={locked}
                   whileHover={locked ? undefined : { y: -5 }}
@@ -1417,11 +1508,18 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
                       {st && <StatusChip status={st} />}
                     </span>
                     <span className="rescard__desc">
-                      {recoCount != null
-                        ? `AI 已联网聚合 ${recoCount} 条优质外部资源，可打开学习。`
-                        : 'AI 联网聚合的优质外部资源（视频/课程/论文/文档），可直接打开。'}
+                      {busy && pr
+                        ? `生成中 · ${pct}% · ${pr.stage}`
+                        : recoCount != null
+                          ? `AI 已联网聚合 ${recoCount} 条优质外部资源，可打开学习。`
+                          : 'AI 联网聚合的优质外部资源（视频/课程/论文/文档），可直接打开。'}
                     </span>
                   </span>
+                  {busy && (
+                    <span className="rescard__progress" aria-hidden="true">
+                      <span className="rescard__progress-fill" style={{ width: `${pct}%` }} />
+                    </span>
+                  )}
                 </motion.button>
               )
             })()}
@@ -1438,13 +1536,11 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             </span>
           </RevealItem>
 
-          {/* 辅助项降级：次要小 chip 工具行（不与内容卡争视觉权重）*/}
-          <RevealItem className="aux-chips">
-            <span className="aux-chips__label">更多工具</span>
-            <button type="button" className="aux-chip" onClick={() => openCard('tutor')}>
-              💬 导学对话
-            </button>
-            {USE_REAL_API && (
+          {/* 辅助项降级：次要小 chip 工具行（不与内容卡争视觉权重）。
+             导学对话已升为上方醒目横幅主入口，不再收在此处。 */}
+          {USE_REAL_API && (
+            <RevealItem className="aux-chips">
+              <span className="aux-chips__label">更多工具</span>
               <button
                 type="button"
                 className="aux-chip"
@@ -1453,8 +1549,8 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
               >
                 {regenRunning ? `⏳ 重新生成中 · ${regenPhase}…` : '🔄 重新生成讲义'}
               </button>
-            )}
-          </RevealItem>
+            </RevealItem>
+          )}
         </RevealGroup>
       )}
 
