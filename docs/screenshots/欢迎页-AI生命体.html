@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智学中枢 · AI Learning OS</title>
+<style>
+  :root{
+    --paper:#efe9db; --paper2:#f5f1e8; --warm-ink:#2c3e42;
+    --void:#0d1512; --void2:#111c18; --panel:#16241f;
+    --mist:#c3d4cb; --mist2:#8fa89c;
+    --sage:#7fb89b; --sage-g:#9fd4b5; --clay:#d19a63; --clay-l:#e3b585;
+    --line:rgba(159,212,181,.14);
+    --radius:24px;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+  body{background:var(--void);color:var(--paper);font-family:var(--font);line-height:1.6;overflow-x:hidden;letter-spacing:-.01em}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+
+  /* 星空/星尘背景 */
+  .cosmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .cosmos .neb{position:absolute;border-radius:50%;filter:blur(120px)}
+  .cosmos .n1{width:600px;height:600px;background:radial-gradient(circle,rgba(127,184,155,.22),transparent 70%);top:-160px;left:50%;transform:translateX(-50%);animation:drift 24s ease-in-out infinite}
+  .cosmos .n2{width:460px;height:460px;background:radial-gradient(circle,rgba(209,154,99,.14),transparent 70%);top:30%;right:-140px;animation:drift 30s ease-in-out infinite reverse}
+  @keyframes drift{0%,100%{transform:translate(-50%,0) scale(1)}50%{transform:translate(-50%,40px) scale(1.1)}}
+  .stars{position:absolute;inset:0}
+  .star{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--mist);opacity:.3;animation:twinkle 3s ease-in-out infinite}
+
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);background:rgba(13,21,18,.6);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px;max-width:1180px;margin:0 auto;padding:0 40px}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
+  .brand small{display:block;font-size:8px;color:var(--mist2);letter-spacing:2px;font-weight:500}
+  .navlinks{display:flex;gap:34px;font-size:14px;color:var(--mist2);font-weight:450}
+  .navlinks a{transition:color .3s var(--ease)}
+  .navlinks a:hover{color:var(--paper)}
+  .nav-cta{font-size:13px;font-weight:500;color:var(--void);background:linear-gradient(135deg,var(--sage-g),var(--sage));padding:9px 20px;border-radius:12px;transition:all .5s var(--ease)}
+  .nav-cta:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(127,184,155,.35)}
+
+  section{position:relative;z-index:2}
+
+  /* ===== 01 · Awakening ===== */
+  .awaken{min-height:94vh;display:grid;grid-template-columns:1.05fr 1fr;gap:60px;align-items:center;padding:60px 0}
+  .aw-l .tag{font-size:12px;letter-spacing:.2em;color:var(--sage);margin-bottom:28px;opacity:0;animation:fade 1s var(--ease) .2s forwards}
+  .aw-greet{font-size:15px;color:var(--mist2);margin-bottom:14px;min-height:22px}
+  .aw-l h1{font-size:52px;line-height:1.16;font-weight:600;letter-spacing:-.03em;margin-bottom:26px;min-height:180px}
+  .aw-l h1 .g{background:linear-gradient(120deg,var(--sage-g),var(--clay-l));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .cursor{display:inline-block;width:3px;height:.9em;background:var(--sage-g);margin-left:3px;vertical-align:-2px;animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+  .aw-l p{font-size:17px;color:var(--mist);line-height:1.75;margin-bottom:38px;max-width:440px;opacity:0}
+  .aw-l .btn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--sage-g),var(--sage));color:var(--void);padding:16px 34px;border-radius:15px;font-size:15px;font-weight:600;transition:all .5s var(--ease);opacity:0}
+  .aw-l .btn:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(127,184,155,.4)}
+  .aw-l .btn .a{transition:transform .5s var(--ease)}
+  .aw-l .btn:hover .a{transform:translateX(5px)}
+  .aw-l p.show,.aw-l .btn.show{animation:rise .9s var(--ease) forwards}
+
+  /* AI Orb 智能核心 */
+  .orb-stage{position:relative;height:520px;display:grid;place-items:center;opacity:0;animation:fade 1.4s var(--ease) .5s forwards}
+  .orb{width:230px;height:230px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 38% 32%,var(--sage-g),var(--sage) 42%,#2f5847 72%,#14261e 100%);
+    box-shadow:0 0 80px rgba(127,184,155,.4),inset 0 4px 30px rgba(255,255,255,.25),inset 0 -20px 50px rgba(0,0,0,.5);
+    animation:breathe 5s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(.98)}50%{transform:scale(1.02)}}
+  .orb::before{content:"";position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,rgba(127,184,155,.35),transparent 62%);animation:breathe 5s ease-in-out infinite}
+  .orb-core{position:absolute;top:50%;left:50%;width:20px;height:20px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 30px rgba(255,255,255,.95);animation:corePulse 2.2s ease-in-out infinite}
+  @keyframes corePulse{0%,100%{opacity:.75;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.5)}}
+  .orb-ring{position:absolute;top:50%;left:50%;border-radius:50%;border:1px solid rgba(159,212,181,.25);transform:translate(-50%,-50%)}
+  .ring1{width:300px;height:300px;animation:spin 24s linear infinite}
+  .ring2{width:380px;height:380px;border-style:dashed;border-color:rgba(209,154,99,.2);animation:spin 34s linear infinite reverse}
+  @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+  /* 漂浮知识节点 */
+  .float{position:absolute;background:rgba(22,36,31,.85);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px 14px;font-size:12px;color:var(--mist);white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:bob 6s ease-in-out infinite}
+  .float b{color:var(--sage-g);font-weight:600}
+  .float .up{color:var(--sage-g)}
+  .f1{top:8%;left:2%;animation-delay:0s}.f2{top:20%;right:0;animation-delay:-2s}
+  .f3{bottom:22%;left:-2%;animation-delay:-4s}.f4{bottom:8%;right:4%;animation-delay:-1s}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+  /* ===== 通用 band ===== */
+  .band{padding:140px 0}
+  .band-head{text-align:center;margin-bottom:80px;max-width:660px;margin-left:auto;margin-right:auto}
+  .band-head .no{font-size:13px;letter-spacing:.2em;color:var(--clay);font-weight:600;margin-bottom:18px}
+  .band-head h2{font-size:42px;font-weight:600;letter-spacing:-.03em;line-height:1.25}
+  .band-head p{color:var(--mist);margin-top:18px;font-size:17px}
+
+  /* ===== 02 · Learning DNA(旅程) ===== */
+  .dna{max-width:580px;margin:0 auto;position:relative}
+  .dna::before{content:"";position:absolute;left:33px;top:30px;bottom:30px;width:2px;background:linear-gradient(var(--sage),var(--clay))}
+  .dstep{display:flex;align-items:center;gap:28px;padding:20px 0;position:relative;opacity:0;transform:translateX(-24px);transition:.8s var(--ease)}
+  .dstep.in{opacity:1;transform:none}
+  .dstep .node{width:68px;height:68px;border-radius:22px;background:var(--panel);border:1px solid var(--line);display:grid;place-items:center;flex-shrink:0;z-index:2;transition:.5s var(--ease)}
+  .dstep:hover .node{transform:scale(1.1);border-color:var(--sage);box-shadow:0 0 30px rgba(127,184,155,.3)}
+  .dstep .node svg{width:28px;height:28px;stroke:var(--sage-g);fill:none;stroke-width:1.6}
+  .dstep .txt b{font-size:18px;font-weight:600;display:block;margin-bottom:3px}
+  .dstep .txt span{font-size:14px;color:var(--mist2)}
+
+  /* ===== 03 · Knowledge Universe ===== */
+  .universe{background:var(--void2)}
+  .galaxy{position:relative;width:100%;max-width:760px;height:580px;margin:0 auto}
+  .u-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:160px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,var(--sage-g),var(--sage) 48%,#274539 100%);
+    display:grid;place-items:center;box-shadow:0 0 60px rgba(127,184,155,.4),inset 0 3px 18px rgba(255,255,255,.25);
+    animation:breathe 5s ease-in-out infinite;z-index:5}
+  .u-core b{color:var(--void);font-size:16px;font-weight:700;text-align:center;line-height:1.3}
+  .u-node{position:absolute;width:140px;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:18px;text-align:center;transition:.5s var(--ease);z-index:3}
+  .u-node:hover{transform:scale(1.08)!important;border-color:var(--sage);box-shadow:0 0 34px rgba(127,184,155,.3)}
+  .u-node .ci{width:36px;height:36px;border-radius:11px;background:rgba(127,184,155,.14);display:grid;place-items:center;margin:0 auto 9px;transition:.4s var(--ease)}
+  .u-node:hover .ci{background:var(--sage)}
+  .u-node:hover .ci svg{stroke:var(--void)}
+  .u-node .ci svg{width:19px;height:19px;stroke:var(--sage-g);fill:none;stroke-width:1.7;transition:.4s var(--ease)}
+  .u-node b{font-size:13px;font-weight:600;display:block}
+  .u-node span{font-size:11px;color:var(--mist2)}
+  .un1{top:4%;left:14%}.un2{top:4%;right:14%}
+  .un3{top:50%;left:0;transform:translateY(-50%)}.un4{top:50%;right:0;transform:translateY(-50%)}
+  .un5{bottom:4%;left:14%}.un6{bottom:4%;right:14%}
+  .uline{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .uline line{stroke:var(--sage);stroke-width:1.5;stroke-dasharray:3 6;opacity:.3;animation:dash 22s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-90}}
+
+  /* ===== 04 · Growth Timeline(产品截图) ===== */
+  .timeline{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .tcard{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;transition:.5s var(--ease);opacity:0;transform:translateY(30px)}
+  .tcard.in{opacity:1;transform:none}
+  .tcard:hover{transform:translateY(-8px);border-color:var(--sage);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+  .tcard .cap{aspect-ratio:3/4;background:linear-gradient(160deg,rgba(127,184,155,.12),rgba(209,154,99,.06));display:grid;place-items:center;color:var(--mist2);font-size:11px;text-align:center;padding:14px;position:relative}
+  .tcard .sn{position:absolute;top:12px;left:12px;width:26px;height:26px;border-radius:50%;background:var(--sage);color:var(--void);display:grid;place-items:center;font-size:12px;font-weight:700}
+  .tcard .lbl{padding:16px;text-align:center}
+  .tcard .lbl b{font-size:14px;font-weight:600;display:block}
+  .tcard .lbl span{font-size:12px;color:var(--mist2)}
+
+  /* ===== 05 · Closing ===== */
+  .closing{padding:180px 0;text-align:center;position:relative}
+  .closing::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(127,184,155,.14),transparent 68%);filter:blur(40px)}
+  .closing h2{font-size:54px;font-weight:600;letter-spacing:-.03em;line-height:1.28;position:relative;margin-bottom:18px}
+  .closing h2 .g{background:linear-gradient(120deg,var(--sage-g),var(--clay-l));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .closing p{font-size:19px;color:var(--mist);position:relative;margin-bottom:46px}
+  .closing .btn{position:relative;display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--sage-g),var(--sage));color:var(--void);padding:18px 44px;border-radius:16px;font-size:16px;font-weight:600;transition:all .5s var(--ease)}
+  .closing .btn:hover{transform:translateY(-3px);box-shadow:0 18px 50px rgba(127,184,155,.4)}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--mist2);font-size:13px}
+
+  .reveal{opacity:0;transform:translateY(34px);transition:.9s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  @keyframes fade{to{opacity:1}}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  @media(max-width:900px){
+    .awaken{grid-template-columns:1fr;gap:40px;text-align:center}
+    .aw-l h1{font-size:38px;min-height:auto}
+    .aw-l .btn{margin:0 auto}
+    .orb-stage{height:400px}
+    .timeline{grid-template-columns:1fr 1fr}
+    .galaxy{height:auto;display:flex;flex-direction:column;gap:14px}
+    .u-core{position:relative;transform:none;margin:0 auto}
+    .u-node{position:relative!important;width:100%;inset:auto!important;transform:none!important}
+    .uline{display:none}.navlinks{display:none}
+    .closing h2{font-size:34px}
+  }
+</style>
+</head>
+<body>
+
+<div class="cosmos">
+  <div class="neb n1"></div><div class="neb n2"></div>
+  <div class="stars" id="stars"></div>
+</div>
+
+<nav><div class="nav-in">
+  <div class="brand">
+    <svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="5" fill="#7fb89b"/><circle cx="18" cy="18" r="16" fill="none" stroke="#7fb89b" stroke-width="1" opacity=".3"/><circle cx="18" cy="4" r="2.5" fill="#d19a63"/><circle cx="30" cy="12" r="2.5" fill="#7fb89b"/><circle cx="30" cy="24" r="2.5" fill="#7fb89b"/><circle cx="18" cy="32" r="2.5" fill="#d19a63"/><circle cx="6" cy="24" r="2.5" fill="#7fb89b"/><circle cx="6" cy="12" r="2.5" fill="#7fb89b"/></svg>
+    <div>智学中枢<small>AI LEARNING OS</small></div>
+  </div>
+  <div class="navlinks"><a href="#dna">学习旅程</a><a href="#universe">知识宇宙</a><a href="#timeline">成长记录</a></div>
+  <a class="nav-cta" href="#">进入平台</a>
+</div></nav>
+
+<!-- 01 Awakening -->
+<section class="awaken wrap">
+  <div class="aw-l">
+    <div class="tag">01 · AI AWAKENING</div>
+    <div class="aw-greet" id="greet"></div>
+    <h1 id="headline"></h1>
+    <p id="awp">它读懂你的基础、优势与薄弱，为你规划下一步——不是一套课程，而是一场与你共同进化的智能旅程。</p>
+    <a class="btn" id="awbtn" href="#">开始你的学习旅程 <span class="a">→</span></a>
+  </div>
+  <div class="orb-stage">
+    <div class="orb-ring ring1"></div>
+    <div class="orb-ring ring2"></div>
+    <div class="orb"><div class="orb-core"></div></div>
+    <div class="float f1">优势：逻辑推理 <span class="up">↑</span></div>
+    <div class="float f2">数学基础 <span class="up">↑</span></div>
+    <div class="float f3">下一步：<b>机器学习基础</b></div>
+    <div class="float f4">已读完你的学习历史</div>
+  </div>
+</section>
+
+<!-- 02 Learning DNA -->
+<section class="band" id="dna">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="no">02 · MY LEARNING DNA</div>
+      <h2>它如何一步步<br>成为懂你的导师</h2>
+      <p>不是功能列表，而是一段被 AI 全程陪伴的关系</p>
+    </div>
+    <div class="dna">
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 15v.5"/></svg></div><div class="txt"><b>认识你</b><span>对话 + 做题，读懂你的真实基础</span></div></div>
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M4 18l5-5 3 3 8-8M17 8h4v4"/></svg></div><div class="txt"><b>理解你的能力</b><span>行为实测画像，而非自我感觉</span></div></div>
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 12h9M3 18h13"/><circle cx="20" cy="6" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="20" cy="18" r="1.5"/></svg></div><div class="txt"><b>规划学习路径</b><span>能力定内容、偏好定形式，带时间线</span></div></div>
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M6 8l2 2M16 8l-2 2M8 16h8"/></svg></div><div class="txt"><b>生成学习资源</b><span>讲义 / 图解 / 视频 / 闪卡，按需生成</span></div></div>
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z"/></svg></div><div class="txt"><b>陪你完成学习</b><span>卡住就能问，苏格拉底式启发</span></div></div>
+      <div class="dstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M12 2l2.5 7h7l-5.5 4 2 7-6-4.5-6 4.5 2-7L2.5 9h7z"/></svg></div><div class="txt"><b>不断成长</b><span>掌握式学习，达标才进阶</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 Knowledge Universe -->
+<section class="band universe" id="universe">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="no">03 · KNOWLEDGE UNIVERSE</div>
+      <h2>一个 AI 中枢，<br>统筹你的整个学习</h2>
+      <p>所有能力，围绕理解你的核心协同运转</p>
+    </div>
+    <div class="galaxy reveal">
+      <svg class="uline"><line x1="50%" y1="50%" x2="21%" y2="14%"/><line x1="50%" y1="50%" x2="79%" y2="14%"/><line x1="50%" y1="50%" x2="7%" y2="50%"/><line x1="50%" y1="50%" x2="93%" y2="50%"/><line x1="50%" y1="50%" x2="21%" y2="86%"/><line x1="50%" y1="50%" x2="79%" y2="86%"/></svg>
+      <div class="u-core"><b>AI Core<br>学情管家</b></div>
+      <div class="u-node un1"><div class="ci"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 12h9M3 18h13"/></svg></div><b>学习规划</b><span>个性化路径</span></div>
+      <div class="u-node un2"><div class="ci"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div><b>文档学习</b><span>基于你的资料</span></div>
+      <div class="u-node un3"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z"/></svg></div><b>AI 导师</b><span>苏格拉底辅导</span></div>
+      <div class="u-node un4"><div class="ci"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3"/></svg></div><b>多智能体</b><span>协同工作流</span></div>
+      <div class="u-node un5"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><b>可信 AI</b><span>防幻觉溯源</span></div>
+      <div class="u-node un6"><div class="ci"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div><b>学习分析</b><span>掌握度监测</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 Growth Timeline -->
+<section class="band" id="timeline">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="no">04 · GROWTH TIMELINE</div>
+      <h2>看它如何陪你走完一段学习</h2>
+    </div>
+    <div class="timeline">
+      <div class="tcard"><div class="cap"><div class="sn">1</div>[ 画像诊断 截图 ]</div><div class="lbl"><b>认识我</b><span>读懂你的基础</span></div></div>
+      <div class="tcard"><div class="cap"><div class="sn">2</div>[ 学习路径 截图 ]</div><div class="lbl"><b>理解我</b><span>规划专属路径</span></div></div>
+      <div class="tcard"><div class="cap"><div class="sn">3</div>[ 资源生成 截图 ]</div><div class="lbl"><b>训练我</b><span>生成多模态资源</span></div></div>
+      <div class="tcard"><div class="cap"><div class="sn">4</div>[ 文档学习 截图 ]</div><div class="lbl"><b>帮助我</b><span>基于我的资料</span></div></div>
+      <div class="tcard"><div class="cap"><div class="sn">5</div>[ 学情管家 截图 ]</div><div class="lbl"><b>陪伴我</b><span>统筹全局</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 Closing -->
+<section class="closing">
+  <div class="wrap">
+    <h2 class="reveal">AI 不替你学习。<br>它让每一次学习，<br><span class="g">都更接近你的目标。</span></h2>
+    <p class="reveal">无论你是求职、考研、科研、转行，还是纯粹热爱。</p>
+    <a class="btn reveal" href="#">遇见你的 AI 导师 →</a>
+  </div>
+</section>
+
+<footer><div class="wrap">智学中枢 · AI Learning OS ｜ 中国软件杯 2026 · A 赛题</div></footer>
+
+<script>
+  // 星尘
+  const sw=document.getElementById('stars');
+  for(let i=0;i<60;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animationDelay=Math.random()*3+'s';s.style.opacity=(Math.random()*.4+.1);sw.appendChild(s);}
+  const st=document.createElement('style');st.textContent='@keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.6}}';document.head.appendChild(st);
+
+  // 逐字打字:问候 + 标题
+  function type(el,text,speed,cb){let i=0;const c=document.createElement('span');c.className='cursor';el.appendChild(c);
+    (function step(){if(i<text.length){c.insertAdjacentText('beforebegin',text[i]);i++;setTimeout(step,speed)}else{setTimeout(()=>{c.remove();cb&&cb()},400)}})();}
+  window.addEventListener('load',()=>{
+    setTimeout(()=>type(document.getElementById('greet'),'你好，我已经读完了你的学习历史。',42,()=>{
+      type(document.getElementById('headline'),'一个真正理解你的 AI。',70,()=>{
+        const g=document.createElement('span');g.className='g';g.textContent='它知道你下一步该去哪里。';
+        document.getElementById('headline').appendChild(document.createElement('br'));document.getElementById('headline').appendChild(g);
+        document.getElementById('awp').classList.add('show');
+        document.getElementById('awbtn').classList.add('show');
+      });
+    }),700);
+  });
+
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
+  document.querySelectorAll('.reveal,.dstep,.tcard').forEach((el,i)=>{if(el.classList.contains('dstep')||el.classList.contains('tcard'))el.style.transitionDelay=(i%6*.09)+'s';io.observe(el)});
+</script>
+</body>
+</html>

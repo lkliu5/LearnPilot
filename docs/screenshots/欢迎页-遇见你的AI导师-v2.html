@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智学中枢 · 遇见你的 AI 导师</title>
+<style>
+  :root{
+    --void:#0b1310; --void2:#0e1814; --panel:#132019;
+    --paper:#f2ede2; --mist:#c3d4cb; --mist2:#8fa89c; --faint:#5c6b62;
+    --sage:#7fb89b; --sage-g:#a9d4bd; --sage-d:#4f7562; --clay:#d1a06b; --clay-l:#e3bd8c;
+    --line:rgba(159,212,181,.13); --line2:rgba(159,212,181,.07);
+    --radius:24px; --ease:cubic-bezier(.22,1,.36,1);
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    --serif:"Songti SC",Georgia,serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+  body{background:var(--void);color:var(--paper);font-family:var(--font);line-height:1.7;overflow-x:hidden;letter-spacing:-.01em}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 40px}
+
+  .cosmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .cosmos .neb{position:absolute;border-radius:50%;filter:blur(140px)}
+  .cosmos .n1{width:660px;height:660px;background:radial-gradient(circle,rgba(127,184,155,.16),transparent 70%);top:-200px;left:50%;transform:translateX(-50%);animation:drift 28s ease-in-out infinite}
+  .cosmos .n2{width:460px;height:460px;background:radial-gradient(circle,rgba(209,160,107,.09),transparent 70%);top:45%;right:-160px;animation:drift 34s ease-in-out infinite reverse}
+  @keyframes drift{0%,100%{transform:translate(-50%,0) scale(1)}50%{transform:translate(-50%,40px) scale(1.08)}}
+  .stars{position:absolute;inset:0}
+  .star{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--mist);animation:tw 4s ease-in-out infinite}
+  @keyframes tw{0%,100%{opacity:.08}50%{opacity:.42}}
+
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);background:rgba(11,19,16,.55);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px;max-width:1120px;margin:0 auto;padding:0 40px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:600;font-size:16px}
+  .brand small{display:block;font-size:8px;color:var(--mist2);letter-spacing:2px;font-weight:500}
+  .navlinks{display:flex;gap:32px;font-size:14px;color:var(--mist2);font-weight:450}
+  .navlinks a:hover{color:var(--paper)}
+  .nav-cta{font-size:13px;font-weight:500;color:var(--void);background:linear-gradient(135deg,var(--sage-g),var(--sage));padding:9px 20px;border-radius:12px;transition:all .5s var(--ease)}
+  .nav-cta:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(127,184,155,.35)}
+  section{position:relative;z-index:2}
+
+  /* ============ 01 · 相遇(极简) ============ */
+  .meet{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 0}
+
+  /* 有人格的 AI 导师 Orb —— 会注视 */
+  .mentor{width:200px;height:200px;position:relative;margin-bottom:60px;opacity:0;animation:fd 2s var(--ease) .3s forwards}
+  .mentor .body{position:absolute;inset:0;border-radius:50%;
+    background:radial-gradient(circle at 40% 36%,#cfe8db,#8fc0a9 40%,#5a8570 66%,#2b463b 100%);
+    box-shadow:0 0 90px rgba(127,184,155,.42),inset 0 6px 30px rgba(255,255,255,.32),inset 0 -20px 50px rgba(0,0,0,.5);
+    animation:mBreathe 5s ease-in-out infinite;transition:transform .6s var(--ease)}
+  @keyframes mBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.028)}}
+  .mentor .aura{position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,rgba(127,184,155,.3),transparent 60%);animation:mBreathe 5s ease-in-out infinite}
+  /* 注视的"眼神"—— 一个会随状态移动的光点 */
+  .mentor .gaze{position:absolute;top:42%;left:50%;width:26px;height:26px;border-radius:50%;
+    background:radial-gradient(circle at 50% 45%,#fff,#cfe8db 60%,transparent 72%);
+    transform:translate(-50%,-50%);transition:all 1.2s var(--ease);box-shadow:0 0 24px rgba(255,255,255,.8)}
+  /* 思考状态:光点内的小核脉动 */
+  .mentor .gaze::after{content:"";position:absolute;top:50%;left:50%;width:9px;height:9px;border-radius:50%;background:#3a5249;transform:translate(-50%,-50%);animation:pupil 3s ease-in-out infinite}
+  @keyframes pupil{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-52%,-46%) scale(.85)}}
+  /* 回应时的涟漪 */
+  .mentor .ripple{position:absolute;inset:0;border-radius:50%;border:1.5px solid rgba(169,212,189,.5);opacity:0}
+  .mentor.responding .ripple{animation:resp 1.4s var(--ease)}
+  @keyframes resp{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.4);opacity:0}}
+  /* 状态标签 */
+  .m-state{position:absolute;bottom:-42px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--sage-g);
+    display:flex;align-items:center;gap:8px;white-space:nowrap;opacity:0;animation:fd 1s 1.4s forwards}
+  .m-state .d{width:6px;height:6px;border-radius:50%;background:var(--sage);animation:blink2 2s infinite}
+  @keyframes blink2{0%,100%{opacity:1}50%{opacity:.3}}
+
+  .meet .said{font-size:15px;color:var(--mist2);margin-bottom:22px;min-height:24px}
+  .meet h1{font-size:52px;line-height:1.32;font-weight:500;letter-spacing:-.02em;font-family:var(--serif);max-width:680px;margin-bottom:30px;min-height:140px}
+  .meet h1 .g{color:var(--sage-g)}
+  .meet .btn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--sage-g),var(--sage));color:var(--void);padding:16px 38px;border-radius:16px;font-size:15px;font-weight:600;transition:all .5s var(--ease);opacity:0}
+  .meet .btn.show{animation:up .9s var(--ease) forwards}
+  .meet .btn:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(127,184,155,.4)}
+  .meet .scroll{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--faint);opacity:0;animation:fd 1s 3s forwards}
+  .meet .scroll .m{width:22px;height:34px;border:1.5px solid var(--faint);border-radius:12px;margin:8px auto 0;position:relative}
+  .meet .scroll .m::after{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:3px;height:6px;border-radius:2px;background:var(--faint);animation:scroll 1.8s infinite}
+  @keyframes scroll{0%{opacity:1;top:6px}100%{opacity:0;top:16px}}
+  @keyframes fd{to{opacity:1}}
+  @keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .band{padding:140px 0}
+  .band-head{text-align:center;margin-bottom:76px;max-width:640px;margin-left:auto;margin-right:auto}
+  .band-head .no{font-size:12px;letter-spacing:.2em;color:var(--clay);font-weight:600;margin-bottom:18px}
+  .band-head h2{font-size:40px;font-weight:500;letter-spacing:-.02em;line-height:1.3;font-family:var(--serif)}
+  .band-head p{color:var(--mist);margin-top:18px;font-size:17px}
+
+  /* ============ 02 · 它认识我 ============ */
+  .knows{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:920px;margin:0 auto}
+  .kcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:32px 34px;opacity:0;transform:translateY(30px);transition:.8s var(--ease)}
+  .kcard.in{opacity:1;transform:none}
+  .kcard .from{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .kcard .from .dot{width:28px;height:28px;border-radius:50%;background:linear-gradient(140deg,var(--sage-g),var(--sage-d));position:relative;flex-shrink:0}
+  .kcard .from .dot::after{content:"";position:absolute;top:50%;left:50%;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.9);transform:translate(-50%,-50%)}
+  .kcard .from span{font-size:13px;color:var(--mist2)}
+  .kcard .msg{font-size:18px;line-height:1.7;color:var(--paper);font-weight:400}
+  .kcard .msg b{color:var(--sage-g);font-weight:600}
+  .kcard.wide{grid-column:span 2}
+
+  /* ============ 03 · 学习瞬间/成长痕迹 ============ */
+  .moments{background:var(--void2)}
+  .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto}
+  .moment{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:30px;opacity:0;transform:translateY(30px);transition:.8s var(--ease);position:relative;overflow:hidden}
+  .moment.in{opacity:1;transform:none}
+  .moment .spark{position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(209,160,107,.2),transparent 70%)}
+  .moment .time{font-size:12px;color:var(--clay-l);font-weight:600;margin-bottom:14px}
+  .moment .scene{font-size:16px;line-height:1.7;color:var(--paper);margin-bottom:16px}
+  .moment .scene b{color:var(--sage-g)}
+  .moment .tutor{font-size:13px;color:var(--mist2);font-style:italic;padding-top:14px;border-top:1px solid var(--line2)}
+
+  /* ============ 04 · 你正在成长的能力 ============ */
+  .power{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:28px 26px;transition:.5s var(--ease);opacity:0;transform:translateY(28px)}
+  .pcard.in{opacity:1;transform:none}
+  .pcard:hover{transform:translateY(-6px);border-color:var(--sage);box-shadow:0 20px 44px rgba(0,0,0,.4)}
+  .pcard .ci{width:44px;height:44px;border-radius:13px;background:rgba(127,184,155,.13);display:grid;place-items:center;margin-bottom:16px;transition:.4s var(--ease)}
+  .pcard:hover .ci{background:var(--sage)}.pcard:hover .ci svg{stroke:var(--void)}
+  .pcard .ci svg{width:22px;height:22px;stroke:var(--sage-g);fill:none;stroke-width:1.6;transition:.4s var(--ease)}
+  .pcard h4{font-size:18px;font-weight:600;margin-bottom:8px}
+  .pcard p{font-size:14px;color:var(--mist2);line-height:1.65;margin-bottom:16px}
+  .pcard .bar{height:6px;background:rgba(159,212,181,.1);border-radius:6px;overflow:hidden}
+  .pcard .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sage),var(--sage-g));border-radius:6px;transition:width 1.4s var(--ease)}
+  .pcard.in .bar i{width:var(--w)}
+  .pcard .grow{font-size:12px;color:var(--sage-g);margin-top:8px;text-align:right}
+
+  /* ============ 05 · AI Memory Reveal(高潮) ============ */
+  .reveal-mem{padding:170px 0;position:relative;overflow:hidden;text-align:center}
+  .reveal-mem::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:900px;height:600px;background:radial-gradient(ellipse,rgba(127,184,155,.14),transparent 65%);filter:blur(50px)}
+  .rm-eyebrow{font-size:12px;letter-spacing:.24em;color:var(--clay);font-weight:600;margin-bottom:26px;position:relative}
+  .rm-title{font-size:40px;font-weight:500;font-family:var(--serif);letter-spacing:-.02em;margin-bottom:70px;position:relative}
+  .rm-compare{display:grid;grid-template-columns:1fr auto 1fr;gap:40px;align-items:center;max-width:900px;margin:0 auto;position:relative}
+  .rm-side{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:40px 34px;opacity:0;transform:translateY(30px);transition:1s var(--ease)}
+  .rm-side.in{opacity:1;transform:none}
+  .rm-side.then{border-style:dashed;opacity:.7}
+  .rm-side .when{font-size:13px;color:var(--mist2);margin-bottom:18px;letter-spacing:.1em}
+  .rm-side.now .when{color:var(--clay-l)}
+  .rm-score{font-size:56px;font-weight:700;font-family:var(--serif);line-height:1;margin-bottom:12px}
+  .rm-side.then .rm-score{color:var(--mist2)}
+  .rm-side.now .rm-score{background:linear-gradient(135deg,var(--sage-g),var(--clay-l));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .rm-side .desc{font-size:14px;color:var(--mist2);line-height:1.7}
+  .rm-side .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;justify-content:center}
+  .rm-side .tags span{font-size:12px;padding:4px 11px;border-radius:8px}
+  .rm-side.then .tags span{background:rgba(159,212,181,.06);color:var(--mist2)}
+  .rm-side.now .tags span{background:rgba(127,184,155,.14);color:var(--sage-g)}
+  .rm-arrow{opacity:0;transition:1s var(--ease) .4s;font-size:14px;color:var(--sage);text-align:center}
+  .rm-arrow.in{opacity:1}
+  .rm-arrow .big{font-size:32px;color:var(--sage-g);display:block;margin-bottom:6px}
+  .rm-said{margin-top:56px;font-size:22px;font-family:var(--serif);color:var(--paper);position:relative;opacity:0;transition:1s var(--ease) .8s;line-height:1.6}
+  .rm-said.in{opacity:1}
+  .rm-said .g{color:var(--sage-g)}
+
+  /* ============ 06 · 收尾 ============ */
+  .closing{padding:180px 0;text-align:center;position:relative}
+  .closing::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:580px;height:380px;background:radial-gradient(ellipse,rgba(127,184,155,.13),transparent 68%);filter:blur(40px)}
+  .closing h2{font-size:50px;font-weight:500;letter-spacing:-.02em;line-height:1.35;position:relative;margin-bottom:20px;font-family:var(--serif)}
+  .closing h2 .g{background:linear-gradient(120deg,var(--sage-g),var(--clay-l));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .closing p{font-size:18px;color:var(--mist);position:relative;margin-bottom:46px}
+  .closing .btn{position:relative;display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--sage-g),var(--sage));color:var(--void);padding:18px 46px;border-radius:16px;font-size:16px;font-weight:600;transition:all .5s var(--ease)}
+  .closing .btn:hover{transform:translateY(-3px);box-shadow:0 18px 50px rgba(127,184,155,.4)}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--mist2);font-size:13px}
+  .reveal{opacity:0;transform:translateY(32px);transition:.9s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+
+  @media(max-width:900px){
+    .meet h1{font-size:34px;min-height:auto}.mentor{width:150px;height:150px}
+    .knows{grid-template-columns:1fr}.kcard.wide{grid-column:span 1}
+    .mgrid{grid-template-columns:1fr}.power{grid-template-columns:1fr}
+    .rm-compare{grid-template-columns:1fr;gap:24px}.rm-arrow .big{transform:rotate(90deg)}
+    .navlinks{display:none}.closing h2,.rm-title{font-size:30px}
+  }
+</style>
+</head>
+<body>
+
+<div class="cosmos"><div class="neb n1"></div><div class="neb n2"></div><div class="stars" id="stars"></div></div>
+
+<nav><div class="nav-in">
+  <div class="brand">
+    <svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="5" fill="#7fb89b"/><circle cx="18" cy="18" r="15" fill="none" stroke="#7fb89b" stroke-width="1" opacity=".3"/><circle cx="18" cy="4" r="2.4" fill="#d1a06b"/><circle cx="31" cy="13" r="2.4" fill="#7fb89b"/><circle cx="28" cy="29" r="2.4" fill="#7fb89b"/><circle cx="8" cy="29" r="2.4" fill="#d1a06b"/><circle cx="5" cy="13" r="2.4" fill="#7fb89b"/></svg>
+    <div>智学中枢<small>你的 AI 学习导师</small></div>
+  </div>
+  <div class="navlinks"><a href="#knows">它认识你</a><a href="#moments">成长瞬间</a><a href="#reveal">30 天后的你</a></div>
+  <a class="nav-cta" href="#">遇见它</a>
+</div></nav>
+
+<!-- 01 相遇 -->
+<section class="meet wrap">
+  <div class="mentor" id="mentor">
+    <div class="aura"></div>
+    <div class="ripple"></div>
+    <div class="body"></div>
+    <div class="gaze" id="gaze"></div>
+    <div class="m-state" id="mstate"><span class="d"></span><span id="mstate-t">正在认识你…</span></div>
+  </div>
+  <div class="said" id="said"></div>
+  <h1 id="head"></h1>
+  <a class="btn" id="btn" href="#knows">让它认识我 →</a>
+  <div class="scroll">向下，看看它怎么懂你<div class="m"></div></div>
+</section>
+
+<!-- 02 它认识我 -->
+<section class="band" id="knows">
+  <div class="wrap">
+    <div class="band-head reveal"><div class="no">IT KNOWS YOU</div><h2>它，好像真的认识我</h2><p>不是把你归类，而是真正看见你此刻在哪里</p></div>
+    <div class="knows">
+      <div class="kcard"><div class="from"><div class="dot"></div><span>你的 AI 导师</span></div><div class="msg">我注意到你在 <b>逻辑推理</b> 上很有天赋，但 <b>神经网络</b> 那部分，我们可以慢一点、走扎实一点。</div></div>
+      <div class="kcard"><div class="from"><div class="dot"></div><span>你的 AI 导师</span></div><div class="msg">你好像更喜欢 <b>看图理解</b>。那接下来，我多给你画一些图，少堆一些文字。</div></div>
+      <div class="kcard wide"><div class="from"><div class="dot"></div><span>你的 AI 导师</span></div><div class="msg">不着急。今天先从这里开始就好——你每走一步，我都会记得，也会一直在。</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 成长瞬间 -->
+<section class="band moments" id="moments">
+  <div class="wrap">
+    <div class="band-head reveal"><div class="no">YOUR MOMENTS</div><h2>那些一起走过的瞬间</h2><p>学习不是数据，是一个个被记住的时刻</p></div>
+    <div class="mgrid">
+      <div class="moment"><div class="spark"></div><div class="time">某个深夜</div><div class="scene">你在 <b>反向传播</b> 卡了很久。它没有直接给答案，而是一步步问你，直到你自己"啊，原来如此"。</div><div class="tutor">"你看，你自己想通了。"</div></div>
+      <div class="moment"><div class="spark"></div><div class="time">第一次测验通过</div><div class="scene">机器学习基础，你一次就过了 <b>82 分</b>。它悄悄把后面的路，调得更有挑战了一点。</div><div class="tutor">"你比自己想的更强。"</div></div>
+      <div class="moment"><div class="spark"></div><div class="time">想放弃的那天</div><div class="scene">你两天没打开它。再回来时，它没有责备，只说：<b>"没关系，我们从你停下的地方继续。"</b></div><div class="tutor">"我一直在这儿等你。"</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 你正在成长的能力 -->
+<section class="band" id="power">
+  <div class="wrap">
+    <div class="band-head reveal"><div class="no">YOU ARE GROWING</div><h2>你正在长出的，<br>不只是知识</h2><p>它陪你养成的，是让你真正变强的能力</p></div>
+    <div class="power">
+      <div class="pcard" style="--w:78%"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 0-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9l7 0z"/></svg></div><h4>方向感</h4><p>不再迷茫该学什么，你越来越知道自己要去哪里。</p><div class="bar"><i></i></div><div class="grow">这一个月 +24%</div></div>
+      <div class="pcard" style="--w:71%"><div class="ci"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div><h4>独立思考</h4><p>从"背答案"到"会自己推"，你开始真正理解，而不只是记住。</p><div class="bar"><i></i></div><div class="grow">这一个月 +31%</div></div>
+      <div class="pcard" style="--w:85%"><div class="ci"><svg viewBox="0 0 24 24"><path d="M9 3v12a3 3 0 006 0V3M6 8h3M15 8h3"/></svg></div><h4>持久记忆</h4><p>学过的不再转头就忘，间隔重复让知识真正留在你脑子里。</p><div class="bar"><i></i></div><div class="grow">这一个月 +19%</div></div>
+      <div class="pcard" style="--w:66%"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><h4>判断力</h4><p>面对 AI 给的答案，你学会了分辨对错，不再全盘照收。</p><div class="bar"><i></i></div><div class="grow">这一个月 +28%</div></div>
+      <div class="pcard" style="--w:73%"><div class="ci"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M11 8h5M8 11v5"/></svg></div><h4>与 AI 协作</h4><p>你越来越会"用"AI 学习，让它成为你的助力而非拐杖。</p><div class="bar"><i></i></div><div class="grow">这一个月 +35%</div></div>
+      <div class="pcard" style="--w:80%"><div class="ci"><svg viewBox="0 0 24 24"><path d="M4 20c0-6 4-10 8-10s8 4 8 10M12 10V3M9 6l3-3 3 3"/></svg></div><h4>持续成长</h4><p>你养成了每天进步一点的节奏，成长成了一种习惯。</p><div class="bar"><i></i></div><div class="grow">这一个月 +22%</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 AI Memory Reveal 高潮 -->
+<section class="reveal-mem" id="reveal">
+  <div class="wrap">
+    <div class="rm-eyebrow">AI MEMORY · 它记得你走过的每一天</div>
+    <div class="rm-title">还记得，30 天前的你吗？</div>
+    <div class="rm-compare">
+      <div class="rm-side then" id="rm-then">
+        <div class="when">30 天前 · 你们刚认识</div>
+        <div class="rm-score">62</div>
+        <div class="desc">那时的你，方向模糊、容易忘、遇到难点就想放弃。</div>
+        <div class="tags"><span>迷茫</span><span>易忘</span><span>想放弃</span></div>
+      </div>
+      <div class="rm-arrow" id="rm-arrow"><span class="big">→</span>30 天<br>的陪伴</div>
+      <div class="rm-side now" id="rm-now">
+        <div class="when">现在 · 你们一起走过</div>
+        <div class="rm-score">78</div>
+        <div class="desc">现在的你，有方向、记得住、卡住了也愿意自己想通。</div>
+        <div class="tags"><span>有方向</span><span>会思考</span><span>更坚定</span></div>
+      </div>
+    </div>
+    <div class="rm-said" id="rm-said">这一路，<span class="g">它都记得</span>。<br>而你，已经不是 30 天前的你了。</div>
+  </div>
+</section>
+
+<!-- 06 收尾 -->
+<section class="closing">
+  <div class="wrap">
+    <h2 class="reveal">如果，你也想要<br>一位<span class="g">这样懂你的 AI 导师</span>。</h2>
+    <p class="reveal">它会认识你、记得你，陪你一天天，变成更好的自己。</p>
+    <a class="btn reveal" href="#">遇见属于你的 AI 导师 →</a>
+  </div>
+</section>
+
+<footer><div class="wrap">智学中枢 · 你的 AI 学习导师 ｜ 中国软件杯 2026</div></footer>
+
+<script>
+  const sw=document.getElementById('stars');
+  for(let i=0;i<50;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animationDelay=Math.random()*4+'s';sw.appendChild(s);}
+
+  // 逐字
+  function type(el,text,speed,cb){let i=0;const c=document.createElement('span');c.style.cssText='display:inline-block;width:2px;height:.9em;background:#7fb89b;margin-left:2px;vertical-align:-2px;animation:bk 1s step-end infinite';el.appendChild(c);
+    if(!document.getElementById('bks')){const s=document.createElement('style');s.id='bks';s.textContent='@keyframes bk{50%{opacity:0}}';document.head.appendChild(s)}
+    (function step(){if(i<text.length){c.insertAdjacentText('beforebegin',text[i]);i++;setTimeout(step,speed)}else{setTimeout(()=>{c.remove();cb&&cb()},400)}})();}
+
+  // 导师状态机:认识你→注视→回应
+  const mentor=document.getElementById('mentor'),gaze=document.getElementById('gaze'),mstate=document.getElementById('mstate-t');
+  window.addEventListener('load',()=>{
+    // 阶段1:思考(眼神游移)
+    setTimeout(()=>{gaze.style.top='38%';gaze.style.left='44%'},1600);
+    setTimeout(()=>{gaze.style.top='40%';gaze.style.left='56%'},2600);
+    // 阶段2:看见你(眼神回正+回应涟漪)
+    setTimeout(()=>{
+      gaze.style.top='42%';gaze.style.left='50%';
+      mstate.textContent='看见你了';
+      mentor.classList.add('responding');
+    },3600);
+    // 说话
+    setTimeout(()=>type(document.getElementById('said'),'你好，我一直在等你。',48,()=>{
+      type(document.getElementById('head'),'现在，',82,()=>{
+        const g=document.createElement('span');g.className='g';g.textContent='让我慢慢认识你。';
+        const h=document.getElementById('head');h.appendChild(document.createElement('br'));h.appendChild(g);
+        document.getElementById('btn').classList.add('show');
+        mstate.textContent='等待与你交流';
+      });
+    }),4200);
+  });
+  // 鼠标移动时眼神跟随(注视感)
+  document.querySelector('.meet').addEventListener('mousemove',e=>{
+    const r=mentor.getBoundingClientRect();const cx=r.left+r.width/2,cy=r.top+r.height/2;
+    const dx=(e.clientX-cx)/r.width,dy=(e.clientY-cy)/r.height;
+    gaze.style.transform=`translate(calc(-50% + ${dx*16}px),calc(-50% + ${dy*14}px))`;
+  });
+
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
+  document.querySelectorAll('.reveal,.kcard,.moment,.pcard').forEach((el,i)=>{if(!el.classList.contains('reveal'))el.style.transitionDelay=(i%3*.1)+'s';io.observe(el)});
+  // Memory Reveal 依次触发
+  const rio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){
+    setTimeout(()=>document.getElementById('rm-then').classList.add('in'),0);
+    setTimeout(()=>document.getElementById('rm-arrow').classList.add('in'),500);
+    setTimeout(()=>document.getElementById('rm-now').classList.add('in'),900);
+    setTimeout(()=>document.getElementById('rm-said').classList.add('in'),1500);
+    rio.disconnect();
+  }}),{threshold:.4});
+  rio.observe(document.getElementById('reveal'));
+</script>
+</body>
+</html>

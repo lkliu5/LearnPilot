@@ -41,11 +41,13 @@ export default function FeynmanTutor({ kpId, onReview, onComplete }: FeynmanTuto
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
   const [gaps, setGaps] = useState<FeynmanGap[]>([])
-  const [chips, setChips] = useState<string[]>([
-    '它就是把输入加权求和…',
-    '然后经过激活函数输出…',
-    '靠反向传播更新权重…',
-  ])
+  /* 讲解引子 chips 跟随当前知识点（nn 保留精修引子，其余点用 kpName 锚定的通用引子），
+     与苏格拉底导学同口径：不再对任意知识点都显示神经网络的引子。 */
+  const [chips, setChips] = useState<string[]>(() =>
+    kpId === 'nn'
+      ? ['它就是把输入加权求和…', '然后经过激活函数输出…', '靠反向传播更新权重…']
+      : [`「${kpName}」要解决的问题是…`, '它的核心原理是…', '举个实际例子…'],
+  )
   const sessionRef = useRef<string | undefined>(undefined)
 
   const send = () => {

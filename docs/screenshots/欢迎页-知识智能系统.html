@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智学中枢 · Personal Knowledge Intelligence</title>
+<style>
+  :root{
+    --ivory:#f4f2ec;      /* 象牙白背景 */
+    --ivory2:#eeece4;
+    --panel:#fbfaf6;
+    --ink:#1e2a33;        /* 深蓝灰文字 */
+    --ink2:#4a5862;
+    --dim:#8994a0;
+    --silver:#b9c2cc;     /* 银色结构 */
+    --silver-l:#d4dae0;
+    --cyan:#2fb6c9;       /* AI 青高光 */
+    --cyan-d:#1f8a9a;
+    --steel:#3a5568;      /* 钢蓝 */
+    --line:rgba(30,42,51,.1);
+    --line2:rgba(30,42,51,.06);
+    --radius:18px;
+    --shadow:0 24px 70px -34px rgba(30,42,51,.32);
+    --shadow-sm:0 14px 40px -24px rgba(30,42,51,.22);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --font:"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",-apple-system,system-ui,sans-serif;
+    --mono:"SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+  body{background:var(--ivory);color:var(--ink);font-family:var(--font);line-height:1.65;overflow-x:hidden;letter-spacing:-.01em}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 40px}
+
+  /* 精密网格背景 */
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+    background-image:linear-gradient(rgba(30,42,51,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(30,42,51,.035) 1px,transparent 1px);
+    background-size:52px 52px;-webkit-mask:radial-gradient(ellipse 100% 80% at 50% 30%,#000,transparent 78%)}
+
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);background:rgba(244,242,236,.82);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px;max-width:1200px;margin:0 auto;padding:0 40px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:600;font-size:16px}
+  .brand small{display:block;font-size:8px;color:var(--dim);letter-spacing:1.5px;font-weight:500}
+  .navlinks{display:flex;gap:32px;font-size:13.5px;color:var(--ink2);font-weight:450}
+  .navlinks a:hover{color:var(--cyan-d)}
+  .nav-cta{font-size:13px;font-weight:600;color:#fff;background:var(--steel);padding:9px 20px;border-radius:10px;transition:all .5s var(--ease)}
+  .nav-cta:hover{background:var(--cyan-d);transform:translateY(-2px)}
+  section{position:relative;z-index:2}
+
+  /* ============ Hero:Knowledge Intelligence Awakening ============ */
+  .hero{min-height:92vh;display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center;padding:50px 0}
+  .hero-l .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.15em;color:var(--cyan-d);margin-bottom:26px;display:flex;align-items:center;gap:10px;opacity:0;animation:up .9s var(--ease) .2s forwards}
+  .hero-l .eyebrow::before{content:"";width:28px;height:1px;background:var(--cyan)}
+  .hero-l h1{font-size:52px;line-height:1.18;font-weight:600;letter-spacing:-.03em;margin-bottom:24px;opacity:0;animation:up .9s var(--ease) .3s forwards}
+  .hero-l h1 .c{color:var(--cyan-d)}
+  .hero-l .lead{font-size:17px;color:var(--ink2);margin-bottom:34px;max-width:440px;line-height:1.7;opacity:0;animation:up .9s var(--ease) .42s forwards}
+  /* 学习画像读出 */
+  .profile{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:6px;margin-bottom:34px;max-width:440px;opacity:0;animation:up .9s var(--ease) .54s forwards}
+  .prow{display:flex;align-items:center;gap:16px;padding:13px 16px;border-radius:10px;font-size:14px}
+  .prow+.prow{border-top:1px solid var(--line2)}
+  .prow .k{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.05em;min-width:88px;text-transform:uppercase}
+  .prow .v{color:var(--ink);font-weight:500;display:flex;align-items:center;gap:8px}
+  .prow .v .badge{font-size:11px;padding:2px 9px;border-radius:6px;background:rgba(47,182,201,.12);color:var(--cyan-d);font-family:var(--mono)}
+  .prow.analyzing .v{color:var(--cyan-d)}
+  .hero-l .btn{display:inline-flex;align-items:center;gap:11px;background:var(--steel);color:#fff;padding:15px 32px;border-radius:12px;font-size:15px;font-weight:600;transition:all .5s var(--ease);opacity:0;animation:up .9s var(--ease) .66s forwards}
+  .hero-l .btn:hover{background:var(--cyan-d);transform:translateY(-3px);box-shadow:0 16px 40px -12px rgba(47,182,201,.5)}
+  .hero-l .btn .a{transition:transform .5s var(--ease)}.hero-l .btn:hover .a{transform:translateX(5px)}
+  @keyframes up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+  /* AI Knowledge Core:知识晶体 + 神经网络 + 图谱节点 */
+  .core-stage{position:relative;height:540px;display:grid;place-items:center;opacity:0;animation:up 1.4s var(--ease) .5s forwards}
+  .kcore{position:relative;width:460px;height:460px}
+  .kcore svg{position:absolute;inset:0;width:100%;height:100%}
+  /* 晶体多边形 */
+  .crystal{fill:rgba(47,182,201,.05);stroke:var(--cyan);stroke-width:1;opacity:.6;animation:cryPulse 6s ease-in-out infinite}
+  @keyframes cryPulse{0%,100%{opacity:.4}50%{opacity:.7}}
+  .net-line{stroke:var(--silver);stroke-width:1;opacity:.5}
+  .net-line.active{stroke:var(--cyan);opacity:.8;stroke-dasharray:3 3;animation:flow 3s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-30}}
+  .knode{fill:var(--panel);stroke:var(--steel);stroke-width:1.5}
+  .knode.hl{fill:var(--cyan);stroke:var(--cyan-d)}
+  .kcore .nlabel{position:absolute;font-family:var(--mono);font-size:11px;color:var(--ink2);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 10px;box-shadow:var(--shadow-sm);white-space:nowrap;animation:bob 6s ease-in-out infinite}
+  .kcore .nlabel.hl{color:var(--cyan-d);border-color:rgba(47,182,201,.4)}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  /* 中央核心 */
+  .kcenter{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:120px;height:120px;border-radius:24px;
+    background:linear-gradient(145deg,rgba(251,250,246,.9),rgba(238,236,228,.7));backdrop-filter:blur(10px);
+    border:1px solid rgba(47,182,201,.3);display:grid;place-items:center;box-shadow:0 20px 50px -20px rgba(47,182,201,.4),inset 0 1px 0 rgba(255,255,255,.6);
+    animation:coreFloat 5s ease-in-out infinite;z-index:3}
+  @keyframes coreFloat{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-52%) scale(1.03)}}
+  .kcenter .pulse{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--cyan-d));position:relative;animation:corePulse 2.4s ease-in-out infinite}
+  @keyframes corePulse{0%,100%{box-shadow:0 0 0 0 rgba(47,182,201,.4)}50%{box-shadow:0 0 0 12px rgba(47,182,201,0)}}
+  .kcenter .pulse::after{content:"";position:absolute;inset:0;display:grid;place-items:center}
+  .kcenter .lab{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;letter-spacing:.08em}
+
+  /* ============ 通用 ============ */
+  .band{padding:120px 0}
+  .band-head{margin-bottom:64px;max-width:640px}
+  .band-head.center{text-align:center;margin-left:auto;margin-right:auto}
+  .band-head .no{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--cyan-d);font-weight:500;margin-bottom:16px}
+  .band-head h2{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.25}
+  .band-head p{color:var(--ink2);margin-top:16px;font-size:16.5px}
+
+  /* ============ Knowledge Evolution Timeline ============ */
+  .evo{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;position:relative}
+  .evo::before{content:"";position:absolute;top:52px;left:16%;right:16%;height:1px;background:repeating-linear-gradient(90deg,var(--silver),var(--silver) 4px,transparent 4px,transparent 8px)}
+  .ecard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:30px;opacity:0;transform:translateY(30px);transition:.8s var(--ease);position:relative}
+  .ecard.in{opacity:1;transform:none}
+  .ecard .day{font-family:var(--mono);font-size:13px;color:var(--cyan-d);font-weight:600;margin-bottom:6px;position:relative;z-index:2}
+  .ecard .marker{width:44px;height:44px;border-radius:12px;background:var(--ivory);border:1px solid var(--line);display:grid;place-items:center;margin-bottom:20px;position:relative;z-index:2}
+  .ecard .marker svg{width:22px;height:22px;stroke:var(--steel);fill:none;stroke-width:1.6}
+  .ecard h4{font-size:19px;font-weight:600;margin-bottom:10px}
+  .ecard p{font-size:14px;color:var(--ink2);line-height:1.7;margin-bottom:18px}
+  .ecard .metric{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .ecard .metric .bar{flex:1;height:5px;background:var(--ivory2);border-radius:5px;overflow:hidden}
+  .ecard .metric .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--cyan-d));border-radius:5px;transition:width 1.4s var(--ease) .3s}
+  .ecard.in .metric .bar i{width:var(--w)}
+
+  /* ============ My Knowledge Graph ============ */
+  .kg{background:var(--ivory2)}
+  .kg-wrap{display:grid;grid-template-columns:.9fr 1.1fr;gap:60px;align-items:center}
+  .kg-graph{position:relative;height:480px}
+  .kg-graph svg{position:absolute;inset:0;width:100%;height:100%}
+  .kg-edge{stroke:var(--silver);stroke-width:1.2;opacity:.6}
+  .kg-edge.active{stroke:var(--cyan);opacity:.7;stroke-dasharray:4 4;animation:flow 3s linear infinite}
+  .kgnode{position:absolute;transform:translate(-50%,-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 18px;box-shadow:var(--shadow-sm);transition:.4s var(--ease);cursor:default}
+  .kgnode:hover{border-color:var(--cyan);box-shadow:0 0 30px -6px rgba(47,182,201,.4);z-index:5}
+  .kgnode b{font-size:14px;font-weight:600;display:block}
+  .kgnode span{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .kgnode.core{background:linear-gradient(145deg,var(--steel),#2a4051);border-color:var(--steel)}
+  .kgnode.core b{color:#fff}.kgnode.core span{color:var(--cyan)}
+  .kgnode.mastered{border-color:rgba(47,182,201,.4)}
+  .kgnode.mastered .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cyan);margin-right:6px}
+
+  /* ============ 底部价值 ============ */
+  .value{padding:0 0 110px}
+  .value-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:36px;align-items:stretch}
+  .value-l{border-radius:var(--radius);position:relative;overflow:hidden;background:linear-gradient(140deg,var(--steel),#2a4051);padding:52px 46px;display:flex;flex-direction:column;justify-content:center;color:#fff;min-height:280px}
+  .value-l::after{content:"";position:absolute;inset:0;opacity:.3;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:32px 32px}
+  .value-l h2{font-size:32px;font-weight:600;line-height:1.35;margin-bottom:16px;position:relative}
+  .value-l h2 .c{color:var(--cyan)}
+  .value-l p{font-size:15px;color:rgba(255,255,255,.7);margin-bottom:30px;position:relative}
+  .value-l .btn{align-self:flex-start;display:inline-flex;align-items:center;gap:10px;background:#fff;color:var(--steel);padding:14px 30px;border-radius:12px;font-size:14px;font-weight:600;transition:all .5s var(--ease);position:relative}
+  .value-l .btn:hover{transform:translateY(-3px);box-shadow:0 16px 40px -12px rgba(0,0,0,.4)}
+  .value-r{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .vstat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px;display:flex;flex-direction:column;transition:.4s var(--ease)}
+  .vstat:hover{transform:translateY(-4px);box-shadow:var(--shadow-sm);border-color:rgba(47,182,201,.3)}
+  .vstat .ico{width:40px;height:40px;border-radius:11px;background:var(--ivory2);display:grid;place-items:center;margin-bottom:16px}
+  .vstat .ico svg{width:20px;height:20px;stroke:var(--cyan-d);fill:none;stroke-width:1.7}
+  .vstat .num{font-size:26px;font-weight:700;color:var(--ink);font-family:var(--mono)}
+  .vstat .lbl{font-size:12.5px;color:var(--ink2);margin-top:4px}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--dim);font-size:13px;font-family:var(--mono);letter-spacing:.03em}
+  .reveal{opacity:0;transform:translateY(30px);transition:.9s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+
+  @media(max-width:920px){
+    .hero{grid-template-columns:1fr;gap:30px}.hero-l h1{font-size:36px}
+    .core-stage{height:400px}.kcore{width:340px;height:340px}
+    .evo{grid-template-columns:1fr;gap:16px}.evo::before{display:none}
+    .kg-wrap{grid-template-columns:1fr;gap:30px}.kg-graph{height:400px}
+    .value-grid{grid-template-columns:1fr}
+    .navlinks{display:none}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="nav-in">
+  <div class="brand">
+    <svg width="32" height="32" viewBox="0 0 32 32"><rect x="13" y="13" width="6" height="6" rx="1.5" fill="#2fb6c9"/><circle cx="16" cy="5" r="2.4" fill="#3a5568"/><circle cx="27" cy="16" r="2.4" fill="#3a5568"/><circle cx="16" cy="27" r="2.4" fill="#3a5568"/><circle cx="5" cy="16" r="2.4" fill="#3a5568"/><path d="M16 8v5M24 16h-5M16 24v-5M8 16h5" stroke="#b9c2cc" stroke-width="1.2"/></svg>
+    <div>智学中枢<small>KNOWLEDGE INTELLIGENCE</small></div>
+  </div>
+  <div class="navlinks"><a href="#evo">知识演进</a><a href="#kg">我的知识图谱</a><a href="#value">系统能力</a></div>
+  <a class="nav-cta" href="#">进入系统</a>
+</div></nav>
+
+<!-- Hero -->
+<section class="hero wrap">
+  <div class="hero-l">
+    <div class="eyebrow">KNOWLEDGE INTELLIGENCE · AWAKENING</div>
+    <h1>你好，我正在<br><span class="c">理解你的学习路径</span>。</h1>
+    <p class="lead">我不是一个搜索框，而是一个正在建立你专属知识模型的 AI 学习系统——分析你的画像，定位你的坐标，为你规划下一步。</p>
+    <div class="profile">
+      <div class="prow"><div class="k">Direction</div><div class="v">机器学习 <span class="badge">主方向</span></div></div>
+      <div class="prow"><div class="k">Level</div><div class="v">基础阶段 · 综合能力 <span class="badge">62 / 100</span></div></div>
+      <div class="prow analyzing"><div class="k">Next</div><div class="v">深度学习 · 正在为你构建学习路径…</div></div>
+    </div>
+    <a class="btn" href="#">构建我的知识模型 <span class="a">→</span></a>
+  </div>
+  <div class="core-stage">
+    <div class="kcore">
+      <svg viewBox="0 0 460 460">
+        <!-- 晶体结构 -->
+        <polygon class="crystal" points="230,60 370,150 370,310 230,400 90,310 90,150"/>
+        <polygon class="crystal" points="230,110 320,170 320,290 230,350 140,290 140,170" style="animation-delay:-2s"/>
+        <!-- 神经网络连线 -->
+        <line class="net-line active" x1="230" y1="230" x2="110" y2="110"/>
+        <line class="net-line active" x1="230" y1="230" x2="350" y2="120"/>
+        <line class="net-line" x1="230" y1="230" x2="90" y2="250"/>
+        <line class="net-line active" x1="230" y1="230" x2="370" y2="270"/>
+        <line class="net-line" x1="230" y1="230" x2="160" y2="380"/>
+        <line class="net-line active" x1="230" y1="230" x2="310" y2="370"/>
+        <line class="net-line" x1="110" y1="110" x2="350" y2="120"/>
+        <line class="net-line" x1="90" y1="250" x2="160" y2="380"/>
+        <!-- 图谱节点 -->
+        <circle class="knode hl" cx="110" cy="110" r="7"/>
+        <circle class="knode" cx="350" cy="120" r="6"/>
+        <circle class="knode hl" cx="90" cy="250" r="6"/>
+        <circle class="knode" cx="370" cy="270" r="7"/>
+        <circle class="knode" cx="160" cy="380" r="6"/>
+        <circle class="knode hl" cx="310" cy="370" r="6"/>
+      </svg>
+      <div class="kcenter">
+        <div class="pulse"></div>
+        <div class="lab">KNOWLEDGE CORE</div>
+      </div>
+      <div class="nlabel hl" style="top:14%;left:6%">机器学习</div>
+      <div class="nlabel" style="top:18%;right:2%;animation-delay:-2s">数学基础</div>
+      <div class="nlabel hl" style="top:52%;left:-4%;animation-delay:-3s">已掌握 · 3</div>
+      <div class="nlabel" style="top:56%;right:-2%;animation-delay:-1s">深度学习 · 目标</div>
+      <div class="nlabel" style="bottom:12%;right:4%;animation-delay:-4s">学习偏好 · 已建模</div>
+    </div>
+  </div>
+</section>
+
+<!-- Knowledge Evolution Timeline -->
+<section class="band wrap" id="evo">
+  <div class="band-head center reveal">
+    <div class="no">KNOWLEDGE EVOLUTION TIMELINE</div>
+    <h2>你的知识演进，被完整记录</h2>
+    <p>像一份科研成长档案，追踪你从认知到实践的每一步</p>
+  </div>
+  <div class="evo">
+    <div class="ecard" style="--w:35%"><div class="day">DAY 01</div><div class="marker"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div><h4>基础认知</h4><p>系统建立你的初始画像：知识起点、优势维度、学习偏好。定位综合能力 62 分。</p><div class="metric">知识覆盖 <div class="bar"><i></i></div> 35%</div></div>
+    <div class="ecard" style="--w:62%"><div class="day">DAY 07</div><div class="marker"><svg viewBox="0 0 24 24"><path d="M4 18l5-5 3 3 8-8M17 8h4v4"/></svg></div><h4>理论理解</h4><p>攻克机器学习核心原理，知识图谱扩展至 12 个节点，路径动态重规划。</p><div class="metric">知识覆盖 <div class="bar"><i></i></div> 62%</div></div>
+    <div class="ecard" style="--w:88%"><div class="day">DAY 30</div><div class="marker"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 12l2 2 4-4"/></svg></div><h4>项目实践</h4><p>完成首个深度学习项目，综合能力跃升至 78 分，进入进阶研究阶段。</p><div class="metric">知识覆盖 <div class="bar"><i></i></div> 88%</div></div>
+  </div>
+</section>
+
+<!-- My Knowledge Graph -->
+<section class="band kg" id="kg">
+  <div class="wrap kg-wrap">
+    <div class="kg-graph reveal">
+      <svg viewBox="0 0 460 460" preserveAspectRatio="none">
+        <line class="kg-edge active" x1="50%" y1="50%" x2="26%" y2="18%" vector-effect="non-scaling-stroke"/>
+        <line class="kg-edge active" x1="50%" y1="50%" x2="78%" y2="22%" vector-effect="non-scaling-stroke"/>
+        <line class="kg-edge" x1="50%" y1="50%" x2="16%" y2="54%" vector-effect="non-scaling-stroke"/>
+        <line class="kg-edge active" x1="50%" y1="50%" x2="84%" y2="58%" vector-effect="non-scaling-stroke"/>
+        <line class="kg-edge" x1="50%" y1="50%" x2="34%" y2="86%" vector-effect="non-scaling-stroke"/>
+        <line class="kg-edge" x1="50%" y1="50%" x2="70%" y2="84%" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div class="kgnode core" style="top:50%;left:50%"><b>我的知识网络</b><span>KNOWLEDGE GRAPH</span></div>
+      <div class="kgnode mastered" style="top:18%;left:26%"><b><span class="dot"></span>数学</b><span>MASTERED</span></div>
+      <div class="kgnode mastered" style="top:22%;left:78%"><b><span class="dot"></span>编程</b><span>MASTERED</span></div>
+      <div class="kgnode" style="top:54%;left:16%"><b>算法</b><span>IN PROGRESS</span></div>
+      <div class="kgnode mastered" style="top:58%;left:84%"><b><span class="dot"></span>机器学习</b><span>MASTERED</span></div>
+      <div class="kgnode" style="top:86%;left:34%"><b>深度学习</b><span>TARGET</span></div>
+      <div class="kgnode" style="top:84%;left:70%"><b>科研能力</b><span>EMERGING</span></div>
+    </div>
+    <div>
+      <div class="band-head reveal" style="margin-bottom:32px">
+        <div class="no">MY KNOWLEDGE GRAPH</div>
+        <h2>不是课程清单，<br>而是你的知识网络</h2>
+        <p>系统为你构建一张动态知识图谱——哪些已掌握、哪些进行中、哪些是下一个目标，一目了然。它随你的学习实时演化。</p>
+      </div>
+      <div class="reveal" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--ink2)"><span style="width:8px;height:8px;border-radius:50%;background:var(--cyan);flex-shrink:0"></span>已掌握节点会点亮，成为新知识的支点</div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--ink2)"><span style="width:8px;height:8px;border-radius:50%;background:var(--silver);flex-shrink:0"></span>进行中与目标节点，标注你的下一步坐标</div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--ink2)"><span style="width:8px;height:8px;border-radius:50%;background:var(--steel);flex-shrink:0"></span>节点间的依赖关系，构成你的专属学习路径</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 底部价值 -->
+<section class="value wrap" id="value">
+  <div class="value-grid">
+    <div class="value-l reveal">
+      <h2>一个未来学习者，<br>应该拥有一套<span class="c">属于自己的 AI 知识系统</span>。</h2>
+      <p>它理解你的知识体系，记录你的每一次演进，陪你走向真正的研究能力。</p>
+      <a class="btn" href="#">进入知识智能系统 →</a>
+    </div>
+    <div class="value-r">
+      <div class="vstat reveal"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="8.5" y="14" width="7" height="7" rx="1.5"/><path d="M6.5 10v4M17.5 10v4"/></svg></div><div class="num">78</div><div class="lbl">知识节点 · 7 大领域</div></div>
+      <div class="vstat reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="num">&lt;5%</div><div class="lbl">内容幻觉率</div></div>
+      <div class="vstat reveal"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5v2"/></svg></div><div class="num">6+</div><div class="lbl">智能体协同</div></div>
+      <div class="vstat reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 18l5-6 3 3 8-9M18 6h3v3"/></svg></div><div class="num">100%</div><div class="lbl">路径可溯源</div></div>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">智学中枢 · PERSONAL KNOWLEDGE INTELLIGENCE ｜ 中国软件杯 2026</div></footer>
+
+<script>
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.14});
+  document.querySelectorAll('.reveal,.ecard').forEach((el,i)=>{if(el.classList.contains('ecard'))el.style.transitionDelay=(i*.12)+'s';io.observe(el)});
+</script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智学中枢 · AI Learning OS</title>
+<style>
+  :root{
+    --bg:#e9e2d4; --bg-warm:#ede7da; --paper:#f5f1e8; --paper2:#faf8f2;
+    --ink:#26332f; --ink2:#5c6862; --dim:#93897a;
+    --accent:#2c3e42; --sage:#6f9280; --sage-l:#8bab97; --clay:#b5824e; --clay-l:#ca9a6a;
+    --line:rgba(38,51,47,.09);
+    --radius:24px;
+    --shadow:0 24px 80px -32px rgba(38,51,47,.35);
+    --shadow-sm:0 12px 40px -20px rgba(38,51,47,.28);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --dur:.6s;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.6;overflow-x:hidden;letter-spacing:-.01em}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 40px}
+
+  /* 纸纹背景 */
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+    background:radial-gradient(circle at 20% 15%,rgba(111,146,128,.1),transparent 40%),radial-gradient(circle at 85% 60%,rgba(181,130,78,.08),transparent 40%)}
+
+  /* 导航 */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);background:rgba(233,226,212,.7);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px;max-width:1140px;margin:0 auto;padding:0 40px}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
+  .mark{width:34px;height:34px;position:relative;display:grid;place-items:center}
+  .mark svg{width:34px;height:34px}
+  .brand small{display:block;font-size:8px;color:var(--dim);letter-spacing:2px;font-weight:500}
+  .navlinks{display:flex;gap:34px;font-size:14px;color:var(--ink2);font-weight:450}
+  .navlinks a{transition:color .3s var(--ease)}
+  .navlinks a:hover{color:var(--ink)}
+  .nav-cta{font-size:13px;font-weight:500;color:var(--paper);background:var(--accent);padding:9px 20px;border-radius:12px;transition:all var(--dur) var(--ease)}
+  .nav-cta:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+
+  section{position:relative;z-index:2}
+
+  /* ===== 第一屏 Hero:左句子 右活工作空间 ===== */
+  .hero{padding:100px 0 120px;display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center;min-height:82vh}
+  .hero-l{opacity:0;animation:rise 1s var(--ease) .1s forwards}
+  .hero-l h1{font-size:52px;line-height:1.18;font-weight:600;letter-spacing:-.03em;margin-bottom:28px}
+  .hero-l h1 .soft{color:var(--sage)}
+  .hero-l p{font-size:17px;color:var(--ink2);line-height:1.75;margin-bottom:36px;max-width:400px;font-weight:400}
+  .hero-l .btn{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:var(--paper);padding:15px 30px;border-radius:15px;font-size:15px;font-weight:500;transition:all var(--dur) var(--ease)}
+  .hero-l .btn:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .hero-l .btn .a{transition:transform var(--dur) var(--ease)}
+  .hero-l .btn:hover .a{transform:translateX(4px)}
+  .hero-l .hint{margin-top:20px;font-size:13px;color:var(--dim);display:flex;align-items:center;gap:8px}
+  .hero-l .hint b{color:var(--sage);font-weight:500}
+
+  /* 活的 AI 工作空间(非截图) */
+  .workspace{opacity:0;animation:rise 1s var(--ease) .35s forwards;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px;position:relative;overflow:hidden}
+  .ws-top{display:flex;align-items:center;gap:12px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .ws-avatar{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--sage),var(--accent));display:grid;place-items:center;position:relative}
+  .ws-avatar::after{content:"";position:absolute;inset:-4px;border-radius:16px;border:1.5px solid var(--sage);opacity:.4;animation:ripple 3s ease-out infinite}
+  @keyframes ripple{0%{transform:scale(1);opacity:.4}100%{transform:scale(1.25);opacity:0}}
+  .ws-avatar svg{width:22px;height:22px;stroke:var(--paper);fill:none;stroke-width:1.6}
+  .ws-top b{font-size:15px;display:block}
+  .ws-top .live{font-size:11px;color:var(--sage);display:flex;align-items:center;gap:5px;margin-top:2px}
+  .ws-top .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--sage);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .ws-label{font-size:12px;color:var(--dim);margin-bottom:8px}
+  .ws-course{font-size:20px;font-weight:600;margin-bottom:16px}
+  .ws-bar{height:8px;background:var(--bg-warm);border-radius:8px;overflow:hidden;margin-bottom:8px}
+  .ws-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sage),var(--sage-l));border-radius:8px;animation:fill 2s var(--ease) 1s forwards}
+  @keyframes fill{to{width:82%}}
+  .ws-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);margin-bottom:22px}
+  .ws-meta b{color:var(--sage);font-weight:600}
+  .ws-analyzing{background:var(--bg-warm);border-radius:14px;padding:14px 16px;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .ws-dots{display:flex;gap:4px}
+  .ws-dots span{width:6px;height:6px;border-radius:50%;background:var(--sage);animation:think 1.4s infinite}
+  .ws-dots span:nth-child(2){animation-delay:.2s}.ws-dots span:nth-child(3){animation-delay:.4s}
+  @keyframes think{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  .ws-cta{width:100%;background:var(--accent);color:var(--paper);border:none;padding:14px;border-radius:14px;font-size:14px;font-weight:500;cursor:pointer;transition:all .3s var(--ease);display:flex;align-items:center;justify-content:center;gap:8px}
+  .ws-cta:hover{background:var(--ink)}
+
+  @keyframes rise{to{opacity:1;transform:none}}
+  .hero-l,.workspace{transform:translateY(40px)}
+
+  /* ===== 通用分区 ===== */
+  .band{padding:130px 0}
+  .band-head{text-align:center;margin-bottom:80px;max-width:640px;margin-left:auto;margin-right:auto}
+  .band-head .eye{font-size:12px;letter-spacing:.16em;color:var(--clay);font-weight:600;text-transform:uppercase;margin-bottom:20px}
+  .band-head h2{font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.25}
+  .band-head p{color:var(--ink2);margin-top:18px;font-size:17px;font-weight:400}
+
+  /* ===== 第二屏:学习旅程 ===== */
+  .journey{max-width:560px;margin:0 auto;position:relative}
+  .journey::before{content:"";position:absolute;left:31px;top:20px;bottom:20px;width:2px;background:linear-gradient(var(--sage),var(--clay))}
+  .jstep{display:flex;align-items:center;gap:26px;padding:18px 0;position:relative;opacity:0;transform:translateX(-20px);transition:.7s var(--ease)}
+  .jstep.in{opacity:1;transform:none}
+  .jstep .node{width:64px;height:64px;border-radius:20px;background:var(--paper);border:1px solid var(--line);display:grid;place-items:center;flex-shrink:0;box-shadow:var(--shadow-sm);z-index:2;transition:.4s var(--ease)}
+  .jstep:hover .node{transform:scale(1.08);border-color:var(--sage)}
+  .jstep .node svg{width:26px;height:26px;stroke:var(--accent);fill:none;stroke-width:1.6}
+  .jstep .txt b{font-size:18px;font-weight:600;display:block;margin-bottom:3px}
+  .jstep .txt span{font-size:14px;color:var(--ink2)}
+
+  /* ===== 第三屏:AI Core 能力星系 ===== */
+  .galaxy{position:relative;width:100%;max-width:720px;height:560px;margin:0 auto}
+  .core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:150px;height:150px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,var(--sage-l),var(--sage) 50%,var(--accent) 100%);
+    display:grid;place-items:center;box-shadow:0 20px 60px -15px rgba(44,62,66,.5),inset 0 2px 14px rgba(255,255,255,.3);
+    animation:coreBreathe 5s ease-in-out infinite;z-index:5}
+  @keyframes coreBreathe{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+  .core::before{content:"";position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,rgba(111,146,128,.3),transparent 65%);animation:coreBreathe 5s ease-in-out infinite}
+  .core b{color:var(--paper);font-size:17px;font-weight:600;z-index:2;letter-spacing:.02em}
+  .core small{color:rgba(245,241,232,.75);font-size:10px;display:block;text-align:center;margin-top:2px}
+  .node-c{position:absolute;width:132px;padding:16px 18px;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-sm);text-align:center;transition:.45s var(--ease);z-index:3;cursor:default}
+  .node-c:hover{transform:scale(1.06);border-color:var(--sage);box-shadow:var(--shadow)}
+  .node-c .ci{width:34px;height:34px;border-radius:10px;background:rgba(111,146,128,.12);display:grid;place-items:center;margin:0 auto 8px;transition:.4s var(--ease)}
+  .node-c:hover .ci{background:var(--sage)}
+  .node-c:hover .ci svg{stroke:var(--paper)}
+  .node-c .ci svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:1.7;transition:.4s var(--ease)}
+  .node-c b{font-size:13px;font-weight:600;display:block}
+  .node-c span{font-size:11px;color:var(--ink2)}
+  .n1{top:6%;left:12%}.n2{top:6%;right:12%}
+  .n3{top:50%;left:-1%;transform:translateY(-50%)}.n4{top:50%;right:-1%;transform:translateY(-50%)}
+  .n5{bottom:6%;left:12%}.n6{bottom:6%;right:12%}
+  .n3:hover,.n4:hover{transform:translateY(-50%) scale(1.06)}
+  .gline{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+  .gline line{stroke:var(--sage);stroke-width:1.5;stroke-dasharray:4 5;opacity:.35;animation:dash 20s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-100}}
+
+  /* ===== 第四屏:产品故事 ===== */
+  .story{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .scard{background:var(--paper);border:1px solid var(--line);border-radius:18px;overflow:hidden;transition:.5s var(--ease);opacity:0;transform:translateY(30px)}
+  .scard.in{opacity:1;transform:none}
+  .scard:hover{transform:translateY(-8px);box-shadow:var(--shadow)}
+  .scard .cap{aspect-ratio:3/4;background:linear-gradient(160deg,rgba(111,146,128,.14),rgba(181,130,78,.08));display:grid;place-items:center;color:var(--dim);font-size:11px;text-align:center;padding:14px;position:relative}
+  .scard .step-n{position:absolute;top:12px;left:12px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--paper);display:grid;place-items:center;font-size:12px;font-weight:600}
+  .scard .lbl{padding:16px;font-size:13px;font-weight:600;text-align:center}
+
+  /* ===== 第五屏:教育感收尾 ===== */
+  .closing{padding:160px 0;text-align:center;position:relative}
+  .closing::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 50%,rgba(111,146,128,.1),transparent 70%)}
+  .closing h2{font-size:52px;font-weight:600;letter-spacing:-.03em;line-height:1.3;position:relative;margin-bottom:16px}
+  .closing h2 .g{color:var(--sage)}
+  .closing p{font-size:19px;color:var(--ink2);position:relative;margin-bottom:44px}
+  .closing .btn{position:relative;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:var(--paper);padding:17px 40px;border-radius:16px;font-size:16px;font-weight:500;transition:all var(--dur) var(--ease)}
+  .closing .btn:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--dim);font-size:13px}
+
+  .reveal{opacity:0;transform:translateY(34px);transition:.85s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+
+  @media(max-width:900px){
+    .hero{grid-template-columns:1fr;gap:50px;padding:60px 0}
+    .hero-l h1{font-size:38px}
+    .story{grid-template-columns:1fr 1fr}
+    .galaxy{height:auto;display:flex;flex-direction:column;gap:16px}
+    .core{position:relative;transform:none;margin:0 auto}
+    .node-c{position:relative!important;width:100%;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;transform:none!important}
+    .gline{display:none}
+    .navlinks{display:none}
+    .closing h2{font-size:36px}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="nav-in">
+  <div class="brand">
+    <div class="mark"><svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="none" stroke="#2c3e42" stroke-width="1.5"/><circle cx="17" cy="10" r="3" fill="#6f9280"/><circle cx="11" cy="21" r="3" fill="#b5824e"/><circle cx="23" cy="21" r="3" fill="#2c3e42"/><path d="M17 10L11 21M17 10L23 21M11 21L23 21" stroke="#6f9280" stroke-width="1.2" opacity=".5"/></svg></div>
+    <div>智学中枢<small>AI LEARNING OS</small></div>
+  </div>
+  <div class="navlinks"><a href="#journey">学习旅程</a><a href="#core">AI 能力</a><a href="#story">产品一览</a></div>
+  <a class="nav-cta" href="#">进入平台</a>
+</div></nav>
+
+<!-- 第一屏 -->
+<section class="hero wrap">
+  <div class="hero-l">
+    <h1>每个人，都该拥有<br>一位<span class="soft">属于自己的</span><br>AI 导师。</h1>
+    <p>它读懂你的基础与偏好，为你规划路径、生成资源、在你卡住时启发思考——像一位真正懂你的老师。</p>
+    <a class="btn" href="#">开始学习 <span class="a">→</span></a>
+    <div class="hint"><b>●</b> 此刻，已有 AI 在为学习者规划专属路径</div>
+  </div>
+  <div class="workspace">
+    <div class="ws-top">
+      <div class="ws-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/></svg></div>
+      <div><b>AI 学情管家</b><span class="live">正在陪你学习</span></div>
+    </div>
+    <div class="ws-label">今天建议学习</div>
+    <div class="ws-course">深度学习原理</div>
+    <div class="ws-bar"><i></i></div>
+    <div class="ws-meta"><span>已掌握 <b>82%</b></span><span>预计还需 45 分钟</span></div>
+    <div class="ws-analyzing"><div class="ws-dots"><span></span><span></span><span></span></div>AI 正在分析你的薄弱点…</div>
+    <button class="ws-cta">继续学习 →</button>
+  </div>
+</section>
+
+<!-- 第二屏:旅程 -->
+<section class="band" id="journey">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="eye">Your Journey</div>
+      <h2>你的学习，将这样发生</h2>
+      <p>不是一堆功能，而是一段被 AI 全程陪伴的旅程</p>
+    </div>
+    <div class="journey">
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 15v.5"/></svg></div><div class="txt"><b>认识你</b><span>对话 + 做题，读懂你的真实基础</span></div></div>
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M4 18l5-5 3 3 8-8"/><path d="M17 8h4v4"/></svg></div><div class="txt"><b>理解你的能力</b><span>行为实测画像，而非自我感觉</span></div></div>
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 12h9M3 18h13"/><circle cx="20" cy="6" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="20" cy="18" r="1.5"/></svg></div><div class="txt"><b>规划学习路径</b><span>能力定内容、偏好定形式，带时间线</span></div></div>
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" opacity=".3"/><path d="M6 8l2 2M16 8l-2 2M8 16h8"/><circle cx="12" cy="12" r="9"/></svg></div><div class="txt"><b>生成学习资源</b><span>讲义 / 图解 / 视频 / 闪卡，按需生成</span></div></div>
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z"/></svg></div><div class="txt"><b>陪你完成学习</b><span>卡住就能问，苏格拉底式启发</span></div></div>
+      <div class="jstep"><div class="node"><svg viewBox="0 0 24 24"><path d="M12 2l2.5 7h7l-5.5 4 2 7-6-4.5-6 4.5 2-7L2.5 9h7z"/></svg></div><div class="txt"><b>不断成长</b><span>掌握式学习，达标才进阶</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 第三屏:AI Core -->
+<section class="band" id="core" style="background:var(--bg-warm)">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="eye">AI Core</div>
+      <h2>一个 AI 中枢，<br>统筹你的整个学习</h2>
+      <p>所有能力围绕一个核心协同运转</p>
+    </div>
+    <div class="galaxy reveal">
+      <svg class="gline"><line x1="50%" y1="50%" x2="20%" y2="16%"/><line x1="50%" y1="50%" x2="80%" y2="16%"/><line x1="50%" y1="50%" x2="7%" y2="50%"/><line x1="50%" y1="50%" x2="93%" y2="50%"/><line x1="50%" y1="50%" x2="20%" y2="84%"/><line x1="50%" y1="50%" x2="80%" y2="84%"/></svg>
+      <div class="core"><b>AI Core</b><small>学情管家</small></div>
+      <div class="node-c n1"><div class="ci"><svg viewBox="0 0 24 24"><path d="M3 6h13M3 12h9M3 18h13"/></svg></div><b>学习规划</b><span>个性化路径</span></div>
+      <div class="node-c n2"><div class="ci"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div><b>文档学习</b><span>基于你的资料</span></div>
+      <div class="node-c n3"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z"/></svg></div><b>AI 导师</b><span>苏格拉底辅导</span></div>
+      <div class="node-c n4"><div class="ci"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3"/></svg></div><b>多智能体</b><span>协同工作流</span></div>
+      <div class="node-c n5"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><b>可信 AI</b><span>防幻觉溯源</span></div>
+      <div class="node-c n6"><div class="ci"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div><b>学习分析</b><span>掌握度监测</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 第四屏:产品故事 -->
+<section class="band" id="story">
+  <div class="wrap">
+    <div class="band-head reveal">
+      <div class="eye">Product Tour</div>
+      <h2>看它如何陪你走完一段学习</h2>
+    </div>
+    <div class="story">
+      <div class="scard"><div class="cap"><div class="step-n">1</div>[ 画像诊断 截图 ]</div><div class="lbl">认识你</div></div>
+      <div class="scard"><div class="cap"><div class="step-n">2</div>[ 学习路径 截图 ]</div><div class="lbl">规划路径</div></div>
+      <div class="scard"><div class="cap"><div class="step-n">3</div>[ 资源生成 截图 ]</div><div class="lbl">生成资源</div></div>
+      <div class="scard"><div class="cap"><div class="step-n">4</div>[ 文档学习 截图 ]</div><div class="lbl">文档问答</div></div>
+      <div class="scard"><div class="cap"><div class="step-n">5</div>[ 学情管家 截图 ]</div><div class="lbl">统筹全局</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 第五屏:收尾 -->
+<section class="closing">
+  <div class="wrap">
+    <h2 class="reveal">AI 不替代学习。<br>它<span class="g">陪伴</span>你完成学习。</h2>
+    <p class="reveal">无论你是求职、考研、科研、转行，还是纯粹热爱。</p>
+    <a class="btn reveal" href="#">遇见你的 AI 导师 →</a>
+  </div>
+</section>
+
+<footer><div class="wrap">智学中枢 · AI Learning OS ｜ 中国软件杯 2026 · A 赛题</div></footer>
+
+<script>
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
+  document.querySelectorAll('.reveal,.jstep,.scard').forEach((el,i)=>{if(el.classList.contains('jstep')||el.classList.contains('scard'))el.style.transitionDelay=(i%6*.08)+'s';io.observe(el)});
+</script>
+</body>
+</html>
