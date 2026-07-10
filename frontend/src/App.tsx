@@ -18,7 +18,7 @@ import AdminPrompts from './pages/admin/AdminPrompts'
 import AdminMetrics from './pages/admin/AdminMetrics'
 import AdminUsers from './pages/admin/AdminUsers'
 import Login from './pages/Login'
-import Landing from './pages/Landing'
+import WelcomePage from './pages/WelcomePage'
 import { getUser, clearAuth, getToken, isTokenExpired, USE_REAL_API } from './services/api'
 import { useJourney } from './store/journey'
 import { useMastery } from './store/mastery'
@@ -170,7 +170,7 @@ function App() {
   }
 
   if (stage === 'landing') {
-    return <Landing onEnter={() => setStage('login')} />
+    return <WelcomePage onEnter={() => setStage('login')} />
   }
 
   if (stage === 'login') {
