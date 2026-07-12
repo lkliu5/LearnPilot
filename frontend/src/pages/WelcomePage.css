@@ -212,6 +212,9 @@
 @keyframes wkSweep { to { background-position: -220% 0; } }
 .wk .shot .winbar { position: absolute; top: 0; left: 0; right: 0; height: 34px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; padding: 0 14px; border-bottom: 1px solid var(--line); z-index: 2; }
 .wk .shot .winbar i { width: 10px; height: 10px; border-radius: 50%; background: #c9b89e; }
+/* 真实界面截图（1440×900 → 4/3 容器）：cover 靠右裁切——裁掉的正好是侧边栏，
+   主内容完整；位于 winbar(z2) 与流光 ::after 之下，窗口框样式不变 */
+.wk .shot .shot-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right center; display: block; }
 
 .wk .final { text-align: center; padding: 120px 0; position: relative; }
 .wk .final::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 700px; height: 400px; background: radial-gradient(ellipse, rgba(111, 146, 128, 0.16), transparent 70%); filter: blur(40px); }

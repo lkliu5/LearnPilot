@@ -564,7 +564,12 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
                 <i />
                 <i />
               </div>
-              [ 个性化路径 + 时间线 截图 ]
+              <img
+                className="shot-img"
+                src="/welcome-shots/path-timeline.png"
+                alt="个性化学习路径页实拍：路径节点时间线、学习里程碑与能力/偏好双驱动规划"
+                loading="lazy"
+              />
             </div>
           </div>
           <div className="feature rev reveal" id="doc">
@@ -584,7 +589,12 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
                 <i />
                 <i />
               </div>
-              [ 文档学习三栏 截图 ]
+              <img
+                className="shot-img"
+                src="/welcome-shots/doc-learning.png"
+                alt="文档学习页实拍：来源与概览、文档即问即答（标注出处）、六类资源生成三栏工作台"
+                loading="lazy"
+              />
             </div>
           </div>
           <div className="feature reveal" id="method">
@@ -604,7 +614,12 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
                 <i />
                 <i />
               </div>
-              [ 有序学习流程 截图 ]
+              <img
+                className="shot-img"
+                src="/welcome-shots/learning-flow.png"
+                alt="有序学习流实拍：输入→康奈尔笔记→费曼讲解→代码实操阶段步进器与定制讲义正文"
+                loading="lazy"
+              />
             </div>
           </div>
         </div>
