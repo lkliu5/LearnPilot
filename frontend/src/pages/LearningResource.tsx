@@ -17,7 +17,7 @@ import { kpById } from '../data/knowledgePoints'
 import { ksPointById } from '../data/knowledgeSystem'
 import { KP_RESOURCES, genericKpContent, kpCodeDemo } from '../data/kpResources'
 import { USE_REAL_API } from '../services/api'
-import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
+import { getDiagram, getLecture, getQuiz, getVideo, loadAggregateCached, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
 import { StatusChip, type ItemStatus, useStagedProgress, VIDEO_STAGES } from '../components/genStatus'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
@@ -704,8 +704,10 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
           break
         }
         case 'external': {
-          const items = await fetchRecommendations(kpId, kpName, kpName)
-          setRecoCount(items.length)
+          // 与资源推荐弹层共享同一会话级缓存/在途请求（services/resource）：
+          // 「立即查看」预生成一次后，弹层打开直接复用，不再触发第二轮联网聚合。
+          const snap = await loadAggregateCached(kpId)
+          setRecoCount(snap.items.length)
           break
         }
         case 'code':

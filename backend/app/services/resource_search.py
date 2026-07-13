@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -22,6 +23,8 @@ from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services import resource as resource_service
 from app.services import web_search
+
+logger = logging.getLogger("app.services.resource_search")
 
 
 def _derive_weak_points(db: Session, user_id: str, kp_id: str) -> list[str]:
@@ -41,13 +44,24 @@ def _derive_weak_points(db: Session, user_id: str, kp_id: str) -> list[str]:
 
 
 def _seed_candidates(db: Session, kp_id: str) -> list[dict[str, Any]]:
-    """种子兜底候选池（无联网能力时）：ExternalResource 精选库 → 候选结构。"""
+    """种子兜底候选池（无联网能力时）：ExternalResource 精选库 → 候选结构。
+
+    体系拓展点（78 点目录中无专属种子的 kp）回落全库精选：保证任意在库 kp 的
+    推荐非空且候选池含视频（形态保底可生效），最终排序仍由聚合评分决定。
+    """
     rows = (
         db.query(ExternalResource)
         .filter(ExternalResource.kp_id == kp_id)
         .order_by(ExternalResource.relevance.desc(), ExternalResource.id)
         .all()
     )
+    if not rows:
+        rows = (
+            db.query(ExternalResource)
+            .order_by(ExternalResource.relevance.desc(), ExternalResource.id)
+            .limit(12)
+            .all()
+        )
     candidates: list[dict[str, Any]] = []
     for r in rows:
         item: dict[str, Any] = {
@@ -83,6 +97,22 @@ def aggregate(
     online = bool(hits)
     if not hits:  # 无联网能力 / 联网失败 → 种子兜底候选池
         hits = _seed_candidates(db, kp_id)
+    elif not any(h.get("type") == "视频" for h in hits):
+        # 视频保底（候选池层）：联网命中无视频（通用搜索常不返回视频站点）→
+        # 从精选种子库补充视频候选（真实 URL、可站内嵌播），最终取舍仍由聚合评分决定。
+        hit_urls = {str(h.get("url")) for h in hits}
+        seed_videos = [
+            c for c in _seed_candidates(db, kp_id)
+            if c.get("type") == "视频" and str(c.get("url")) not in hit_urls
+        ][:2]
+        if seed_videos:
+            hits = hits + seed_videos
+            logger.info(
+                "外部资源聚合：联网命中无视频，补充精选库视频候选 %d 条（kp=%s）",
+                len(seed_videos), kp_id,
+            )
+        else:
+            logger.info("外部资源聚合：联网命中与精选库均无视频候选，视频保底降级（kp=%s）", kp_id)
 
     items = get_llm().aggregate_resources(kp.name, weak, hits)
     return {

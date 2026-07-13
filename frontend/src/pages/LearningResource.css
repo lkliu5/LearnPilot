@@ -750,6 +750,31 @@
 .agg__refresh:hover:not(:disabled) { background: var(--primary-50); }
 .agg__refresh:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* 联网首拉占位（有结果前不展示卡片，状态与内容一致） */
+.agg__searching {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--primary-200);
+  background: var(--primary-50);
+  color: var(--gray-600);
+  font-size: 0.82rem;
+}
+.agg__searching-orb {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--primary-200);
+  border-top-color: var(--primary-600);
+  animation: agg-searching-spin 0.9s linear infinite;
+}
+@keyframes agg-searching-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 嵌入播放 */
 .agg__embed {
   margin-bottom: var(--space-lg);

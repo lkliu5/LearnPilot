@@ -79,6 +79,42 @@ export function aggregateExternalResources(
   })
 }
 
+/** 8.6 增量：聚合结果的会话级缓存快照（items + 是否真实联网命中）。 */
+export interface AggregateSnapshot {
+  items: ExternalResource[]
+  online: boolean
+}
+
+/* 同一知识点的联网聚合「生成一次、会话内复用」+ 在途请求去重：
+   资源推荐弹层每次打开都重挂载（页面条件渲染），且 hub「立即查看」预生成与弹层
+   自身拉取此前各打一次后端 —— 相同 kpId 共享同一缓存/在途 Promise 后只联网一次；
+   仅显式「重新联网搜索」（force）才重拉。 */
+const aggCache = new Map<string, AggregateSnapshot>()
+const aggInflight = new Map<string, Promise<AggregateSnapshot>>()
+
+/** 读缓存（无副作用）：命中返回快照，未命中 undefined。 */
+export function getAggregateCached(kpId: string): AggregateSnapshot | undefined {
+  return aggCache.get(kpId)
+}
+
+/** 缓存优先的联网聚合：命中直接复用；未命中共享在途请求（并发/双挂载只发一次）。 */
+export function loadAggregateCached(kpId: string, force = false): Promise<AggregateSnapshot> {
+  const hit = aggCache.get(kpId)
+  if (hit && !force) return Promise.resolve(hit)
+  let p = aggInflight.get(kpId)
+  if (!p) {
+    p = aggregateExternalResources(kpId)
+      .then((res) => {
+        const snap: AggregateSnapshot = { items: res.items, online: res.online }
+        aggCache.set(kpId, snap)
+        return snap
+      })
+      .finally(() => aggInflight.delete(kpId))
+    aggInflight.set(kpId, p)
+  }
+  return p
+}
+
 /** 9.2 错题强化卡：薄弱点 + 强化讲解 + 一道针对性追加练习。 */
 export interface ReinforceCard {
   questionId: string

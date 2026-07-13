@@ -2446,6 +2446,30 @@ class LLMClient:
         return item
 
     @staticmethod
+    def _ensure_video(ranked: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
+        """结果选取约束（形态多样性保底）：Top-N 至少含 1 个 type=视频 的资源。
+
+        ranked 已按 relevance 降序。Top-N 无视频时，从落选候选中取评分最高的视频，
+        替换 Top-N 中评分最低的非视频项（总数不变），再按相关度重排保持降序；
+        候选池确实无视频 → 不硬塞，记日志作可解释降级。
+        """
+        top = ranked[:limit]
+        if any(it["type"] == "视频" for it in top):
+            return top
+        video = next((it for it in ranked[limit:] if it["type"] == "视频"), None)
+        if video is None:
+            logger.info("资源聚合：候选池无任何视频资源，视频保底降级（本次清单不含视频）")
+            return top
+        dropped = top.pop()  # 已降序 → 末位即评分最低项（且必为非视频）
+        top.append(video)
+        top.sort(key=lambda x: x["relevance"], reverse=True)
+        logger.info(
+            "资源聚合：Top-%d 无视频，以「%s」(rel=%s) 替换最低分项「%s」(rel=%s)",
+            limit, video["title"], video["relevance"], dropped["title"], dropped["relevance"],
+        )
+        return top
+
+    @staticmethod
     def _mock_aggregate(
         kp_name: str, weak_points: list[str], cands: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -2461,7 +2485,7 @@ class LLMClient:
             reason = f"契合你当前「{kp_name}」的学习，对补强「{wp}」很有帮助。"
             scored.append((rel, LLMClient._agg_item(c, i, type_=str(c.get("type") or ""), rel=rel, cred=cred, reason=reason)))
         scored.sort(key=lambda e: e[0], reverse=True)
-        return [it for _, it in scored][:8]
+        return LLMClient._ensure_video([it for _, it in scored])
 
     def _deepseek_aggregate(
         self, kp_name: str, weak_points: list[str], cands: list[dict[str, Any]]
@@ -2484,7 +2508,8 @@ class LLMClient:
             '"url": "...", "relevance": 0, "credibility": 0, "reason": "..."}]}。'
             f"type 只能取 {list(_AGG_TYPES)}；relevance/credibility 为 0-100 整数（相关度结合"
             "知识点与薄弱点、可信度结合来源权威性）；reason 一句中文说明为何推荐（结合薄弱点）；"
-            "**url 必须原样取自候选列表，禁止编造或改写链接**；按 relevance 降序，最多 8 条。"
+            "**url 必须原样取自候选列表，禁止编造或改写链接**；按 relevance 降序，最多 8 条；"
+            "资源形态尽量多样（视频/课程/论文/文档兼顾），候选中存在视频时清单**至少含 1 条视频**。"
         )
         payload = {"knowledgePoint": kp_name, "weakPoints": weak_points, "candidates": listing}
         raw = llm_transport.chat(json.dumps(payload, ensure_ascii=False), system=system)
@@ -2517,8 +2542,20 @@ class LLMClient:
             )
         if not items:
             raise LLMGenerationError("资源聚合输出不含有效候选")
+        # 视频保底：LLM 清单一条视频都没有而候选池有 → 用确定性评分把最优视频候选补入
+        # 排序池（质量仍由启发式评分把关），交给 _ensure_video 统一做 Top-N 替换。
+        if not any(it["type"] == "视频" for it in items):
+            chosen_urls = {it["url"] for it in items}
+            video_cands = [
+                c for c in cands
+                if str(c.get("type")) == "视频" and str(c["url"]) not in chosen_urls
+            ]
+            if video_cands:
+                best = self._mock_aggregate(kp_name, weak_points, video_cands)[0]
+                best["id"] = f"agg-{len(items) + 1}"
+                items.append(best)
         items.sort(key=lambda x: x["relevance"], reverse=True)
-        return items[:8]
+        return self._ensure_video(items)
 
     # ---- 康奈尔线索生成（接口文档 18.1，C2） -------------------------------
     def generate_cornell_cues(

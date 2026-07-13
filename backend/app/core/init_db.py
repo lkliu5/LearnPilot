@@ -326,6 +326,7 @@ _EXTERNAL_RESOURCES: dict[str, list[tuple]] = {
         (1, "课程", "CS231n 笔记 · 卷积网络", "Stanford · cs231n.github.io", "https://cs231n.github.io/convolutional-networks/", None, "长文", 96, 96, "卷积/池化/感受野的权威讲义，配大量图示，是 CNN 架构的标准参考。"),
         (2, "文档", "CNN Explainer 交互可视化", "Georgia Tech · poloclub", "https://poloclub.github.io/cnn-explainer/", None, "交互", 93, 90, "在浏览器里逐层拖动观察卷积运算，把抽象的特征图变得可见。"),
         (3, "论文", "Deep Residual Learning（ResNet）", "arXiv:1512.03385", "https://arxiv.org/abs/1512.03385", None, "12 页", 86, 98, "经典卷积网络的里程碑，理解残差连接如何让网络更深。"),
+        (4, "视频", "3Blue1Brown：什么是卷积？", "YouTube · 3Blue1Brown", "https://www.youtube.com/watch?v=KuXjwB4LzSA", "https://www.youtube.com/embed/KuXjwB4LzSA", "23:01", 94, 97, "可视化拆解卷积运算的滑动窗口本质，是理解卷积层的最佳直觉入口。"),
     ],
     "transformer": [
         (1, "论文", "Attention Is All You Need", "arXiv:1706.03762", "https://arxiv.org/abs/1706.03762", None, "15 页", 97, 99, "Transformer 奠基论文，自注意力与多头注意力的第一手定义。"),
