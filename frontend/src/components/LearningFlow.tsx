@@ -18,6 +18,7 @@ import {
   type ReviewRef,
 } from '../services/learningFlow'
 import type { PageType } from '../App'
+import { kpCodeDemo } from '../data/kpResources'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import './LearningFlow.css'
 
@@ -366,8 +367,8 @@ export default function LearningFlow({
             {phase.key === 'practice' && (
               <div className="flow__practice">
                 <Suspense fallback={<Loading />}>
-                  <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完代码即时看结果：</div>
-                  <CodeSandbox baseName={`代码-${kpName}`} />
+                  <div className="resource-modal-hint">{kpCodeDemo(kpId).hint}</div>
+                  <CodeSandbox js={kpCodeDemo(kpId).js} baseName={`代码-${kpName}`} />
                 </Suspense>
                 <label className="flow__seen">
                   <input

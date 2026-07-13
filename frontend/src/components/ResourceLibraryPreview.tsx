@@ -14,7 +14,7 @@ import {
   generateQuiz,
   generateFlashcards,
 } from '../services/documentLearning'
-import { KP_RESOURCES } from '../data/kpResources'
+import { KP_RESOURCES, kpCodeDemo } from '../data/kpResources'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import { KIND_LABEL, type ResourceHistoryItem } from '../services/resourceHistory'
 import '../pages/LearningResource.css'
@@ -349,11 +349,11 @@ export default function ResourceLibraryPreview({
         </>
       )
     }
-    // code（仅内置课程）
+    // code（仅内置课程）：按记录的 kpId 取对应知识点 demo，与学习资源页同源
     return (
       <Suspense fallback={<Loading />}>
-        <div className="resource-modal-hint">浏览器内可运行的代码示例，可下载代码文件：</div>
-        <CodeSandbox baseName={`代码-${displayName}`} />
+        <div className="resource-modal-hint">{kpCodeDemo(kpId).hint}</div>
+        <CodeSandbox js={kpCodeDemo(kpId).js} baseName={`代码-${displayName}`} />
       </Suspense>
     )
   }

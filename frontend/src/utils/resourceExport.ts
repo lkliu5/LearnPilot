@@ -2,7 +2,7 @@
  * 学习资源导出工具（纯前端，不重新请求生成；复用「当前已渲染好」的产物）。
  *
  * - 图解（mermaid）/ 思维导图（markmap）：把在线 SVG 导出为 .svg / .png。
- * - 代码实操（Sandpack）：把代码文件内容按真实后缀导出为单文件。
+ * - 代码实操（本地沙箱 CodeSandbox）：把代码文件内容按真实后缀导出为单文件。
  *
  * 为什么导出前要把 <foreignObject> 降级成原生 <text>：
  *   mermaid（htmlLabels 默认开）与 markmap 都把节点文字渲染在 <foreignObject> 的 HTML 里。

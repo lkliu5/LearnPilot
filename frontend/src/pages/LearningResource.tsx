@@ -15,7 +15,7 @@ import { RevealGroup, RevealItem } from '../components/Reveal'
 import { useMastery, STATUS_LABEL } from '../store/mastery'
 import { kpById } from '../data/knowledgePoints'
 import { ksPointById } from '../data/knowledgeSystem'
-import { KP_RESOURCES, genericKpContent } from '../data/kpResources'
+import { KP_RESOURCES, genericKpContent, kpCodeDemo } from '../data/kpResources'
 import { USE_REAL_API } from '../services/api'
 import { getDiagram, getLecture, getQuiz, getVideo, submitQuiz, type LectureData } from '../services/resource'
 import { fetchRecommendations } from '../services/tutorResource'
@@ -1105,13 +1105,15 @@ export default function LearningResource({ onNavigate }: { onNavigate?: (page: P
             )}
           </Suspense>
         )
-      case 'code':
+      case 'code': {
+        const codeDemo = kpCodeDemo(kpId)
         return (
           <Suspense fallback={<Loading />}>
-            <div className="resource-modal-hint">浏览器内可运行的神经元示例，改完左侧代码即时看结果：</div>
-            <CodeSandbox baseName={`代码-${kpName}`} />
+            <div className="resource-modal-hint">{codeDemo.hint}</div>
+            <CodeSandbox js={codeDemo.js} baseName={`代码-${kpName}`} />
           </Suspense>
         )
+      }
       case 'diagram':
         return (
           <Suspense fallback={<Loading />}>

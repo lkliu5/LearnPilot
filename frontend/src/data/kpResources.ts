@@ -8,6 +8,7 @@
  * 联调模式（USE_REAL_API=true）不使用本文件，内容仍由后端按 kpId 真实生成。
  */
 import type { QuizQuestion } from '../components/QuizRenderer'
+import { ksPointById } from './knowledgeSystem'
 
 export interface KpResourceContent {
   /** 难度自适应三档讲义（入门/初级/高级），与难度切换 UI 对齐 */
@@ -18,10 +19,256 @@ export interface KpResourceContent {
   mindmap: string
   /** 知识图解（mermaid flowchart） */
   diagram: string
+  /** 代码实操：浏览器内可跑的知识点 demo（本地 srcdoc 沙箱执行，见 CodeSandbox） */
+  code: KpCodeDemo
+}
+
+/** 代码实操 demo：hint 为顶部「怎么用」提示，js 为 index.js 内容（在本地 iframe srcdoc 内执行）。 */
+export interface KpCodeDemo {
+  hint: string
+  js: string
+}
+
+/* ═══════════════════════ 代码实操 demo（6 核心点各一份，真实可跑）═══════════════════════
+   约定：渲染到 #app；纯浏览器 JS 无依赖；不用模板字符串（避免与外层 TS 模板字面量转义纠缠）；
+   页面底色/文字色由沙箱 srcdoc 按平台主题注入，demo 内只用局部装饰色。 */
+
+const ML_CODE: KpCodeDemo = {
+  hint: '改动 learningRate / epochs / data 数据点，看梯度下降拟合出的 w、b 与损失变化：',
+  js: `// 线性回归：用梯度下降从数据里"学"出规律 y ≈ w·x + b
+var data = [[1, 3.1], [2, 4.9], [3, 7.2], [4, 8.8], [5, 11.1]]; // [x, y] 样本
+var learningRate = 0.02;  // 学习率
+var epochs = 200;         // 训练轮数
+
+var w = 0, b = 0;         // 从"什么都不会"开始
+var trace = [];
+for (var e = 1; e <= epochs; e++) {
+  var gw = 0, gb = 0, loss = 0;
+  for (var i = 0; i < data.length; i++) {
+    var xi = data[i][0], yi = data[i][1];
+    var err = (w * xi + b) - yi;          // 预测 − 真实
+    gw += (2 * err * xi) / data.length;   // ∂loss/∂w
+    gb += (2 * err) / data.length;        // ∂loss/∂b
+    loss += (err * err) / data.length;    // 均方误差
+  }
+  w -= learningRate * gw;                 // 沿梯度反方向走一步
+  b -= learningRate * gb;
+  if (e === 1 || e % 50 === 0) {
+    trace.push('第 ' + e + ' 轮  loss=' + loss.toFixed(3) + '  w=' + w.toFixed(2) + '  b=' + b.toFixed(2));
+  }
+}
+
+var rows = data.map(function (d) {
+  return '<tr><td>' + d[0] + '</td><td>' + d[1] + '</td><td>' + (w * d[0] + b).toFixed(2) + '</td></tr>';
+}).join('');
+
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 8px">📈 线性回归 · 梯度下降</h3>' +
+  '<p>学到的规律：<b>y ≈ ' + w.toFixed(2) + ' · x + ' + b.toFixed(2) + '</b>（数据由 y≈2x+1 加噪生成）</p>' +
+  '<pre style="opacity:.75;font-size:12px;line-height:1.7;margin:8px 0">' + trace.join('\\n') + '</pre>' +
+  '<table style="border-collapse:collapse;font-size:13px">' +
+  '<tr><th style="padding:2px 12px;text-align:left">x</th><th style="padding:2px 12px;text-align:left">真实 y</th><th style="padding:2px 12px;text-align:left">预测 ŷ</th></tr>' +
+  rows.replace(/<td>/g, '<td style="padding:2px 12px;border-top:1px solid rgba(127,127,127,.35)">') +
+  '</table>' +
+  '<p style="opacity:.6;font-size:12px;margin-top:10px">✏️ 把 learningRate 改成 0.1 试试——损失还降得下去吗？</p>';
+`,
+}
+
+const DL_CODE: KpCodeDemo = {
+  hint: '改动两组学习率 lrSmall / lrLarge 或起点 wStart，对比梯度下降是收敛还是震荡：',
+  js: `// 梯度下降怎么"走"：在损失函数 L(w) = (w − 3)² 上，从 w = −2 出发下山
+function loss(w) { return (w - 3) * (w - 3); }
+function grad(w) { return 2 * (w - 3); }   // dL/dw：反向传播算出的梯度
+
+var wStart = -2;
+var lrSmall = 0.1;    // 小学习率：稳步收敛
+var lrLarge = 0.95;   // 大学习率：来回震荡
+var steps = 8;
+
+function descend(lr) {
+  var w = wStart, path = [];
+  for (var s = 0; s <= steps; s++) {
+    path.push('step ' + s + '  w=' + w.toFixed(3) + '  loss=' + loss(w).toFixed(3));
+    w = w - lr * grad(w);                  // 优化器的一步：w ← w − lr·∇L
+  }
+  return path;
+}
+
+function column(title, lr) {
+  return '<div style="flex:1;min-width:200px">' +
+    '<div style="font-weight:700;margin-bottom:4px">' + title + '（lr=' + lr + '）</div>' +
+    '<pre style="font-size:12px;line-height:1.7;margin:0;opacity:.8">' + descend(lr).join('\\n') + '</pre>' +
+  '</div>';
+}
+
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 8px">⛰️ 梯度下降与学习率（最低点在 w=3）</h3>' +
+  '<div style="display:flex;gap:20px;flex-wrap:wrap">' +
+  column('小步稳走', lrSmall) + column('大步震荡', lrLarge) +
+  '</div>' +
+  '<p style="opacity:.6;font-size:12px;margin-top:10px">✏️ 把 lrLarge 改成 1.05——loss 会发散（越走越高）；这就是训练"炸了"。</p>';
+`,
+}
+
+const NN_CODE: KpCodeDemo = {
+  hint: '改动 weights / bias / 激活函数，右侧实时看输出变化：',
+  js: `// 单个神经元的前向传播：加权求和 → 加偏置 → ReLU 激活
+function relu(v) { return Math.max(0, v); }
+
+function neuron(inputs, weights, bias) {
+  var z = bias;
+  for (var i = 0; i < inputs.length; i++) z += inputs[i] * weights[i];
+  return { z: z, out: relu(z) };
+}
+
+var inputs  = [0.5, 0.8, 0.2];   // 输入
+var weights = [0.4, 0.7, 0.1];   // 权重
+var bias    = 0.1;               // 偏置
+
+var r = neuron(inputs, weights, bias);
+
+// 渲染到页面，直观看到每一步
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 8px">🧠 神经元前向传播</h3>' +
+  '<div>输入 inputs = [' + inputs.join(', ') + ']</div>' +
+  '<div>权重 weights = [' + weights.join(', ') + ']</div>' +
+  '<div>偏置 bias = ' + bias + '</div>' +
+  '<div style="margin-top:6px">加权求和 z = ' + r.z.toFixed(2) + '</div>' +
+  '<div style="margin-top:8px;font-weight:700;color:#4f8b6f">输出 = ReLU(z) = ' + r.out.toFixed(2) + '</div>' +
+  '<p style="opacity:.6;font-size:12px;margin-top:12px">✏️ 试着改改 weights / bias，或把 ReLU 换成 v => 1/(1+Math.exp(-v))（Sigmoid）。</p>';
+`,
+}
+
+const CNN_CODE: KpCodeDemo = {
+  hint: '改动 3×3 kernel 的数值（当前为竖直边缘检测 Sobel 核），看特征图如何响应：',
+  js: `// 卷积：3×3 卷积核在 6×6 图像上滑窗做点积，提取"竖直边缘"特征图
+var image = [            // 左半暗(0)右半亮(9)，中间有一条竖直边缘
+  [0, 0, 0, 9, 9, 9],
+  [0, 0, 0, 9, 9, 9],
+  [0, 0, 0, 9, 9, 9],
+  [0, 0, 0, 9, 9, 9],
+  [0, 0, 0, 9, 9, 9],
+  [0, 0, 0, 9, 9, 9],
+];
+var kernel = [           // Sobel 竖直边缘检测核
+  [1, 0, -1],
+  [2, 0, -2],
+  [1, 0, -1],
+];
+
+function convolve(img, k) {         // 滑窗：每个位置 = 3×3 邻域与核的点积
+  var out = [];
+  for (var y = 0; y + 3 <= img.length; y++) {
+    var row = [];
+    for (var x = 0; x + 3 <= img[0].length; x++) {
+      var sum = 0;
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) sum += img[y + i][x + j] * k[i][j];
+      row.push(sum);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+var featureMap = convolve(image, kernel);
+
+function grid(m, maxAbs, title) {   // 数值 → 灰度格子（越亮响应越强）
+  var html = '<div style="display:inline-block;margin:0 18px 10px 0;vertical-align:top">' +
+    '<div style="font-size:12px;opacity:.7;margin-bottom:4px">' + title + '</div>';
+  for (var y = 0; y < m.length; y++) {
+    html += '<div style="line-height:0">';
+    for (var x = 0; x < m[y].length; x++) {
+      var g = Math.round(255 * Math.min(1, Math.abs(m[y][x]) / maxAbs));
+      html += '<span style="display:inline-block;width:26px;height:26px;background:rgb(' + g + ',' + g + ',' + g + ');' +
+        'color:' + (g > 140 ? '#222' : '#ddd') + ';font-size:10px;line-height:26px;text-align:center">' + m[y][x] + '</span>';
+    }
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 10px">🔍 卷积核滑窗 · 边缘检测</h3>' +
+  grid(image, 9, '输入图像 6×6') + grid(kernel, 2, '卷积核 3×3') + grid(featureMap, 36, '特征图 4×4') +
+  '<p style="opacity:.6;font-size:12px;margin-top:6px">✏️ 把 kernel 转置成横向核 [[1,2,1],[0,0,0],[-1,-2,-1]]——竖直边缘就检不出来了（特征图全 0）。</p>';
+`,
+}
+
+const TRANSFORMER_CODE: KpCodeDemo = {
+  hint: '改动各词的 key 向量、query 或 temperature，看注意力权重（softmax）如何重新分配：',
+  js: `// 自注意力：query 与每个词的 key 算相似度（点积）→ softmax → 得到注意力权重
+var tokens = [
+  { word: '小猫', key: [0.9, 0.1, 0.0] },
+  { word: '吃',   key: [0.1, 0.8, 0.1] },
+  { word: '鱼',   key: [0.7, 0.3, 0.1] },
+  { word: '了',   key: [0.0, 0.1, 0.9] },
+];
+var query = [0.8, 0.2, 0.1];   // 当前词想"找什么"（试试改成 [0,0.9,0.2] 去关注动词）
+var temperature = 0.3;         // 越小分布越尖锐（对应 1/√d 缩放的作用）
+
+function dot(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+
+var scores = tokens.map(function (t) { return dot(query, t.key) / temperature; });
+var maxS = Math.max.apply(null, scores);
+var exps = scores.map(function (s) { return Math.exp(s - maxS); });
+var sumE = exps.reduce(function (a, b) { return a + b; }, 0);
+var weights = exps.map(function (e) { return e / sumE; });   // softmax：总和恰为 1
+
+var rows = tokens.map(function (t, i) {
+  var pct = (weights[i] * 100).toFixed(1);
+  return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">' +
+    '<span style="width:44px">' + t.word + '</span>' +
+    '<span style="width:110px;font-size:12px;opacity:.7">score ' + scores[i].toFixed(2) + '</span>' +
+    '<span style="flex:1;background:rgba(127,127,127,.18);border-radius:4px;overflow:hidden">' +
+      '<span style="display:block;height:14px;width:' + pct + '%;background:#4f8b6f"></span></span>' +
+    '<b style="width:56px;text-align:right">' + pct + '%</b>' +
+  '</div>';
+}).join('');
+
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 8px">🎯 自注意力权重分配</h3>' +
+  '<p style="font-size:13px;opacity:.8">query 在整句「' + tokens.map(function (t) { return t.word; }).join('') + '」上的注意力：</p>' +
+  rows +
+  '<p style="opacity:.6;font-size:12px;margin-top:10px">✏️ 权重和恒为 1（softmax）。把 temperature 调大到 2——注意力会被"摊平"。</p>';
+`,
+}
+
+const FINETUNE_CODE: KpCodeDemo = {
+  hint: '切换各层 frozen（❄冻结/🔥参与训练）标记，对比不同微调策略的可训练参数量：',
+  js: `// 微调策略：冻结哪些层，决定要训练/存储多少参数（单位：百万 M）
+var layers = [
+  { name: 'Embedding 词嵌入',        params: 38.0, frozen: true  },
+  { name: 'Transformer 底部 10 层',  params: 85.0, frozen: true  },
+  { name: 'Transformer 顶部 2 层',   params: 17.0, frozen: false },
+  { name: '任务分类头 Head',         params: 0.6,  frozen: false },
+];
+
+var total = 0, trainable = 0;
+layers.forEach(function (l) { total += l.params; if (!l.frozen) trainable += l.params; });
+var pct = ((trainable / total) * 100).toFixed(1);
+
+var rows = layers.map(function (l) {
+  return '<tr>' +
+    '<td style="padding:4px 12px;border-top:1px solid rgba(127,127,127,.35)">' + l.name + '</td>' +
+    '<td style="padding:4px 12px;border-top:1px solid rgba(127,127,127,.35);text-align:right">' + l.params.toFixed(1) + ' M</td>' +
+    '<td style="padding:4px 12px;border-top:1px solid rgba(127,127,127,.35)">' + (l.frozen ? '❄ 冻结' : '🔥 训练') + '</td>' +
+  '</tr>';
+}).join('');
+
+document.getElementById('app').innerHTML =
+  '<h3 style="margin:0 0 8px">🧊 微调 · 冻结与解冻</h3>' +
+  '<table style="border-collapse:collapse;font-size:13px">' +
+  '<tr><th style="padding:4px 12px;text-align:left">层</th><th style="padding:4px 12px;text-align:right">参数量</th><th style="padding:4px 12px;text-align:left">状态</th></tr>' +
+  rows + '</table>' +
+  '<p style="margin-top:10px">可训练参数：<b>' + trainable.toFixed(1) + ' M / ' + total.toFixed(1) + ' M（' + pct + '%）</b>' +
+  '——梯度与优化器状态只为 🔥 层分配，显存/算力开销随之线性下降。</p>' +
+  '<p style="opacity:.6;font-size:12px">✏️ 全部设为 frozen:false 就是"全量微调"；LoRA 则相当于再把 🔥 层换成低秩增量（参数量再降一个数量级）。</p>';
+`,
 }
 
 /* ─────────────────────────── 机器学习基础 (ml) ─────────────────────────── */
 const ml: KpResourceContent = {
+  code: ML_CODE,
   lectureByLevel: {
     入门: `# 机器学习基础（入门版）
 
@@ -170,6 +417,7 @@ R(h) = E_{(x,y)~D}[ L(h(x), y) ]
 
 /* ─────────────────────────── 深度学习原理 (dl) ─────────────────────────── */
 const dl: KpResourceContent = {
+  code: DL_CODE,
   lectureByLevel: {
     入门: `# 深度学习原理（入门版）
 
@@ -305,6 +553,7 @@ block = nn.Sequential(
 
 /* ─────────────────────────── CNN架构 (cnn) ─────────────────────────── */
 const cnn: KpResourceContent = {
+  code: CNN_CODE,
   lectureByLevel: {
     入门: `# CNN架构（入门版）
 
@@ -439,6 +688,7 @@ conv = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
 
 /* ─────────────────────────── Transformer架构 (transformer) ─────────────────────────── */
 const transformer: KpResourceContent = {
+  code: TRANSFORMER_CODE,
   lectureByLevel: {
     入门: `# Transformer架构（入门版）
 
@@ -571,6 +821,7 @@ Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V
 
 /* ─────────────────────────── 大模型微调技术 (finetune) ─────────────────────────── */
 const finetune: KpResourceContent = {
+  code: FINETUNE_CODE,
   lectureByLevel: {
     入门: `# 大模型微调技术（入门版）
 
@@ -758,5 +1009,56 @@ ${desc}
   C --> E["实践与进阶"]
   D --> E
 `,
+    code: genericCodeDemo(name, desc),
   }
+}
+
+/**
+ * 非核心目录点的通用代码实操 demo：按名称/简介参数化，且**明示是通用示例**
+ * （不假装为该知识点定制；联调模式下代码资源目前无后端生成端点，故 mock/联调同用本模板）。
+ */
+export function genericCodeDemo(name: string, description: string): KpCodeDemo {
+  const kpLiteral = JSON.stringify({ name, description })
+  return {
+    hint: `「${name}」暂无定制实操，以下为通用示例——编辑 kp 卡片数据（要点/自测清单），右侧实时渲染：`,
+    js: `// 【通用示例】"${name}" 暂无定制代码实操；下面用一段可编辑的 JS 渲染该知识点的学习卡片。
+var kp = ${kpLiteral};
+kp.keyPoints = [
+  '它要解决的核心问题是什么',
+  '关键机制与工作流程',
+  '典型应用场景与局限',
+];
+kp.selfCheck = [
+  '我能用一句话讲清它是什么吗？',
+  '我能举出一个实际例子吗？',
+  '它和先修知识点是什么关系？',
+];
+
+var points = kp.keyPoints.map(function (p) { return '<li>' + p + '</li>'; }).join('');
+var checks = kp.selfCheck.map(function (c) { return '<li>☐ ' + c + '</li>'; }).join('');
+
+document.getElementById('app').innerHTML =
+  '<div style="border:1px solid rgba(127,127,127,.35);border-radius:10px;padding:14px;max-width:520px">' +
+    '<div style="font-size:11px;opacity:.55;margin-bottom:6px">通用示例 · 非定制内容</div>' +
+    '<h3 style="margin:0 0 6px">📚 ' + kp.name + '</h3>' +
+    '<p style="font-size:13px;opacity:.8;margin:0 0 10px">' + (kp.description || '') + '</p>' +
+    '<b style="font-size:13px">学习要点</b><ul style="margin:4px 0 10px;font-size:13px">' + points + '</ul>' +
+    '<b style="font-size:13px">自测清单</b><ul style="margin:4px 0 0;font-size:13px;list-style:none;padding-left:4px">' + checks + '</ul>' +
+  '</div>';
+`,
+  }
+}
+
+/**
+ * 代码实操 demo 解析：kpId → 该知识点的可运行 demo。
+ * 6 核心点走精修 demo（nn 不在 KP_RESOURCES，此处单独返回）；
+ * 体系目录点走通用模板（明示通用示例）；未知 kpId 兜底 nn（与资源页 kpId 兜底口径一致）。
+ */
+export function kpCodeDemo(kpId: string): KpCodeDemo {
+  if (kpId === 'nn') return NN_CODE
+  const hit = KP_RESOURCES[kpId]
+  if (hit) return hit.code
+  const ks = ksPointById(kpId)
+  if (ks) return genericCodeDemo(ks.name, ks.description)
+  return NN_CODE
 }
