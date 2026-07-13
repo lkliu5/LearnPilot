@@ -56,3 +56,4 @@ frontend/probe-remotion/run*.log
 # 根目录临时验证截图（仅根级散图；不影响 frontend/ 内的正式图片资源）
 /*.png
 /*.jpg
+backend/uvicorn-8000.log
