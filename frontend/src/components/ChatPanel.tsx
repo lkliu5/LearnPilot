@@ -33,6 +33,8 @@ interface ChatPanelProps {
   locked?: boolean
   /** 对话区与输入区之间的常驻插槽（如画像诊断的微测/偏好作答卡，始终可见、不被遮挡） */
   belowChat?: ReactNode
+  /** 无消息时占据对话区的空状态插槽（如文档学习的大文档卡）；不传则维持原样 */
+  emptySlot?: ReactNode
   className?: string
 }
 
@@ -52,6 +54,7 @@ export default function ChatPanel({
   sending = false,
   locked = false,
   belowChat,
+  emptySlot,
   className = '',
 }: ChatPanelProps) {
   const chatRef = useRef<HTMLDivElement>(null)
@@ -74,6 +77,7 @@ export default function ChatPanel({
       </div>
 
       <div className="socratic__chat" ref={chatRef}>
+        {msgs.length === 0 && !typing && emptySlot}
         <AnimatePresence initial={false}>
           {msgs.map((m, i) => (
             <motion.div

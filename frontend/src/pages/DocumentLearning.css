@@ -8,48 +8,74 @@
   margin: 0 auto;
 }
 
-/* NotebookLM 式三栏：左「来源与概览」· 中「和文档问答」· 右「生成六类」 */
+/* 页面级（仅本页生效）：工作台画布更宽 + 页面底色比面板深一档，让三个面板像卡片「漂浮」 */
+.app__main:has(.doclearn) {
+  background: var(--surface-2);
+}
+.app__content:has(.doclearn) {
+  max-width: 1560px;
+}
+
+/* NotebookLM 式三栏：左「来源」25% · 中「和文档对话」50%（主角）· 右「生成资源」25%，gap 20px */
 .doclearn__grid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 380px;
-  gap: var(--space-lg);
-  align-items: start;
-  margin-top: var(--space-lg);
+  grid-template-columns: minmax(0, 25fr) minmax(0, 50fr) minmax(0, 25fr);
+  gap: 20px;
+  align-items: stretch;
+  margin-top: 20px;
 }
+/* 三栏共用的「漂浮面板」底座：圆角 18 / 内边距 22 / 无边框无重阴影，等高、内部各自滚动 */
 .doclearn__col {
   min-width: 0;
+  height: calc(100vh - 212px);
+  min-height: 560px;
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 22px;
 }
 
 /* ===================== 左栏 · 来源与概览 ===================== */
 .doclearn__sources {
-  position: sticky;
-  top: var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-  max-height: calc(100vh - 160px);
+  gap: 20px;
   overflow-y: auto;
+}
+/* 左栏底部留白区：小图标空状态提示，空间富余时撑开大片留白（空是高级感） */
+.doclearn-sources__spare {
+  flex: 1 0 auto;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 20px 12px;
+}
+.doclearn-sources__spare-icon {
+  font-size: 26px;
+  opacity: 0.4;
+}
+.doclearn-sources__spare p {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  opacity: 0.7;
+  line-height: 1.7;
+  max-width: 220px;
 }
 
 /* ===================== 中栏 · 和文档问答 ===================== */
 .doclearn__chat {
-  position: sticky;
-  top: var(--space-lg);
-  padding: var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .docchat.socratic {
-  height: calc(100vh - 200px);
-  min-height: 480px;
-  max-height: 780px;
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 .doclearn__panel-title {
@@ -154,7 +180,7 @@
 .doclearn-doclist {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   /* 左栏为 flex 纵向容器且限高，需禁止本列表被压缩为 0（自身超长再内部滚动） */
   flex: 0 0 auto;
   max-height: 44vh;
@@ -168,28 +194,26 @@
   text-align: center;
 }
 
+/* 文档行：面板内用深一档底色的圆角条，去描边（样图 .doc），选中态用主色淡底 */
 .doclearn-docitem {
   position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--surface);
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--surface-2);
   transition: all var(--transition-fast);
 }
 .doclearn-docitem:hover {
-  border-color: var(--primary-200);
-  box-shadow: var(--shadow-soft);
+  background: var(--primary-50);
 }
 .doclearn-docitem--checked {
-  border-color: var(--primary-200);
   background: var(--primary-50);
 }
 .doclearn-docitem--active {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-inner-glow);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--primary-rgb), 0.55);
 }
 .doclearn-docitem__check {
   flex: 0 0 auto;
@@ -290,27 +314,24 @@
   background: rgba(220, 38, 38, 0.1);
 }
 
-/* ===================== 生成 + 产出区 ===================== */
+/* ===================== 右栏 · 生成学习资源（单面板：形态卡 + 产出/留白） ===================== */
 .doclearn__studio {
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: 20px;
+  overflow-y: auto;
 }
 
-/* 空状态（未选中文档） */
+/* 空状态（未选中文档）：撑满面板、居中留白 */
 .doclearn-empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: var(--space-md);
-  padding: var(--space-3xl) var(--space-xl);
-  min-height: 420px;
-  border-radius: var(--radius-lg);
-  border: 1px dashed var(--line);
-  background: var(--surface);
+  padding: var(--space-xl) var(--space-md);
 }
 .doclearn-empty__art {
   font-size: 56px;
@@ -345,13 +366,9 @@
   transform: translateY(-1px);
 }
 
-/* 生成操作区 */
+/* 生成操作区：并入右栏面板，自身不再是卡片 */
 .doclearn-actions {
-  padding: var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+  flex: 0 0 auto;
 }
 .doclearn-actions__head {
   display: flex;
@@ -362,7 +379,7 @@
   flex-wrap: wrap;
 }
 .doclearn-actions__doc {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink-soft);
 }
 .doclearn-actions__doc b {
@@ -385,50 +402,85 @@
   font-size: var(--text-xs);
   color: var(--warning-600, #d97706);
 }
+/* 六形态卡：2 列网格、加大内边距、图标柔和底色区分、右上小箭头 ›（样图 .studio/.st） */
 .doclearn-actions__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .doclearn-act {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
+  gap: 5px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  border: none;
   background: var(--surface-2);
   cursor: pointer;
   text-align: left;
   transition: all var(--transition-fast);
 }
+.doclearn-act::after {
+  content: '›';
+  position: absolute;
+  top: 16px;
+  right: 15px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: 0.5;
+}
 .doclearn-act:hover:not(:disabled) {
-  border-color: var(--primary);
   background: var(--primary-50);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-raised);
 }
 .doclearn-act:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 .doclearn-act--done {
-  border-color: var(--primary-200);
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.28);
+}
+/* 已生成卡 hover 时右上角让位给「重新生成 ↻」 */
+.doclearn-act--done:hover::after {
+  opacity: 0;
 }
 .doclearn-act--active {
-  border-color: var(--primary);
   background: var(--primary-50);
-  box-shadow: var(--shadow-glow-blue);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--primary-rgb), 0.5);
 }
 .doclearn-act__icon {
-  font-size: 22px;
-  line-height: 1;
-  height: 32px;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 6px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  background: rgba(var(--primary-rgb), 0.12);
+}
+/* 六形态各配一档柔和底色（低饱和，深浅主题下均成立） */
+.doclearn-act--lecture .doclearn-act__icon {
+  background: rgba(91, 139, 176, 0.16);
+}
+.doclearn-act--video .doclearn-act__icon {
+  background: rgba(168, 121, 154, 0.16);
+}
+.doclearn-act--diagram .doclearn-act__icon {
+  background: rgba(111, 146, 128, 0.18);
+}
+.doclearn-act--mindmap .doclearn-act__icon {
+  background: rgba(181, 130, 78, 0.16);
+}
+.doclearn-act--quiz .doclearn-act__icon {
+  background: rgba(214, 134, 108, 0.16);
+}
+.doclearn-act--flashcards .doclearn-act__icon {
+  background: rgba(139, 171, 151, 0.2);
 }
 .doclearn-act__label {
   font-size: var(--text-sm);
@@ -439,6 +491,7 @@
   font-size: var(--text-xs);
   color: var(--ink-soft);
   opacity: 0.85;
+  line-height: 1.5;
 }
 .doclearn-act__regen {
   position: absolute;
@@ -465,31 +518,48 @@
   transform: rotate(90deg);
 }
 
-/* 产出区 */
+/* 产出区：并入右栏面板；无产物时是一片带小图标提示的大留白（样图 .studio-empty） */
 .doclearn-output {
-  padding: var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-  min-height: 240px;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
 }
 .doclearn-output__empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
-  min-height: 200px;
+  gap: 14px;
+  min-height: 160px;
   text-align: center;
   color: var(--ink-soft);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  line-height: 1.8;
+  padding: var(--space-lg) var(--space-md);
+}
+.doclearn-output__empty p {
+  max-width: 240px;
+  opacity: 0.8;
 }
 .doclearn-output__empty b {
   color: var(--primary);
 }
 .doclearn-output__empty-icon {
-  font-size: 34px;
+  font-size: 26px;
+  opacity: 0.55;
+}
+
+/* 右栏窄列（25%）内嵌产出的难度分段：收紧内距 + 允许换行，避免横向溢出面板
+   （大预览弹层内的 .level-switch 不在 .doclearn-output 下，不受影响） */
+.doclearn-output .level-switch__seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.doclearn-output .level-switch__btn {
+  padding: 5px 10px;
+  font-size: 0.76rem;
 }
 
 /* 幻觉率小徽章 */
@@ -508,19 +578,43 @@
 }
 
 /* ===================== 响应式 ===================== */
-/* 中等屏：右栏（生成）下沉到左栏之下，左栏 + 中栏两列并排 */
-@media (max-width: 1180px) {
+/* 1280 档：25% 侧栏 ≈ 220px，收紧面板内边距与卡片密度，保持三栏舒展不换行 */
+@media (max-width: 1366px) {
+  .doclearn__col {
+    padding: 18px;
+  }
+  .doclearn-actions__grid {
+    gap: 10px;
+  }
+  .doclearn-act {
+    padding: 14px 12px;
+  }
+  .docchat-hero {
+    padding: 26px 24px;
+  }
+  .docchat-hero__title {
+    font-size: 22px;
+  }
+  .docchat-hero__welcome {
+    max-width: 100%;
+  }
+}
+/* 中等屏（25% 栏已窄于 ~260px）：右栏（生成）下沉，左栏 + 中栏两列并排 */
+@media (max-width: 1080px) {
   .doclearn__grid {
-    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-columns: 290px minmax(0, 1fr);
+  }
+  .doclearn__col {
+    height: auto;
+    min-height: 0;
+  }
+  .doclearn__sources,
+  .doclearn__chat {
+    height: calc(100vh - 212px);
+    min-height: 540px;
   }
   .doclearn__studio {
     grid-column: 1 / -1;
-  }
-  .doclearn__chat {
-    position: static;
-  }
-  .docchat.socratic {
-    height: 560px;
   }
 }
 /* 窄屏：三栏纵向堆叠（来源 → 问答 → 生成） */
@@ -529,16 +623,21 @@
     grid-template-columns: 1fr;
   }
   .doclearn__sources {
-    position: static;
+    height: auto;
     max-height: none;
+  }
+  .doclearn__chat {
+    height: auto;
+  }
+  .docchat.socratic {
+    height: 560px;
+    flex: 0 0 auto;
   }
   .doclearn-doclist {
     max-height: none;
   }
-}
-@media (max-width: 560px) {
-  .doclearn-actions__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .doclearn-sources__spare {
+    display: none;
   }
 }
 

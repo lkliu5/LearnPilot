@@ -126,17 +126,30 @@ export default function DocumentChat({ docIds, docTitles }: DocumentChatProps) {
       avatar="📄"
       title="和文档对话"
       subtitle={scopeLabel}
-      msgs={
-        msgs.length
-          ? msgs
-          : [
-              {
-                role: 'agent',
-                text: disabled
-                  ? '你好！左侧勾选一篇或多篇文档后，就可以在这里向我提问，我会严格根据文档内容回答并标注出处。'
-                  : '你好！我已读取所选文档。问我任何关于它的问题，我会严格基于文档内容作答，并在末尾标注出处来源。',
-              },
-            ]
+      msgs={msgs}
+      emptySlot={
+        /* NotebookLM 式大文档卡（纯展示空状态）：大图标 + 大标题 + 来源数 + 欢迎语；有消息后自动让位给气泡流 */
+        <div className="docchat-hero">
+          <span className="docchat-hero__wm" aria-hidden="true">
+            〜
+          </span>
+          <span className="docchat-hero__icon" aria-hidden="true">
+            {disabled ? '📄' : '📘'}
+          </span>
+          <h2 className="docchat-hero__title">
+            {disabled ? '和文档对话' : docTitles.length === 1 ? docTitles[0] : `${docTitles.length} 篇文档 · 合并对话`}
+          </h2>
+          <div className="docchat-hero__meta">
+            {disabled
+              ? '在左栏上传并勾选文档后，即可开始提问'
+              : `${docIds.length} 个来源 · 就绪 · 严格基于文档作答并标注出处`}
+          </div>
+          <p className="docchat-hero__welcome">
+            {disabled
+              ? '你好！左侧勾选一篇或多篇文档后，就可以在这里向我提问，我会严格根据文档内容回答并标注出处。'
+              : '你好！我已读取所选文档。问我任何关于它的问题，我会严格基于文档内容作答，并在末尾标注出处来源。'}
+          </p>
+        </div>
       }
       typing={typing}
       chips={disabled ? [] : CHIPS}

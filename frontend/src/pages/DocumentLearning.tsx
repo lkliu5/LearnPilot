@@ -75,12 +75,12 @@ interface ArtifactBag {
 }
 
 const KIND_META: { id: Kind; label: string; desc: string }[] = [
-  { id: 'lecture', label: '定制讲义', desc: '结构化 Markdown 讲义' },
-  { id: 'video', label: '讲解视频', desc: '分镜脚本 + 同步旁白' },
-  { id: 'diagram', label: '知识图解', desc: 'Mermaid 流程图' },
-  { id: 'mindmap', label: '思维导图', desc: '脉络树状图' },
-  { id: 'quiz', label: '练习题', desc: '分阶自测题' },
-  { id: 'flashcards', label: '记忆闪卡', desc: '正反翻卡速记' },
+  { id: 'lecture', label: '定制讲义', desc: '结构化讲义' },
+  { id: 'video', label: '讲解视频', desc: '脚本 + 旁白' },
+  { id: 'diagram', label: '知识图解', desc: '流程图' },
+  { id: 'mindmap', label: '思维导图', desc: '脉络树' },
+  { id: 'quiz', label: '练习题', desc: '分阶自测' },
+  { id: 'flashcards', label: '记忆闪卡', desc: '翻卡速记' },
 ]
 
 /* 文档学习形态 id（quiz/flashcards 平行链路）→ 统一资源类型图标 kind（flashcards→flashcard）。 */
@@ -854,6 +854,16 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
 
           {/* 文档概览（移至左栏「关于来源」信息区） */}
           {renderOverview()}
+
+          {/* 底部留白区：小图标空状态提示（纯展示） */}
+          <div className="doclearn-sources__spare" aria-hidden="true">
+            <span className="doclearn-sources__spare-icon">📄</span>
+            <p>
+              {docs.length
+                ? '可继续上传资料；勾选多篇即可跨文档统一问答与生成'
+                : '已上传的资料会显示在此。支持 PDF、文本、Markdown、Word'}
+            </p>
+          </div>
         </aside>
 
         {/* ============ 中栏 · 和文档问答（流式即问即答、溯源、历史保留） ============ */}
@@ -863,6 +873,9 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
 
         {/* ============ 右栏 · 生成六类 + 产出 ============ */}
         <section className="doclearn__col doclearn__studio">
+          <div className="doclearn__panel-title">
+            <span>生成学习资源</span>
+          </div>
           {!primaryId ? (
             <div className="doclearn-empty">
               <div className="doclearn-empty__art">📚</div>
@@ -896,7 +909,7 @@ export default function DocumentLearning({ onNavigate }: { onNavigate?: (page: P
                     return (
                       <button
                         key={k.id}
-                        className={`doclearn-act ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''} ${busy ? 'doclearn-act--busy' : ''}`}
+                        className={`doclearn-act doclearn-act--${k.id} ${active ? 'doclearn-act--active' : ''} ${done ? 'doclearn-act--done' : ''} ${busy ? 'doclearn-act--busy' : ''}`}
                         onClick={() => openOrGenerate(k.id)}
                         disabled={busy || !scopeIds.length}
                         title={done ? '点击在大预览中查看' : `基于所选文档生成${k.label}`}
