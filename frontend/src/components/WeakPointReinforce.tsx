@@ -6,9 +6,12 @@ import { USE_REAL_API } from '../services/api'
 import { reinforce } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
 
-/* 知识点 → 强化讲解 + 一道针对性练习（演示 Agent 错题驱动再生成）*/
-const reinforcementBank: Record<string, { point: string; recap: string; practice: QuizQuestion }> = {
-  q1: {
+type ReinforceCard = { point: string; recap: string; practice: QuizQuestion }
+
+/* 精修强化卡（错题 id → 强化讲解 + 针对性变式练习）：目前覆盖 nn 种子题库前三题；
+   未命中的错题走 derivedCard 按题目本身生成（错因回顾 + 原题重练），任意知识点/题库均可用。 */
+const reinforcementBank: Record<string, ReinforceCard> = {
+  nn_q1: {
     point: '神经元运算顺序',
     recap: '记忆口诀：**先乘后加再激活** —— ① 输入×权重求和 → ② 加偏置 b → ③ 激活函数。顺序不能颠倒，因为激活必须作用在「加权和+偏置」的结果上。',
     practice: {
@@ -24,7 +27,7 @@ const reinforcementBank: Record<string, { point: string; recap: string; practice
       explanation: '激活必须作用于加权和+偏置的结果，提前激活会破坏非线性表达能力。',
     },
   },
-  q2: {
+  nn_q2: {
     point: '激活函数辨析',
     recap: '激活函数 = 给神经元引入**非线性**的函数。常见三个：**ReLU**（max(0,x)）、**Sigmoid**、**Tanh**。注意「梯度 Gradient」是反向传播里的概念，**不是**激活函数。',
     practice: {
@@ -41,7 +44,7 @@ const reinforcementBank: Record<string, { point: string; recap: string; practice
       explanation: 'ReLU/Sigmoid/Tanh 描述均正确；Gradient（梯度）不是激活函数。',
     },
   },
-  q3: {
+  nn_q3: {
     point: 'ReLU 与梯度消失',
     recap: '**ReLU** 在正区间导数恒为 1，反向传播时梯度不会被反复压缩，因此能**缓解梯度消失**；而 Sigmoid/Tanh 在饱和区导数趋近 0，深层网络易梯度消失。',
     practice: {
@@ -66,7 +69,7 @@ export default function WeakPointReinforce({ wrong }: { wrong: QuizQuestion[] })
   const [remoteItems, setRemoteItems] = useState<
     { point: string; recap: string; practice: QuizQuestion }[] | null
   >(null)
-  const localItems = wrong.map((w) => reinforcementBank[w.question_id]).filter(Boolean)
+  const localItems = wrong.map((w) => reinforcementBank[w.question_id] ?? derivedCard(w))
   const items = USE_REAL_API && remoteItems ? remoteItems : localItems
 
   useEffect(() => {
@@ -145,4 +148,19 @@ export default function WeakPointReinforce({ wrong }: { wrong: QuizQuestion[] })
 /* 极简 **加粗** 渲染（仅用于 recap 短文本）*/
 function mdBold(s: string) {
   return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+}
+
+/* 未收录精修卡的错题：按题目本身生成强化卡——考点取题干、讲解取解析、练习为原题重练。
+   不依赖任何知识点写死内容，任意题库（78 点核心/非核心、联调兜底）均适用。 */
+function derivedCard(w: QuizQuestion): ReinforceCard {
+  const point = w.question_text.replace(/^【[^】]*】/, '').replace(/[？?。！!].*$/, '').slice(0, 18)
+  return {
+    point,
+    recap: `这题你上轮答错了。**解析**：${w.explanation || '回到讲义中对应小节，先弄懂考点再重练。'}`,
+    practice: {
+      ...w,
+      question_id: `r-${w.question_id}`,
+      question_text: `【强化重练】${w.question_text}`,
+    },
+  }
 }

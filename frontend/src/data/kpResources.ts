@@ -8,6 +8,7 @@
  * 联调模式（USE_REAL_API=true）不使用本文件，内容仍由后端按 kpId 真实生成。
  */
 import type { QuizQuestion } from '../components/QuizRenderer'
+import type { LectureScene } from '../remotion/LectureVideo'
 import { ksPointById } from './knowledgeSystem'
 
 export interface KpResourceContent {
@@ -21,12 +22,178 @@ export interface KpResourceContent {
   diagram: string
   /** 代码实操：浏览器内可跑的知识点 demo（本地 srcdoc 沙箱执行，见 CodeSandbox） */
   code: KpCodeDemo
+  /** 讲解视频 mock 分镜（联调走 8.3 POST /resource/video 真实生成；nn 沿用 LectureVideo 内默认分镜） */
+  video: KpVideoScript
+}
+
+/** 讲解视频 mock 分镜脚本：title=视频标题（知识点名），scenes 与接口 8.3 结构一致。 */
+export interface KpVideoScript {
+  title: string
+  scenes: LectureScene[]
 }
 
 /** 代码实操 demo：hint 为顶部「怎么用」提示，js 为 index.js 内容（在本地 iframe srcdoc 内执行）。 */
 export interface KpCodeDemo {
   hint: string
   js: string
+}
+
+/* ═══════════════════ 讲解视频 mock 分镜（5 核心点各 5 幕；nn 沿用 LectureVideo 默认分镜）═══════════════════
+   结构对齐后端 8.3：每幕 title + points[3] + 一句旁白；首幕课程导入、末幕学习闭环，与 nn 脚本同体例。 */
+
+const ML_VIDEO: KpVideoScript = {
+  title: '机器学习基础',
+  scenes: [
+    {
+      title: '课程导入 · 机器学习基础',
+      points: ['从数据中自动找规律', '监督 · 无监督 · 强化', '由领域知识生成智能体定制'],
+      narration: '欢迎学习机器学习基础。本视频由领域知识生成智能体为你定制。',
+    },
+    {
+      title: '机器学习在做什么',
+      points: ['传统编程：人写规则', '机器学习：从样本归纳规律', '用学到的规律预测新数据'],
+      narration: '传统编程由人来写规则，机器学习则从大量样本中自动归纳规律，再用规律预测新数据。',
+    },
+    {
+      title: '三大学习范式',
+      points: ['监督学习：例子带标签', '无监督学习：自己找结构', '强化学习：试错换奖励'],
+      narration: '监督学习从带标签的例子学映射，无监督学习自己发现结构，强化学习在试错中学习策略。',
+    },
+    {
+      title: '训练与泛化',
+      points: ['训练集上拟合规律', '测试集上检验泛化', '过拟合：记住了却不会用'],
+      narration: '模型在训练集上学习，在测试集上检验泛化能力；只会背训练集叫过拟合。',
+    },
+    {
+      title: '学习闭环',
+      points: ['数据 → 模型 → 评估', '误差驱动持续改进', '完成测验巩固理解'],
+      narration: '数据训练模型、评估暴露误差、误差驱动改进，构成机器学习的完整闭环。',
+    },
+  ],
+}
+
+const DL_VIDEO: KpVideoScript = {
+  title: '深度学习原理',
+  scenes: [
+    {
+      title: '课程导入 · 深度学习原理',
+      points: ['多层网络为何更强', '反向传播与梯度下降', '由领域知识生成智能体定制'],
+      narration: '欢迎学习深度学习原理。本视频由领域知识生成智能体为你定制。',
+    },
+    {
+      title: '从浅层到深层',
+      points: ['逐层提取更抽象特征', '低层边缘 → 高层语义', '端到端自动学特征'],
+      narration: '深层网络逐层提取特征，低层看到边缘纹理，高层理解语义，无需人工设计特征。',
+    },
+    {
+      title: '反向传播',
+      points: ['损失函数衡量差距', '链式法则回传梯度', '逐层更新权重'],
+      narration: '损失函数衡量预测与真实的差距，反向传播用链式法则把梯度逐层回传，指导权重更新。',
+    },
+    {
+      title: '梯度下降与优化器',
+      points: ['沿梯度反方向走一步', '学习率决定步长', 'SGD / Adam 等优化器'],
+      narration: '梯度下降沿梯度反方向更新参数，学习率决定步长，Adam 等优化器让下降更稳更快。',
+    },
+    {
+      title: '学习闭环',
+      points: ['前向算出损失', '反向更新权重', '完成测验巩固理解'],
+      narration: '前向传播算损失、反向传播更新权重，循环往复直到收敛，这就是深度学习的核心闭环。',
+    },
+  ],
+}
+
+const CNN_VIDEO: KpVideoScript = {
+  title: 'CNN架构',
+  scenes: [
+    {
+      title: '课程导入 · CNN架构',
+      points: ['卷积核提取局部特征', '卷积 → 池化 → 全连接', '由领域知识生成智能体定制'],
+      narration: '欢迎学习卷积神经网络架构。本视频由领域知识生成智能体为你定制。',
+    },
+    {
+      title: '卷积层',
+      points: ['卷积核滑窗做点积', '参数共享大幅省参数', '多个核提取多种特征'],
+      narration: '卷积核在图像上滑窗做点积提取局部特征，参数共享让模型远小于全连接网络。',
+    },
+    {
+      title: '池化与降采样',
+      points: ['最大池化保留显著特征', '缩小尺寸、扩大感受野', '提升平移鲁棒性'],
+      narration: '池化层缩小特征图尺寸并扩大感受野，最大池化保留最显著的响应，对平移更鲁棒。',
+    },
+    {
+      title: '经典结构范式',
+      points: ['卷积-池化交替堆叠', '末端全连接做分类', 'LeNet → AlexNet → ResNet'],
+      narration: '经典 CNN 由卷积和池化交替堆叠、末端接全连接分类，从 LeNet 演进到 ResNet。',
+    },
+    {
+      title: '学习闭环',
+      points: ['局部感受野层层抽象', '特征图可视化验证理解', '完成测验巩固理解'],
+      narration: '从局部感受野到层层抽象的特征图，理解卷积的工作方式后，完成测验巩固理解。',
+    },
+  ],
+}
+
+const TRANSFORMER_VIDEO: KpVideoScript = {
+  title: 'Transformer架构',
+  scenes: [
+    {
+      title: '课程导入 · Transformer架构',
+      points: ['全靠注意力机制', '抛弃循环与卷积', '由领域知识生成智能体定制'],
+      narration: '欢迎学习 Transformer 架构。本视频由领域知识生成智能体为你定制。',
+    },
+    {
+      title: '自注意力机制',
+      points: ['Query·Key 算相关性', 'softmax 归一为权重', '加权聚合 Value'],
+      narration: '自注意力用查询与键的点积衡量相关性，softmax 归一化成权重，再加权聚合值向量。',
+    },
+    {
+      title: '多头与位置编码',
+      points: ['多头关注不同关系', '位置编码补充顺序信息', '残差连接与层归一化'],
+      narration: '多头注意力从不同角度建模关系，位置编码补充顺序信息，残差与层归一化稳定训练。',
+    },
+    {
+      title: '编码器与解码器',
+      points: ['编码器理解输入序列', '解码器逐步生成输出', '大语言模型的基石'],
+      narration: '编码器负责理解输入，解码器逐步生成输出，这一架构成为大语言模型的基石。',
+    },
+    {
+      title: '学习闭环',
+      points: ['注意力权重可解释', '并行计算训练高效', '完成测验巩固理解'],
+      narration: '注意力权重可视化让模型可解释，并行计算带来高效训练，完成测验巩固理解。',
+    },
+  ],
+}
+
+const FINETUNE_VIDEO: KpVideoScript = {
+  title: '大模型微调技术',
+  scenes: [
+    {
+      title: '课程导入 · 大模型微调技术',
+      points: ['预训练 + 微调范式', '冻结与解冻的权衡', '由领域知识生成智能体定制'],
+      narration: '欢迎学习大模型微调技术。本视频由领域知识生成智能体为你定制。',
+    },
+    {
+      title: '为什么要微调',
+      points: ['通用能力来自预训练', '少量数据适配下游任务', '成本远低于从头训练'],
+      narration: '预训练赋予模型通用能力，微调用少量任务数据完成适配，成本远低于从头训练。',
+    },
+    {
+      title: '全量微调与冻结',
+      points: ['全参数更新：效果好开销大', '冻结主干只训任务头', '折中：解冻顶部几层'],
+      narration: '全量微调更新所有参数，开销最大；冻结主干只训练任务头最省；解冻顶部几层是折中。',
+    },
+    {
+      title: '参数高效微调',
+      points: ['LoRA：低秩增量矩阵', 'Adapter：插入小模块', '推理可合并零延迟'],
+      narration: '参数高效微调只训练极小的增量参数，LoRA 用低秩矩阵，训练后可合并进原模型。',
+    },
+    {
+      title: '学习闭环',
+      points: ['按算力与数据选策略', '评估防灾难性遗忘', '完成测验巩固理解'],
+      narration: '按算力和数据量选择微调策略，并评估防止灾难性遗忘，完成测验巩固理解。',
+    },
+  ],
 }
 
 /* ═══════════════════════ 代码实操 demo（6 核心点各一份，真实可跑）═══════════════════════
@@ -269,6 +436,7 @@ document.getElementById('app').innerHTML =
 /* ─────────────────────────── 机器学习基础 (ml) ─────────────────────────── */
 const ml: KpResourceContent = {
   code: ML_CODE,
+  video: ML_VIDEO,
   lectureByLevel: {
     入门: `# 机器学习基础（入门版）
 
@@ -418,6 +586,7 @@ R(h) = E_{(x,y)~D}[ L(h(x), y) ]
 /* ─────────────────────────── 深度学习原理 (dl) ─────────────────────────── */
 const dl: KpResourceContent = {
   code: DL_CODE,
+  video: DL_VIDEO,
   lectureByLevel: {
     入门: `# 深度学习原理（入门版）
 
@@ -554,6 +723,7 @@ block = nn.Sequential(
 /* ─────────────────────────── CNN架构 (cnn) ─────────────────────────── */
 const cnn: KpResourceContent = {
   code: CNN_CODE,
+  video: CNN_VIDEO,
   lectureByLevel: {
     入门: `# CNN架构（入门版）
 
@@ -689,6 +859,7 @@ conv = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
 /* ─────────────────────────── Transformer架构 (transformer) ─────────────────────────── */
 const transformer: KpResourceContent = {
   code: TRANSFORMER_CODE,
+  video: TRANSFORMER_VIDEO,
   lectureByLevel: {
     入门: `# Transformer架构（入门版）
 
@@ -822,6 +993,7 @@ Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V
 /* ─────────────────────────── 大模型微调技术 (finetune) ─────────────────────────── */
 const finetune: KpResourceContent = {
   code: FINETUNE_CODE,
+  video: FINETUNE_VIDEO,
   lectureByLevel: {
     入门: `# 大模型微调技术（入门版）
 
@@ -1010,7 +1182,55 @@ ${desc}
   D --> E
 `,
     code: genericCodeDemo(name, desc),
+    video: genericVideoScript(name, desc),
   }
+}
+
+/**
+ * 非核心目录点的通用讲解视频分镜：按名称/简介参数化，首幕即明示为通用讲解模板
+ * （演示模式；联调走 8.3 按知识点真实生成分镜）。
+ */
+export function genericVideoScript(name: string, description: string): KpVideoScript {
+  const desc = description || `${name} 的核心概念与应用`
+  return {
+    title: name,
+    scenes: [
+      {
+        title: `课程导入 · ${name}`,
+        points: [desc, '通用讲解模板（演示模式）', '联调后按知识点真实生成'],
+        narration: `欢迎学习${name}。本视频为通用讲解模板，联调模式将按该知识点真实生成分镜。`,
+      },
+      {
+        title: '它要解决什么问题',
+        points: ['明确适用场景与目标', '梳理输入与输出', '定位与先修知识的关系'],
+        narration: `先想清楚${name}要解决什么问题、适用在什么场景，再进入机制细节。`,
+      },
+      {
+        title: '核心机制',
+        points: ['抓住关键概念与术语', '走一遍工作流程', desc],
+        narration: `围绕核心机制，抓住关键概念，把${name}的工作流程完整走一遍。`,
+      },
+      {
+        title: '实践与进阶',
+        points: ['了解典型应用与局限', '避开常见误区', '结合图解与外部资源深入'],
+        narration: `最后了解${name}的典型应用与局限，结合知识图解与外部资源持续深入。`,
+      },
+    ],
+  }
+}
+
+/**
+ * 讲解视频 mock 分镜解析：kpId → 该知识点分镜脚本。
+ * nn 与未知 kpId 返回 null——由 VideoLecture 回落其内置 DEFAULT_SCENES（与后端 nn 脚本逐字一致，零回归），
+ * 避免本数据模块反向依赖 remotion 运行时。
+ */
+export function kpVideoScript(kpId: string): KpVideoScript | null {
+  if (kpId === 'nn') return null
+  const hit = KP_RESOURCES[kpId]
+  if (hit) return hit.video
+  const ks = ksPointById(kpId)
+  if (ks) return genericVideoScript(ks.name, ks.description)
+  return null
 }
 
 /**

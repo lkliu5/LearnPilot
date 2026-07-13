@@ -11,6 +11,7 @@ import {
   type LectureScene,
 } from '../remotion/LectureVideo'
 import { USE_REAL_API } from '../services/api'
+import { kpVideoScript } from '../data/kpResources'
 import { getVideo, startVideoRender, getTaskStatus, type VideoNarrationLine } from '../services/resource'
 import { getResourceKpId } from '../services/resourceNav'
 import { ttsSpeak, ttsStop } from '../services/tts'
@@ -58,12 +59,22 @@ export default function VideoLecture({
   const controlled = !!propScenes?.length
 
   /* B7-b 联调 + 动态分镜：非受控时分镜脚本（标题/要点/旁白）改吃 8.3 POST /resource/video，
-     画面与旁白随当前知识点动态生成；mock 模式 / 请求失败保持本地默认脚本（兜底占位），
-     朗读与点击 seek 行为不变 */
-  const [fetchedScenes, setFetchedScenes] = useState<LectureScene[]>(DEFAULT_SCENES)
-  const [fetchedTitle, setFetchedTitle] = useState<string>(DEFAULT_TITLE)
+     画面与旁白随当前知识点动态生成；mock 模式按 kpId 取本地分镜库（kpVideoScript：
+     5 核心点精修 + 体系点通用模板；nn/未知返回 null → 内置 nn 默认脚本，零回归）；
+     联调请求失败同样回落本地分镜，朗读与点击 seek 行为不变 */
+  const [fetchedScenes, setFetchedScenes] = useState<LectureScene[]>(
+    () => kpVideoScript(resolvedKpId)?.scenes ?? DEFAULT_SCENES
+  )
+  const [fetchedTitle, setFetchedTitle] = useState<string>(() => kpVideoScript(resolvedKpId)?.title ?? DEFAULT_TITLE)
   useEffect(() => {
-    if (controlled || !USE_REAL_API) return
+    if (controlled) return
+    if (!USE_REAL_API) {
+      // mock：按当前知识点选本地分镜（组件通常随页面重挂载，此处兜底 kpId 变化不重挂的场景）
+      const local = kpVideoScript(resolvedKpId)
+      setFetchedScenes(local?.scenes ?? DEFAULT_SCENES)
+      setFetchedTitle(local?.title ?? DEFAULT_TITLE)
+      return
+    }
     // 难度跟随当前实际选择（与讲义/缓存键 (kp_id, difficulty, kind) 一致；切档自动重取）
     getVideo(resolvedKpId, difficulty)
       .then((d) => {

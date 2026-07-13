@@ -14,7 +14,8 @@ import {
   generateQuiz,
   generateFlashcards,
 } from '../services/documentLearning'
-import { KP_RESOURCES, kpCodeDemo } from '../data/kpResources'
+import { KP_RESOURCES, genericKpContent, kpCodeDemo } from '../data/kpResources'
+import { ksPointById } from '../data/knowledgeSystem'
 import { exportLectureMarkdown, exportLectureToPdf } from '../utils/lectureExport'
 import { KIND_LABEL, type ResourceHistoryItem } from '../services/resourceHistory'
 import '../pages/LearningResource.css'
@@ -167,7 +168,9 @@ export default function ResourceLibraryPreview({
   useEffect(() => {
     if (isDoc) return
     let alive = true
-    const mock = KP_RESOURCES[kpId]
+    /* mock 内容包：核心点取精修内容；未收录（nn 精修常量在资源页内部、及全部体系点）
+       回退按名称/简介参数化的通用模板，预览不再空白（联调走后端真实内容，不受影响）。 */
+    const mock = KP_RESOURCES[kpId] ?? genericKpContent(kpName, ksPointById(kpId)?.description ?? '')
     async function load() {
       try {
         if (kind === 'lecture') {

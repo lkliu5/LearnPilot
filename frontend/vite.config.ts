@@ -15,7 +15,7 @@ export default defineConfig({
     include: [
       'react', 'react-dom', 'react/jsx-runtime', '@react-three/fiber', 'three',
       // 多模态重型库预打包，避免懒加载首访时 Vite 重新优化触发整页刷新
-      '@codesandbox/sandpack-react', 'mermaid', 'markmap-lib', 'markmap-view',
+      'react-syntax-highlighter', 'mermaid', 'markmap-lib', 'markmap-view',
       'remotion', '@remotion/player',
     ],
   },
