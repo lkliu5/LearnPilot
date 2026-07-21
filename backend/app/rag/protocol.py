@@ -77,10 +77,37 @@ class EvidenceItem(_StrictModel):
         return value
 
 
+class CalibrationProfile(_StrictModel):
+    """按Embedding Profile隔离的离线Confidence校准契约。"""
+
+    profile_id: str
+    threshold: float = Field(ge=0.0, le=1.0)
+    calibration_version: str
+
+    @field_validator("profile_id", "calibration_version")
+    @classmethod
+    def _calibration_not_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("calibration profile fields must not be blank")
+        return normalized
+
+
+class TrustReport(_StrictModel):
+    """检索阶段Trust基础快照；不代表最终答案可信度。"""
+
+    retrieval_confidence: float = Field(ge=0.0, le=1.0)
+    evidence_count: int = Field(ge=0)
+    source_count: int = Field(ge=0)
+    coverage: float = Field(ge=0.0, le=1.0)
+    reason_codes: list[str] = Field(default_factory=list)
+
+
 class RAGResponse(_StrictModel):
     evidence: list[EvidenceItem] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     evidence_count: int = Field(default=0, ge=0)
     source_count: int = Field(default=0, ge=0)
     reason_codes: list[str] = Field(default_factory=list)
+    trust_report: TrustReport | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -104,6 +104,9 @@ def test_pipeline_returns_valid_empty_response():
     assert response.metadata["lowConfidence"] is True
     assert response.evidence_count == response.source_count == 0
     assert response.reason_codes == ["NO_EVIDENCE", "LOW_SCORE"]
+    assert response.trust_report is not None
+    assert response.trust_report.retrieval_confidence == 0.0
+    assert response.trust_report.coverage == 0.0
 
 
 def test_pipeline_exposes_score_breakdown_counts_and_single_source_reason():
@@ -124,6 +127,8 @@ def test_pipeline_exposes_score_breakdown_counts_and_single_source_reason():
     assert response.confidence == 0.81
     assert response.evidence_count == response.source_count == 1
     assert response.reason_codes == ["SINGLE_SOURCE"]
+    assert response.trust_report is not None
+    assert response.trust_report.coverage == 1.0
     evidence = response.evidence[0]
     assert evidence.reason_codes == ["SINGLE_SOURCE"]
     assert evidence.score_breakdown["confidenceScore"] == 0.81

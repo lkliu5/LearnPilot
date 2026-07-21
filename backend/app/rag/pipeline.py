@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any, Protocol
 
-from app.rag.protocol import EvidenceItem, QueryPlan, RAGRequest, RAGResponse
+from app.rag.protocol import EvidenceItem, QueryPlan, RAGRequest, RAGResponse, TrustReport
 from app.rag.retriever import get_retriever
 from app.rag.text_quality import validate_text_quality
 
@@ -189,6 +189,13 @@ class TrustedRetrievalPipeline:
             evidence_count=len(evidence),
             source_count=len(source_ids),
             reason_codes=reason_codes,
+            trust_report=TrustReport(
+                retrieval_confidence=confidence,
+                evidence_count=len(evidence),
+                source_count=len(source_ids),
+                coverage=(len(source_ids) / len(evidence)) if evidence else 0.0,
+                reason_codes=reason_codes,
+            ),
             metadata={
                 "schemaVersion": self.schema_version,
                 "queryPlan": plan.model_dump(mode="json"),

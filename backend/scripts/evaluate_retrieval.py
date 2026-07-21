@@ -12,6 +12,12 @@ if str(_BACKEND_ROOT) not in sys.path:
 
 from app.rag.evaluation import RetrievalEvaluator, load_evaluation_cases
 from app.rag.evaluation import measure_latency_phases, validate_evaluation_dataset
+from app.rag.calibration import (
+    confidence_bucket_analysis,
+    expected_calibration_error,
+    recommend_threshold,
+    shadow_gate,
+)
 from app.rag.embeddings import (
     Embedder,
     EmbeddingProfile,
@@ -19,6 +25,7 @@ from app.rag.embeddings import (
     set_embedder_for_evaluation,
 )
 from app.rag.pipeline import TrustedRetrievalPipeline
+from app.rag.protocol import CalibrationProfile
 from app.rag.retriever import HybridRetriever, LegacyHybridRetriever, get_retriever
 from app.rag.vector_store import _ChromaStore
 from app.core.config import settings
@@ -36,6 +43,13 @@ def main() -> None:
     parser.add_argument("--require-real", action="store_true")
     parser.add_argument("--steady-rounds", type=int, default=5)
     parser.add_argument(
+        "--confidence-analysis",
+        action="store_true",
+        help="输出离线Confidence分桶、ECE、阈值建议和Shadow Gate统计",
+    )
+    parser.add_argument("--calibration-threshold", type=float)
+    parser.add_argument("--calibration-version")
+    parser.add_argument(
         "--compare-legacy",
         action="store_true",
         help="使用TASK-003-C1旧Hybrid算法作为before基线",
@@ -46,6 +60,14 @@ def main() -> None:
         help="关闭Score Calibration，使用TASK-003-D1排序作为before基线",
     )
     args = parser.parse_args()
+
+    if args.confidence_analysis and (
+        args.calibration_threshold is None or not args.calibration_version
+    ):
+        parser.error(
+            "--confidence-analysis必须显式提供--calibration-threshold和"
+            "--calibration-version"
+        )
 
     cases = load_evaluation_cases(args.dataset)
     require_real = (
@@ -119,6 +141,43 @@ def main() -> None:
     payload = report.model_dump(mode="json")
     payload["embeddingRuntime"] = embedding_status
     payload["latencyPhases"] = latency
+    if args.confidence_analysis:
+        analysis_system = "d2a_calibrated" if args.compare_d1 else "trusted_pipeline"
+        case_by_id = {case.case_id: case for case in cases}
+        records = []
+        for result in report.results:
+            if result.system != analysis_system:
+                continue
+            case = case_by_id[result.case_id]
+            confidence = max(result.scores, default=0.0)
+            target = 0.0 if case.relevance == 0 else float(result.metrics["hit_rate@5"])
+            records.append(
+                {
+                    "caseId": result.case_id,
+                    "confidence": confidence,
+                    "target": target,
+                    "hit_rate@5": result.metrics.get("hit_rate@5"),
+                    "recall@5": result.metrics.get("recall@5"),
+                    "mrr": result.metrics.get("mrr"),
+                    "emptyResult": result.empty_result,
+                }
+            )
+        calibration_profile = CalibrationProfile(
+            profile_id=embedding_status["profileId"],
+            threshold=args.calibration_threshold,
+            calibration_version=args.calibration_version,
+        )
+        payload["confidenceAnalysis"] = {
+            "system": analysis_system,
+            "caseCount": len(records),
+            "targetDefinition": "有答案用例HitRate@5；无答案用例目标为0",
+            "confidenceSemantics": "检索相对强度分数，不是答案正确概率",
+            "buckets": confidence_bucket_analysis(records),
+            "ece": expected_calibration_error(records),
+            "thresholdRecommendation": recommend_threshold(records),
+            "shadowGate": shadow_gate(records, calibration_profile),
+            "records": records,
+        }
     rendered = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")
