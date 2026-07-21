@@ -6,13 +6,63 @@
 """
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import logging
 import math
 import threading
+from typing import Sequence
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
+from app.rag.protocol import RetrievalCandidate
 
 logger = logging.getLogger("app.rag.reranker")
+
+
+class RerankResult(BaseModel):
+    """离线重排结果；同时保留候选原始名次与重排名次。"""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    candidate_id: str = Field(min_length=1)
+    original_rank: int = Field(ge=1)
+    rerank_rank: int = Field(ge=1)
+    original_score: float
+    rerank_score: float
+
+
+class BaseReranker(ABC):
+    """离线 Reranker 抽象，不接入现有生产调用链。"""
+
+    @abstractmethod
+    def rerank(
+        self,
+        query: str,
+        candidates: Sequence[RetrievalCandidate],
+    ) -> list[RerankResult]:
+        """在候选集合不变的前提下返回完整排序映射。"""
+
+
+class MockReranker(BaseReranker):
+    """恒等重排器：只验证实验链路，不改变候选顺序或分数。"""
+
+    def rerank(
+        self,
+        query: str,
+        candidates: Sequence[RetrievalCandidate],
+    ) -> list[RerankResult]:
+        del query
+        return [
+            RerankResult(
+                candidate_id=candidate.id,
+                original_rank=rank,
+                rerank_rank=rank,
+                original_score=candidate.confidence_score,
+                rerank_score=candidate.confidence_score,
+            )
+            for rank, candidate in enumerate(candidates, start=1)
+        ]
 
 
 def _sigmoid(x: float) -> float:
