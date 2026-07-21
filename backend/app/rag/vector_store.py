@@ -16,6 +16,12 @@ import os
 import threading
 
 from app.core.config import settings
+from app.rag.embeddings import (
+    EmbeddingDimensionError,
+    EmbeddingProfile,
+    get_embedding_profile,
+    validate_vector_dimension,
+)
 
 logger = logging.getLogger("app.rag.vector_store")
 
@@ -49,13 +55,25 @@ class _NumpyStore:
     保证「文档专属集合」与内置 kb_chunks 互不污染（Chroma 不可用时的降级路径同样隔离）。
     """
 
-    def __init__(self, path: str, collection: str = _COLLECTION) -> None:
+    def __init__(
+        self,
+        path: str,
+        collection: str = _COLLECTION,
+        profile: EmbeddingProfile | None = None,
+    ) -> None:
+        self.profile = profile or get_embedding_profile()
         suffix = "" if collection == _COLLECTION else f"__{_safe_collection(collection)}"
         self._path = os.path.join(path, f"fallback_store{suffix}.json")
         os.makedirs(path, exist_ok=True)
         self._items: dict[str, dict] = {}
         self._lock = threading.Lock()
         self._load()
+        for cid, item in self._items.items():
+            validate_vector_dimension(
+                item.get("embedding") or [],
+                expected=self.profile.dimension,
+                context=f"Collection {self._path} stored[{cid}] ",
+            )
 
     def _load(self) -> None:
         if os.path.exists(self._path):
@@ -70,6 +88,12 @@ class _NumpyStore:
             json.dump(self._items, f, ensure_ascii=False)
 
     def add(self, ids, embeddings, documents, metadatas) -> None:
+        for index, vector in enumerate(embeddings):
+            validate_vector_dimension(
+                vector,
+                expected=self.profile.dimension,
+                context=f"Collection {collection_label(self)} add[{index}] ",
+            )
         with self._lock:
             for i, cid in enumerate(ids):
                 self._items[cid] = {
@@ -80,6 +104,11 @@ class _NumpyStore:
             self._persist()
 
     def query(self, embedding, n_results):
+        validate_vector_dimension(
+            embedding,
+            expected=self.profile.dimension,
+            context=f"Collection {collection_label(self)} query ",
+        )
         scored = [
             (cid, _cosine(embedding, it["embedding"]), it)
             for cid, it in self._items.items()
@@ -122,24 +151,68 @@ class _NumpyStore:
 class _ChromaStore:
     """Chroma 持久化集合封装。"""
 
-    def __init__(self, path: str, collection: str = _COLLECTION) -> None:
+    def __init__(
+        self,
+        path: str,
+        collection: str = _COLLECTION,
+        profile: EmbeddingProfile | None = None,
+    ) -> None:
         import chromadb
 
         os.makedirs(path, exist_ok=True)
         self._name = _safe_collection(collection)
+        self.profile = profile or get_embedding_profile()
         self._client = chromadb.PersistentClient(path=path)
         # 余弦空间；嵌入由本层显式提供（不使用 chroma 内置 embedding function）。
         # 文档学习传入专属 collection 名 → 与内置 kb_chunks 物理隔离、互不污染。
         self._col = self._client.get_or_create_collection(
-            name=self._name, metadata={"hnsw:space": "cosine"}
+            name=self._name,
+            metadata={
+                "hnsw:space": "cosine",
+                "embedding_provider": self.profile.provider,
+                "embedding_model": self.profile.model_name,
+                "embedding_dimension": self.profile.dimension,
+                "embedding_profile_id": self.profile.profile_id,
+            },
         )
+        self._validate_collection_profile()
+
+    def _validate_collection_profile(self) -> None:
+        metadata = self._col.metadata or {}
+        declared = metadata.get("embedding_dimension")
+        if declared is not None and int(declared) != self.profile.dimension:
+            raise EmbeddingDimensionError(
+                f"Collection {self._name}维度不一致："
+                f"expected={self.profile.dimension}, actual={declared}"
+            )
+        if self._col.count() == 0:
+            return
+        sample = self._col.get(limit=1, include=["embeddings"])
+        embeddings = sample.get("embeddings")
+        if embeddings is not None and len(embeddings):
+            validate_vector_dimension(
+                list(embeddings[0]),
+                expected=self.profile.dimension,
+                context=f"Collection {self._name} stored ",
+            )
 
     def add(self, ids, embeddings, documents, metadatas) -> None:
+        for index, vector in enumerate(embeddings):
+            validate_vector_dimension(
+                vector,
+                expected=self.profile.dimension,
+                context=f"Collection {self._name} add[{index}] ",
+            )
         self._col.add(
             ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas
         )
 
     def query(self, embedding, n_results):
+        validate_vector_dimension(
+            embedding,
+            expected=self.profile.dimension,
+            context=f"Collection {self._name} query ",
+        )
         n = min(n_results, max(1, self._col.count()))
         res = self._col.query(
             query_embeddings=[embedding],
@@ -189,6 +262,10 @@ _store = None
 _store_lock = threading.Lock()
 
 
+def collection_label(store: object) -> str:
+    return str(getattr(store, "_name", getattr(store, "_path", "unknown")))
+
+
 def get_vector_store():
     """返回向量库单例：优先 Chroma，失败降级 numpy 库（内置知识库 kb_chunks 集合）。"""
     global _store
@@ -201,6 +278,8 @@ def get_vector_store():
         try:
             _store = _ChromaStore(path)
             logger.info("向量库：Chroma 持久化集合就绪（path=%s）", path)
+        except EmbeddingDimensionError:
+            raise
         except Exception as exc:  # noqa: BLE001 chromadb 不可用 → 降级
             logger.warning(
                 "Chroma 初始化失败，降级为内存余弦向量库（JSON 持久化）：%s", exc
@@ -217,6 +296,8 @@ def get_collection_store(collection: str):
     path = settings.chroma_dir
     try:
         return _ChromaStore(path, collection=collection)
+    except EmbeddingDimensionError:
+        raise
     except Exception as exc:  # noqa: BLE001 chromadb 不可用 → 降级（同样按集合隔离）
         logger.warning(
             "Chroma 命名集合 %s 初始化失败，降级为内存余弦向量库：%s", collection, exc

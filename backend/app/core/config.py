@@ -89,9 +89,12 @@ class Settings(BaseSettings):
     chroma_dir: str = "./data/chroma"
     model_cache_dir: str = "./data/models"
     # 本地模型名（sentence-transformers 自动下载到 model_cache_dir；加载失败自动降级）
+    embedding_provider: str = "sentence-transformers"
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
+    embedding_dimension: int = 512
     reranker_model_name: str = "BAAI/bge-reranker-base"
     # 降级哈希嵌入维度（embedding 模型不可用时启用，保证全链路可跑）
+    # 向后兼容旧环境变量；新基础设施统一使用 embedding_dimension，禁止降级时改变维度。
     embedding_fallback_dim: int = 256
     # 切片参数（需求文档 4.3.1）
     chunk_size: int = 512
