@@ -6,6 +6,7 @@ B1：启动时初始化数据库 + 种子 + 日志脱敏；挂载 auth / admin �
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -48,6 +49,9 @@ from app.core.envelope import (
 from app.core.init_db import init_db
 from app.core.logging import setup_logging
 from app.core.security import UserContextMiddleware
+from app.rag.embeddings import get_embedder
+
+logger = logging.getLogger("app.main")
 
 
 @asynccontextmanager
@@ -55,6 +59,16 @@ async def lifespan(app: FastAPI):
     # 启动：装脱敏过滤器 + 建表灌种子（幂等）
     setup_logging()
     init_db()
+    embedding_status = get_embedder().status(load=True)
+    logger.info(
+        "embedding_runtime mode=%s provider=%s model=%s dimension=%s fallbackAllowed=%s loadFailed=%s",
+        embedding_status["mode"],
+        embedding_status["provider"],
+        embedding_status["modelName"],
+        embedding_status["dimension"],
+        embedding_status["fallbackAllowed"],
+        bool(embedding_status["loadError"]),
+    )
     yield
 
 

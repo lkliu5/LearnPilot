@@ -22,6 +22,7 @@ from app.rag.embeddings import (
     get_embedding_profile,
     validate_vector_dimension,
 )
+from app.rag.text_quality import validate_text_quality
 
 logger = logging.getLogger("app.rag.vector_store")
 
@@ -88,6 +89,8 @@ class _NumpyStore:
             json.dump(self._items, f, ensure_ascii=False)
 
     def add(self, ids, embeddings, documents, metadatas) -> None:
+        for index, document in enumerate(documents):
+            validate_text_quality(str(document), context=f"Collection写入[{index}] ")
         for index, vector in enumerate(embeddings):
             validate_vector_dimension(
                 vector,
@@ -197,6 +200,8 @@ class _ChromaStore:
             )
 
     def add(self, ids, embeddings, documents, metadatas) -> None:
+        for index, document in enumerate(documents):
+            validate_text_quality(str(document), context=f"Collection {self._name}写入[{index}] ")
         for index, vector in enumerate(embeddings):
             validate_vector_dimension(
                 vector,

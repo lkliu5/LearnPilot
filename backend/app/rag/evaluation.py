@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import time
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,45 @@ from app.rag.protocol import RAGRequest
 def load_evaluation_cases(path: str | Path) -> list[RetrievalEvaluationCase]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return [RetrievalEvaluationCase.model_validate(item) for item in payload]
+
+
+def validate_evaluation_dataset(
+    cases: list[RetrievalEvaluationCase],
+    *,
+    available_document_ids: set[str] | None = None,
+    available_chunk_ids: set[str] | None = None,
+) -> None:
+    case_ids: set[str] = set()
+    queries: dict[str, tuple[set[str], set[str]]] = {}
+    for case in cases:
+        if case.case_id in case_ids:
+            raise ValueError(f"重复case_id：{case.case_id}")
+        case_ids.add(case.case_id)
+        normalized_query = " ".join(case.query.lower().split())
+        expectation = (set(case.expected_document_ids), set(case.expected_chunk_ids))
+        if normalized_query in queries:
+            if queries[normalized_query] != expectation:
+                raise ValueError(f"相同query存在冲突标注：{case.query}")
+            raise ValueError(f"重复query：{case.query}")
+        queries[normalized_query] = expectation
+        if available_document_ids is not None:
+            invalid = set(case.expected_document_ids) - available_document_ids
+            invalid.update(
+                expected.document_id
+                for expected in case.expected_evidence
+                if expected.document_id and expected.document_id not in available_document_ids
+            )
+            if invalid:
+                raise ValueError(f"{case.case_id}包含失效document ID：{sorted(invalid)}")
+        if available_chunk_ids is not None:
+            invalid_chunks = set(case.expected_chunk_ids) - available_chunk_ids
+            invalid_chunks.update(
+                expected.chunk_id
+                for expected in case.expected_evidence
+                if expected.chunk_id and expected.chunk_id not in available_chunk_ids
+            )
+            if invalid_chunks:
+                raise ValueError(f"{case.case_id}包含失效chunk ID：{sorted(invalid_chunks)}")
 
 
 def _identity(item: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -90,7 +130,17 @@ def calculate_case_metrics(
         found = matched_keys(ranked[:k])
         metrics[f"recall@{k}"] = len(found) / len(relevant_keys)
         metrics[f"hit_rate@{k}"] = 1.0 if found else 0.0
-        gains = [_grade(grades, doc, chunk) for doc, chunk in ranked[:k]]
+        gains = []
+        credited: set[str] = set()
+        for document_id, chunk_id in ranked[:k]:
+            matching = set()
+            if document_id and f"doc:{document_id}" in grades:
+                matching.add(f"doc:{document_id}")
+            if chunk_id and f"chunk:{chunk_id}" in grades:
+                matching.add(f"chunk:{chunk_id}")
+            fresh = matching - credited
+            gains.append(max((grades[key] for key in fresh), default=0))
+            credited.update(fresh)
         dcg = sum((2**gain - 1) / math.log2(rank + 2) for rank, gain in enumerate(gains))
         ideal = sorted(grades.values(), reverse=True)[:k]
         idcg = sum((2**gain - 1) / math.log2(rank + 2) for rank, gain in enumerate(ideal))
@@ -132,6 +182,56 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     if lower == upper:
         return ordered[lower]
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+
+def measure_latency_phases(
+    old_call,
+    new_call,
+    *,
+    warmup_rounds: int = 2,
+    steady_rounds: int = 5,
+) -> dict[str, Any]:
+    """分离冷启动/预热/稳态，并在稳态交替新旧执行顺序。"""
+    if warmup_rounds < 0 or steady_rounds < 1:
+        raise ValueError("warmup_rounds需>=0且steady_rounds需>=1")
+
+    def measured(call) -> float:
+        started = time.perf_counter()
+        call()
+        return (time.perf_counter() - started) * 1000
+
+    cold = {"oldMs": measured(old_call), "newMs": measured(new_call)}
+    warmup_order = []
+    for index in range(warmup_rounds):
+        order = (("old", old_call), ("new", new_call)) if index % 2 == 0 else (("new", new_call), ("old", old_call))
+        warmup_order.append([name for name, _ in order])
+        for _, call in order:
+            call()
+
+    samples = {"old": [], "new": []}
+    execution_order = []
+    for index in range(steady_rounds):
+        order = (("old", old_call), ("new", new_call)) if index % 2 == 0 else (("new", new_call), ("old", old_call))
+        execution_order.append([name for name, _ in order])
+        for name, call in order:
+            samples[name].append(measured(call))
+
+    def summary(values: list[float]) -> dict[str, float | int]:
+        return {
+            "sampleCount": len(values),
+            "meanMs": sum(values) / len(values),
+            "medianMs": statistics.median(values),
+            "p95Ms": _percentile(values, 0.95) or 0.0,
+        }
+
+    return {
+        "coldStart": cold,
+        "warmupRounds": warmup_rounds,
+        "warmupOrder": warmup_order,
+        "steadyRounds": steady_rounds,
+        "executionOrder": execution_order,
+        "steadyState": {"old": summary(samples["old"]), "new": summary(samples["new"])},
+    }
 
 
 def _candidate_score(item: dict[str, Any]) -> float:

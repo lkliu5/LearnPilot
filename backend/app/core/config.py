@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     embedding_provider: str = "sentence-transformers"
     embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
     embedding_dimension: int = 512
+    embedding_allow_fallback: bool = True
+    embedding_evaluation_require_real: bool = False
     reranker_model_name: str = "BAAI/bge-reranker-base"
     # 降级哈希嵌入维度（embedding 模型不可用时启用，保证全链路可跑）
     # 向后兼容旧环境变量；新基础设施统一使用 embedding_dimension，禁止降级时改变维度。

@@ -11,6 +11,7 @@ from typing import Any, Protocol
 
 from app.rag.protocol import EvidenceItem, QueryPlan, RAGRequest, RAGResponse
 from app.rag.retriever import get_retriever
+from app.rag.text_quality import validate_text_quality
 
 _KEYWORD_RE = re.compile(r"[A-Za-z0-9_+#.-]+|[一-鿿]+")
 logger = logging.getLogger("app.rag.pipeline")
@@ -61,6 +62,8 @@ class TrustedRetrievalPipeline:
 
     @classmethod
     def _evidence(cls, candidate: dict[str, Any]) -> EvidenceItem:
+        content = str(candidate.get("content") or "")
+        validate_text_quality(content, context="Evidence构建 ")
         metadata = dict(candidate.get("metadata") or {})
         source = {
             "chunkId": candidate.get("id"),
@@ -79,7 +82,7 @@ class TrustedRetrievalPipeline:
             key: value for key, value in retrieval_metadata.items() if value is not None
         }
         return EvidenceItem(
-            content=str(candidate.get("content") or ""),
+            content=content,
             source=source,
             score=cls._score(candidate),
             metadata=retrieval_metadata,

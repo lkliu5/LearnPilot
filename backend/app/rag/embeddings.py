@@ -17,6 +17,8 @@ import os
 import re
 import threading
 from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 from app.core.config import settings
 
@@ -39,6 +41,16 @@ class EmbeddingConfigurationError(RuntimeError):
 
 class EmbeddingDimensionError(ValueError):
     """向量维度不符合当前Embedding Profile。"""
+
+
+class EmbeddingUnavailableError(RuntimeError):
+    """Embedding不可用且策略不允许降级。"""
+
+
+class EmbeddingRuntimeMode(str, Enum):
+    REAL = "real_embedding"
+    HASH = "hash_fallback"
+    UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True)
@@ -95,23 +107,40 @@ def model_is_cached(model_name: str) -> bool:
 class Embedder:
     """向量化适配层：优先 bge-small-zh，失败降级为哈希嵌入。"""
 
-    def __init__(self) -> None:
-        self.profile = get_embedding_profile()
+    def __init__(
+        self,
+        *,
+        profile: EmbeddingProfile | None = None,
+        allow_fallback: bool | None = None,
+    ) -> None:
+        self.profile = profile or get_embedding_profile()
+        self.allow_fallback = (
+            settings.embedding_allow_fallback
+            if allow_fallback is None
+            else allow_fallback
+        )
         self.model_name = self.profile.model_name
         self.fallback_dim = self.profile.dimension
         self._model = None  # type: ignore[var-annotated]
         self._loaded = False  # 是否已尝试加载（无论成功失败）
         self._configuration_error: EmbeddingConfigurationError | None = None
+        self._unavailable_error: EmbeddingUnavailableError | None = None
         self.degraded = False  # True 表示当前走哈希降级
+        self.runtime_mode = EmbeddingRuntimeMode.UNAVAILABLE
+        self.load_error: str | None = None
         self._lock = threading.Lock()
 
     # ---- 模型加载（延迟、线程安全、失败降级） ----------------------------
     def _ensure_loaded(self) -> None:
+        if self._unavailable_error is not None:
+            raise self._unavailable_error
         if self._configuration_error is not None:
             raise self._configuration_error
         if self._loaded:
             return
         with self._lock:
+            if self._unavailable_error is not None:
+                raise self._unavailable_error
             if self._configuration_error is not None:
                 raise self._configuration_error
             if self._loaded:
@@ -119,6 +148,7 @@ class Embedder:
             if self.profile.provider == "hash":
                 self._model = None
                 self.degraded = True
+                self.runtime_mode = EmbeddingRuntimeMode.HASH
                 self._loaded = True
                 return
             try:
@@ -140,6 +170,7 @@ class Embedder:
                         f"actual={actual_dimension}"
                     )
                 self.degraded = False
+                self.runtime_mode = EmbeddingRuntimeMode.REAL
                 logger.info(
                     "嵌入模型加载成功：%s（%s）",
                     self.model_name,
@@ -149,10 +180,22 @@ class Embedder:
                 self._model = None
                 self.degraded = False
                 self._configuration_error = exc
+                self.runtime_mode = EmbeddingRuntimeMode.UNAVAILABLE
+                self.load_error = str(exc)
                 raise
             except Exception as exc:  # noqa: BLE001 任何运行失败都降级，不阻断
                 self._model = None
+                self.load_error = f"{type(exc).__name__}: {exc}"
+                if not self.allow_fallback:
+                    self.degraded = False
+                    self.runtime_mode = EmbeddingRuntimeMode.UNAVAILABLE
+                    error = EmbeddingUnavailableError(
+                        f"真实Embedding加载失败且禁止fallback：{self.load_error}"
+                    )
+                    self._unavailable_error = error
+                    raise error from exc
                 self.degraded = True
+                self.runtime_mode = EmbeddingRuntimeMode.HASH
                 logger.warning(
                     "嵌入模型 '%s' 加载失败，降级为确定性哈希嵌入（dim=%d）：%s",
                     self.model_name,
@@ -186,6 +229,30 @@ class Embedder:
     def embed_query(self, text: str) -> list[float]:
         """单条查询向量化。"""
         return self.embed_texts([text])[0]
+
+    def status(self, *, load: bool = True) -> dict[str, Any]:
+        """返回可审计运行状态；不把hash fallback标记为真实BGE。"""
+        if load:
+            self._ensure_loaded()
+        return {
+            "mode": self.runtime_mode.value,
+            "profileId": self.profile.profile_id,
+            "provider": self.profile.provider,
+            "modelName": self.profile.model_name,
+            "dimension": self.profile.dimension,
+            "fallbackAllowed": self.allow_fallback,
+            "loadError": self.load_error,
+        }
+
+    def require_real(self) -> dict[str, Any]:
+        """评测强制真实模型；失败必须终止，不允许静默降级。"""
+        status = self.status(load=True)
+        if self.runtime_mode != EmbeddingRuntimeMode.REAL:
+            raise EmbeddingUnavailableError(
+                "评测要求real_embedding，但当前模式为"
+                f"{self.runtime_mode.value}：{self.load_error or 'provider不是实际模型'}"
+            )
+        return status
 
     @property
     def dim(self) -> int:
@@ -226,3 +293,10 @@ def get_embedder() -> Embedder:
             if _embedder is None:
                 _embedder = Embedder()
     return _embedder
+
+
+def set_embedder_for_evaluation(embedder: Embedder | None) -> None:
+    """离线评测进程选择明确Embedding模式；生产业务不得调用。"""
+    global _embedder
+    with _embedder_lock:
+        _embedder = embedder

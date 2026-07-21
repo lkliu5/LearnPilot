@@ -1,7 +1,7 @@
 """可信检索离线评测协议（TASK-003-C1）。"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -34,6 +34,13 @@ class RetrievalEvaluationCase(_StrictModel):
     knowledge_scope: str | list[str] | dict[str, Any] | None = None
     relevance: int = Field(default=1, ge=0, le=3)
     notes: str = ""
+    annotator: str
+    annotation_status: Literal[
+        "single_reviewed", "pending_second_review", "double_reviewed"
+    ]
+    evidence_basis: str
+    difficulty: Literal["easy", "medium", "hard"]
+    second_annotator: str | None = None
 
     @model_validator(mode="after")
     def _validate_expectation(self):
@@ -48,6 +55,10 @@ class RetrievalEvaluationCase(_StrictModel):
             raise ValueError("无答案用例不能声明相关Evidence")
         if self.relevance > 0 and not has_expected:
             raise ValueError("有答案用例必须声明相关Evidence")
+        if not self.annotator.strip() or not self.evidence_basis.strip():
+            raise ValueError("annotator和evidence_basis不能为空")
+        if self.annotation_status == "double_reviewed" and not self.second_annotator:
+            raise ValueError("double_reviewed必须声明second_annotator")
         return self
 
 

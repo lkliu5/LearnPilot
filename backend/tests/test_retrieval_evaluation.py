@@ -9,6 +9,7 @@ from app.rag.evaluation import (
     RetrievalEvaluator,
     calculate_case_metrics,
     load_evaluation_cases,
+    validate_evaluation_dataset,
 )
 from app.rag.evaluation_protocol import RetrievalEvaluationCase
 from app.rag.pipeline import TrustedRetrievalPipeline
@@ -26,6 +27,11 @@ def _case(**updates):
         "knowledge_scope": None,
         "relevance": 3,
         "notes": "fixture",
+        "annotator": "tester",
+        "annotation_status": "pending_second_review",
+        "evidence_basis": "unit fixture",
+        "difficulty": "easy",
+        "second_annotator": None,
     }
     data.update(updates)
     return RetrievalEvaluationCase.model_validate(data)
@@ -126,10 +132,42 @@ def test_pipeline_records_stage_observability(caplog):
 def test_evaluation_dataset_format_and_required_query_types():
     path = Path(__file__).resolve().parents[1] / "evaluation" / "retrieval_cases.json"
     cases = load_evaluation_cases(path)
-    assert len(cases) == 8
+    assert len(cases) >= 40
     assert {case.query_type for case in cases} == {
         "概念解释", "方法比较", "操作步骤", "事实查询", "跨段落综合",
         "模糊表达", "无答案问题", "带knowledge_scope过滤",
     }
     assert len({case.case_id for case in cases}) == len(cases)
     assert all(case.notes for case in cases)
+    assert all(case.annotator and case.evidence_basis for case in cases)
+    assert all(case.annotation_status == "pending_second_review" for case in cases)
+
+
+def test_dataset_rejects_stale_document_and_chunk_ids():
+    cases = [_case(expected_document_ids=["doc_missing"])]
+    with pytest.raises(ValueError, match="失效document ID"):
+        validate_evaluation_dataset(
+            cases,
+            available_document_ids={"doc_a"},
+            available_chunk_ids={"doc_a#0"},
+        )
+
+    stale_chunk = [_case(expected_document_ids=[], expected_chunk_ids=["doc_a#99"])]
+    with pytest.raises(ValueError, match="失效chunk ID"):
+        validate_evaluation_dataset(
+            stale_chunk,
+            available_document_ids={"doc_a"},
+            available_chunk_ids={"doc_a#0"},
+        )
+
+
+def test_dataset_rejects_duplicate_and_conflicting_queries():
+    duplicate = [_case(case_id="a"), _case(case_id="b")]
+    with pytest.raises(ValueError, match="重复query"):
+        validate_evaluation_dataset(duplicate)
+    conflict = [
+        _case(case_id="a"),
+        _case(case_id="b", expected_document_ids=["doc_b"]),
+    ]
+    with pytest.raises(ValueError, match="冲突标注"):
+        validate_evaluation_dataset(conflict)
