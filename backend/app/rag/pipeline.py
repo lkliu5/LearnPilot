@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 import re
+import logging
+import time
 from typing import Any, Protocol
 
 from app.rag.protocol import EvidenceItem, QueryPlan, RAGRequest, RAGResponse
 from app.rag.retriever import get_retriever
 
 _KEYWORD_RE = re.compile(r"[A-Za-z0-9_+#.-]+|[一-鿿]+")
+logger = logging.getLogger("app.rag.pipeline")
 
 
 class Retriever(Protocol):
@@ -83,14 +86,42 @@ class TrustedRetrievalPipeline:
         )
 
     def execute(self, request: RAGRequest | dict[str, Any]) -> RAGResponse:
+        total_started = time.perf_counter()
         validated_request = RAGRequest.model_validate(request)
+        planning_started = time.perf_counter()
         plan = self.planner.plan(validated_request)
+        planning_ms = (time.perf_counter() - planning_started) * 1000
+        retrieval_started = time.perf_counter()
         candidates = self.retriever.search(
             validated_request.query,
             top_k=validated_request.top_k,
         )
+        retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
+        evidence_started = time.perf_counter()
         evidence = [self._evidence(candidate) for candidate in candidates]
         confidence = max((item.score for item in evidence), default=0.0)
+        evidence_ms = (time.perf_counter() - evidence_started) * 1000
+        total_ms = (time.perf_counter() - total_started) * 1000
+        observability = {
+            "queryPlanningMs": round(planning_ms, 4),
+            "retrievalMs": round(retrieval_ms, 4),
+            "evidenceBuildMs": round(evidence_ms, 4),
+            "totalMs": round(total_ms, 4),
+            "candidateCount": len(candidates),
+            "evidenceCount": len(evidence),
+            "emptyResult": not evidence,
+        }
+        logger.info(
+            "trusted_retrieval_completed planningMs=%.4f retrievalMs=%.4f "
+            "evidenceMs=%.4f totalMs=%.4f candidates=%d evidence=%d empty=%s",
+            planning_ms,
+            retrieval_ms,
+            evidence_ms,
+            total_ms,
+            len(candidates),
+            len(evidence),
+            not evidence,
+        )
         return RAGResponse(
             evidence=evidence,
             confidence=confidence,
@@ -99,6 +130,8 @@ class TrustedRetrievalPipeline:
                 "queryPlan": plan.model_dump(mode="json"),
                 "resultCount": len(evidence),
                 "retriever": type(self.retriever).__name__,
+                "confidenceSemantics": "heuristic_max_retrieval_score_not_probability",
+                "observability": observability,
             },
         )
 
