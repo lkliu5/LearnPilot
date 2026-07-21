@@ -1,13 +1,14 @@
-"""TASK-002-B3 学习任务Agent子图测试。"""
+"""TASK-002-B4 学习任务质量路由子图测试。"""
 from __future__ import annotations
 
 import pytest
 
-from app.agents import diagnostic_agent, evaluation_agent, generator_agent
+from app.agents import critic_agent, diagnostic_agent, evaluation_agent, generator_agent
+from app.agents.adapters import QualityDecision
 from app.workflows.learning_graph import LearningGraphState, LearningTaskWorkflow
 
 
-def _state() -> LearningGraphState:
+def _state(*, max_retries: int = 2) -> LearningGraphState:
     return LearningGraphState(
         user_context={"user_id": "u_1", "profile_summary": "基础一般"},
         learning_goal="掌握神经网络",
@@ -20,102 +21,103 @@ def _state() -> LearningGraphState:
             "target_job": "算法工程师",
             "rag_context": [{"id": "c1", "content": "神经网络证据"}],
         },
+        max_retries=max_retries,
     )
 
 
-def _install_legacy_stubs(monkeypatch, calls):
+def _install_legacy_stubs(monkeypatch, calls, critic_passes):
+    decisions = iter(critic_passes)
+
     def diagnosis(db, **kwargs):
         calls.append(("diagnosis", kwargs))
-        return {
-            "agentId": "diagnosis",
-            "name": "学情诊断Agent",
-            "prompt": "diagnosis prompt",
-            "output": {"summary": "优先学习nn", "weakKpIds": ["nn"]},
-        }
+        return {"agentId": "diagnosis", "name": "诊断", "prompt": "p", "output": {"weakKpIds": ["nn"]}}
 
     def generation(db, **kwargs):
         calls.append(("resource", kwargs))
+        return {"agentId": "generation", "name": "生成", "prompt": "p", "output": {"markdown": "# 神经网络"}}
+
+    def critic(db, **kwargs):
+        calls.append(("critic", kwargs))
+        passed = next(decisions)
         return {
-            "agentId": "generation",
-            "name": "资源生成Agent",
-            "prompt": "generation prompt",
-            "output": {"markdown": "# 神经网络"},
+            "agentId": "critic", "name": "质量", "prompt": "p",
+            "output": {
+                "passed": passed,
+                "validationScore": 0.9 if passed else 0.4,
+                "hallucinationRate": 0.1 if passed else 0.6,
+                "issues": [] if passed else ["证据不足"],
+            },
         }
 
     def evaluation(db, user_id):
         calls.append(("evaluation", {"user_id": user_id}))
-        return {
-            "overallScore": 60,
-            "level": "成长中",
-            "trend": "stable",
-            "dimensions": [],
-            "weakPoints": [{"kpId": "nn"}],
-            "summary": "继续学习",
-            "suggestions": ["完成练习"],
-            "adjustment": {"nextKpId": "nn"},
-            "generatedBy": "mock",
-            "signals": {"attemptCount": 0},
-        }
+        return {"overallScore": 60, "level": "成长中", "trend": "stable", "dimensions": [], "weakPoints": [], "summary": "继续学习", "suggestions": [], "adjustment": {}, "generatedBy": "mock", "signals": {}}
 
     monkeypatch.setattr(diagnostic_agent, "run_diagnostic", diagnosis)
     monkeypatch.setattr(generator_agent, "run_generator", generation)
+    monkeypatch.setattr(critic_agent, "run_critic", critic)
     monkeypatch.setattr(evaluation_agent, "evaluate", evaluation)
 
 
-def test_workflow_builds_required_nodes_and_edges():
-    compiled = LearningTaskWorkflow(object(), trace_id="trace-graph").build()
-    graph = compiled.get_graph()
-    assert {"diagnosis", "resource", "evaluation"}.issubset(graph.nodes)
+def test_workflow_builds_quality_routing_graph():
+    graph = LearningTaskWorkflow(object(), trace_id="trace-graph").build().get_graph()
+    assert {"diagnosis", "resource", "critic", "evaluation", "fallback"}.issubset(graph.nodes)
     edges = {(edge.source, edge.target) for edge in graph.edges}
-    assert ("__start__", "diagnosis") in edges
-    assert ("diagnosis", "resource") in edges
-    assert ("resource", "evaluation") in edges
-    assert ("evaluation", "__end__") in edges
+    assert {("__start__", "diagnosis"), ("diagnosis", "resource"), ("resource", "critic"), ("critic", "evaluation"), ("critic", "resource"), ("critic", "fallback"), ("evaluation", "__end__"), ("fallback", "__end__")}.issubset(edges)
 
 
-def test_state_flows_through_adapters_in_order(monkeypatch):
+def test_pass_path(monkeypatch):
     calls = []
-    _install_legacy_stubs(monkeypatch, calls)
-    result = LearningTaskWorkflow(object(), trace_id="trace-flow").execute(_state())
+    _install_legacy_stubs(monkeypatch, calls, [True])
+    result = LearningTaskWorkflow(object(), trace_id="trace-pass").execute(_state())
 
-    assert [name for name, _ in calls] == ["diagnosis", "resource", "evaluation"]
-    assert result.knowledge_state["diagnosis"]["output"]["weakKpIds"] == ["nn"]
-    assert result.resources[0]["output"]["markdown"] == "# 神经网络"
+    assert [name for name, _ in calls] == ["diagnosis", "resource", "critic", "evaluation"]
+    assert result.quality_decision == QualityDecision.PASS
     assert result.evaluation["overallScore"] == 60
-    assert [m.agent_name for m in result.execution_history] == [
-        "learning_diagnosis",
-        "resource_generation",
-        "evaluation",
-    ]
+    assert [message.agent_name for message in result.execution_history] == ["learning_diagnosis", "resource_generation", "quality_critic", "evaluation"]
+    assert {message.metadata["traceId"] for message in result.execution_history} == {"trace-pass"}
 
 
-def test_each_node_records_shared_trace_and_task_identity(monkeypatch):
+def test_revise_path_regenerates_with_critic_feedback(monkeypatch):
     calls = []
-    _install_legacy_stubs(monkeypatch, calls)
-    result = LearningTaskWorkflow(object(), trace_id="trace-shared").execute(_state())
+    _install_legacy_stubs(monkeypatch, calls, [False, True])
+    result = LearningTaskWorkflow(object(), trace_id="trace-revise").execute(_state())
 
-    assert len(result.execution_history) == 3
-    assert {m.metadata["traceId"] for m in result.execution_history} == {
-        "trace-shared"
-    }
-    assert [m.task_id for m in result.execution_history] == [
-        "task_1:diagnosis",
-        "task_1:resource",
-        "task_1:evaluation",
-    ]
-    assert [m.metadata["node"] for m in result.execution_history] == [
-        "diagnosis",
-        "resource",
-        "evaluation",
-    ]
+    assert [name for name, _ in calls] == ["diagnosis", "resource", "critic", "resource", "critic", "evaluation"]
+    assert result.retry_count == 1
+    assert len(result.resources) == 2
+    assert [kwargs for name, kwargs in calls if name == "resource"][1]["feedback"] == "证据不足"
+    assert result.quality_decision == QualityDecision.PASS
+
+
+def test_fallback_path(monkeypatch):
+    calls = []
+    _install_legacy_stubs(monkeypatch, calls, [False])
+    result = LearningTaskWorkflow(object(), trace_id="trace-fallback").execute(_state(max_retries=0))
+
+    assert [name for name, _ in calls] == ["diagnosis", "resource", "critic"]
+    assert result.quality_decision == QualityDecision.FALLBACK
+    assert result.fallback["degraded"] is True
+    assert not result.evaluation
+    assert result.execution_history[-1].agent_name == "fallback_handler"
+    assert {message.metadata["traceId"] for message in result.execution_history} == {"trace-fallback"}
+
+
+def test_max_retry_limit_prevents_infinite_loop(monkeypatch):
+    calls = []
+    _install_legacy_stubs(monkeypatch, calls, [False, False, False])
+    result = LearningTaskWorkflow(object(), trace_id="trace-limit").execute(_state(max_retries=2))
+
+    assert [name for name, _ in calls].count("resource") == 3
+    assert [name for name, _ in calls].count("critic") == 3
+    assert result.retry_count == 2
+    assert result.quality_decision == QualityDecision.FALLBACK
+    assert len(result.execution_history) == 8
 
 
 def test_missing_required_context_fails_explicitly(monkeypatch):
     calls = []
-    _install_legacy_stubs(monkeypatch, calls)
-    state = _state().model_copy(
-        update={"task_context": {"kp_id": "nn", "kp_name": "神经网络"}}
-    )
+    _install_legacy_stubs(monkeypatch, calls, [True])
+    state = _state().model_copy(update={"task_context": {"kp_id": "nn", "kp_name": "神经网络"}})
     with pytest.raises(ValueError, match="difficulty"):
         LearningTaskWorkflow(object()).execute(state)
-

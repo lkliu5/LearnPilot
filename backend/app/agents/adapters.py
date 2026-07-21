@@ -5,12 +5,13 @@
 """
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from sqlalchemy.orm import Session
 
-from app.agents import diagnostic_agent, evaluation_agent, generator_agent
+from app.agents import critic_agent, diagnostic_agent, evaluation_agent, generator_agent
 from app.agents.base import BaseAgent
 from app.agents.state import AgentState
 
@@ -54,6 +55,29 @@ class EvaluationInput(_StrictModel):
 
 class EvaluationOutput(RootModel[dict[str, Any]]):
     """保留旧Dashboard评估结果的顶层字典形状。"""
+
+
+class QualityDecision(str, Enum):
+    """资源质量路由决定；值保持大写，便于审计与条件边显式匹配。"""
+
+    PASS = "PASS"
+    REVISE = "REVISE"
+    FALLBACK = "FALLBACK"
+
+
+class CriticInput(_StrictModel):
+    learning_goal: str
+    knowledge_state: dict[str, Any] = Field(default_factory=dict)
+    resources: list[dict[str, Any]] = Field(min_length=1)
+
+
+class QualityDecisionOutput(_StrictModel):
+    decision: QualityDecision
+    passed: bool
+    validation_score: float
+    hallucination_rate: float
+    issues: list[str] = Field(default_factory=list)
+    reason: str
 
 
 class LearningDiagnosisAgentAdapter(
@@ -126,3 +150,53 @@ class EvaluationAgentAdapter(BaseAgent[EvaluationInput, EvaluationOutput]):
         result = evaluation_agent.evaluate(self.db, agent_input.user_id)
         return EvaluationOutput.model_validate(result)
 
+
+class CriticAgentAdapter(BaseAgent[CriticInput, QualityDecisionOutput]):
+    agent_name = "quality_critic"
+    description = "适配现有内容审核Agent并输出结构化质量路由决定"
+    input_schema = CriticInput
+    output_schema = QualityDecisionOutput
+
+    def __init__(self, db: Session, **kwargs: Any) -> None:
+        self.db = db
+        super().__init__(**kwargs)
+
+    @staticmethod
+    def _draft_content(resources: list[dict[str, Any]]) -> str:
+        latest = resources[-1]
+        output = latest.get("output") if isinstance(latest, dict) else None
+        markdown = output.get("markdown") if isinstance(output, dict) else None
+        if not isinstance(markdown, str) or not markdown.strip():
+            raise ValueError("Critic Adapter无法从最新Resource提取markdown")
+        return markdown
+
+    def execute(
+        self, agent_input: CriticInput, state: AgentState
+    ) -> QualityDecisionOutput:
+        rag_context = agent_input.knowledge_state.get("rag_context", [])
+        if not isinstance(rag_context, list):
+            raise ValueError("knowledge_state.rag_context必须为列表")
+        result = critic_agent.run_critic(
+            self.db,
+            draft_content=self._draft_content(agent_input.resources),
+            rag_context=rag_context,
+        )
+        output = result["output"]
+        passed = bool(output.get("passed"))
+        decision = QualityDecision.PASS if passed else QualityDecision.REVISE
+        score = float(output.get("validationScore", 0.0))
+        rate = float(output.get("hallucinationRate", 1.0))
+        issues = [str(item) for item in output.get("issues", [])]
+        reason = (
+            f"质量校验通过，评分{score:.4f}"
+            if passed
+            else f"质量校验未通过，评分{score:.4f}，需要修订"
+        )
+        return QualityDecisionOutput(
+            decision=decision,
+            passed=passed,
+            validation_score=score,
+            hallucination_rate=rate,
+            issues=issues,
+            reason=reason,
+        )

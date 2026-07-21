@@ -4,11 +4,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.agents import diagnostic_agent, evaluation_agent, generator_agent
+from app.agents import critic_agent, diagnostic_agent, evaluation_agent, generator_agent
 from app.agents.adapters import (
+    CriticAgentAdapter,
     EvaluationAgentAdapter,
     LearningDiagnosisAgentAdapter,
     ResourceGenerationAgentAdapter,
+    QualityDecision,
 )
 
 
@@ -119,3 +121,39 @@ def test_adapter_inputs_are_strict(monkeypatch):
             agent_input={"kp_id": "nn", "unexpected": True},
         )
 
+
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, QualityDecision.PASS), (False, QualityDecision.REVISE)],
+)
+def test_critic_adapter_maps_legacy_result_to_quality_decision(monkeypatch, passed, expected):
+    calls = []
+
+    def legacy(db, **kwargs):
+        calls.append((db, kwargs))
+        return {
+            "agentId": "critic",
+            "name": "质量评估Agent",
+            "prompt": "critic prompt",
+            "output": {
+                "passed": passed,
+                "validationScore": 0.85,
+                "hallucinationRate": 0.05,
+                "issues": [] if passed else ["引用不足"],
+            },
+        }
+
+    monkeypatch.setattr(critic_agent, "run_critic", legacy)
+    db = object()
+    message = CriticAgentAdapter(db, trace_id="trace-critic").run(
+        task_id="task-critic",
+        agent_input={
+            "learning_goal": "掌握神经网络",
+            "knowledge_state": {"rag_context": [{"id": "c1", "content": "证据"}]},
+            "resources": [{"output": {"markdown": "# 神经网络"}}],
+        },
+    )
+
+    assert message.output["decision"] == expected.value
+    assert calls == [(db, {"draft_content": "# 神经网络", "rag_context": [{"id": "c1", "content": "证据"}]})]
+    assert message.metadata["traceId"] == "trace-critic"
