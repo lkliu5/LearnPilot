@@ -72,6 +72,7 @@ class RetrievalEvaluationResult(_StrictModel):
     latency_ms: float = Field(ge=0.0)
     empty_result: bool
     source_completeness: float = Field(ge=0.0, le=1.0)
+    source_coverage: float = Field(ge=0.0, le=1.0)
 
 
 class RetrievalEvaluationReport(_StrictModel):

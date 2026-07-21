@@ -36,7 +36,12 @@ class HybridRetriever:
     集合的 getter，即可在**隔离集合**上做同样的混合检索，不污染内置知识库。
     """
 
-    def __init__(self, store_getter: Callable[[], object] | None = None) -> None:
+    def __init__(
+        self,
+        store_getter: Callable[[], object] | None = None,
+        *,
+        enable_score_calibration: bool = True,
+    ) -> None:
         self.dense_weight = settings.rrf_dense_weight
         self.sparse_weight = settings.rrf_sparse_weight
         self.rrf_k = settings.rrf_k
@@ -46,6 +51,10 @@ class HybridRetriever:
         self.min_dense_score = settings.retrieval_min_dense_score
         self.min_query_overlap = settings.retrieval_min_query_overlap
         self.min_strong_keyword_overlap = settings.retrieval_min_strong_keyword_overlap
+        self.confidence_dense_weight = settings.retrieval_confidence_dense_weight
+        self.confidence_keyword_weight = settings.retrieval_confidence_keyword_weight
+        self.confidence_fusion_weight = settings.retrieval_confidence_fusion_weight
+        self.enable_score_calibration = enable_score_calibration
         self._store_getter = store_getter or get_vector_store
         # BM25 缓存：(库计数, 索引, 语料元数据)
         self._bm25 = None
@@ -122,6 +131,7 @@ class HybridRetriever:
                 "vectorScore": candidate.dense_score,
                 "bm25Score": candidate.keyword_score,
                 "rrfScore": candidate.fusion_score,
+                "confidenceScore": candidate.confidence_score,
             }
         )
         return row
@@ -150,6 +160,59 @@ class HybridRetriever:
             row.fusion_score += self.sparse_weight / (self.rrf_k + rank + 1)
 
         return sorted(merged.values(), key=lambda item: item.fusion_score, reverse=True)
+
+    @staticmethod
+    def _min_max(values: list[float]) -> list[float]:
+        if not values:
+            return []
+        lower, upper = min(values), max(values)
+        if upper == lower:
+            fill = 1.0 if upper > 0.0 else 0.0
+            return [fill] * len(values)
+        scale = upper - lower
+        return [(value - lower) / scale for value in values]
+
+    def _calibrate_scores(
+        self, candidates: list[RetrievalCandidate]
+    ) -> list[RetrievalCandidate]:
+        if not candidates:
+            return []
+        if not self.enable_score_calibration:
+            for candidate in candidates:
+                candidate.confidence_score = max(
+                    0.0, min(1.0, candidate.fusion_score)
+                )
+            return candidates
+        weights = (
+            self.confidence_dense_weight,
+            self.confidence_keyword_weight,
+            self.confidence_fusion_weight,
+        )
+        if any(weight < 0.0 for weight in weights) or sum(weights) <= 0.0:
+            raise ValueError("Retrieval confidence权重必须非负且总和大于0")
+        normalized_dense = self._min_max(
+            [candidate.dense_score for candidate in candidates]
+        )
+        normalized_keyword = self._min_max(
+            [candidate.keyword_score for candidate in candidates]
+        )
+        normalized_fusion = self._min_max(
+            [candidate.fusion_score for candidate in candidates]
+        )
+        weight_total = sum(weights)
+        for index, candidate in enumerate(candidates):
+            candidate.normalized_dense_score = normalized_dense[index]
+            candidate.normalized_keyword_score = normalized_keyword[index]
+            candidate.confidence_score = (
+                weights[0] * normalized_dense[index]
+                + weights[1] * normalized_keyword[index]
+                + weights[2] * normalized_fusion[index]
+            ) / weight_total
+        return sorted(
+            candidates,
+            key=lambda item: (item.confidence_score, item.fusion_score),
+            reverse=True,
+        )
 
     @staticmethod
     def _document_filter(filters: dict[str, Any] | None) -> set[str] | None:
@@ -258,7 +321,7 @@ class HybridRetriever:
         sparse = self._sparse_search(query, pool)
         return self._govern(
             query,
-            self._rrf(dense, sparse),
+            self._calibrate_scores(self._rrf(dense, sparse)),
             final_top_k=final_top_k,
             filters=filters,
         )

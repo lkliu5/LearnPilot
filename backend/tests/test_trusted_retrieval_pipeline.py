@@ -102,3 +102,44 @@ def test_pipeline_returns_valid_empty_response():
     assert response.metadata["resultCount"] == 0
     assert response.metadata["retrievalDecision"] == "low_confidence"
     assert response.metadata["lowConfidence"] is True
+    assert response.evidence_count == response.source_count == 0
+    assert response.reason_codes == ["NO_EVIDENCE", "LOW_SCORE"]
+
+
+def test_pipeline_exposes_score_breakdown_counts_and_single_source_reason():
+    candidate = {
+        "id": "doc_1#0",
+        "content": "反向传播使用链式法则。",
+        "metadata": {"document_id": "doc_1", "document_title": "神经网络"},
+        "dense_score": 0.8,
+        "keyword_score": 4.0,
+        "normalized_dense_score": 1.0,
+        "normalized_keyword_score": 0.7,
+        "fusion_score": 0.02,
+        "confidence_score": 0.81,
+    }
+    response = TrustedRetrievalPipeline(
+        retriever=_LegacyRetriever([candidate])
+    ).execute({"query": "反向传播", "user_id": "u_1"})
+    assert response.confidence == 0.81
+    assert response.evidence_count == response.source_count == 1
+    assert response.reason_codes == ["SINGLE_SOURCE"]
+    evidence = response.evidence[0]
+    assert evidence.reason_codes == ["SINGLE_SOURCE"]
+    assert evidence.score_breakdown["confidenceScore"] == 0.81
+    assert evidence.score_breakdown["normalizedDenseScore"] == 1.0
+
+
+def test_empty_scoped_result_exposes_filter_and_scope_reason_codes():
+    response = TrustedRetrievalPipeline(
+        retriever=_LegacyRetriever([])
+    ).execute(
+        {
+            "query": "范围外问题",
+            "user_id": "u_1",
+            "knowledge_scope": {"document_ids": ["doc_missing"]},
+        }
+    )
+    assert response.reason_codes == [
+        "NO_EVIDENCE", "LOW_SCORE", "FILTERED_RESULT", "OUT_OF_SCOPE"
+    ]

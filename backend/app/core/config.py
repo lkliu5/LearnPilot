@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     retrieval_min_dense_score: float = 0.35
     retrieval_min_query_overlap: float = 0.35
     retrieval_min_strong_keyword_overlap: float = 0.60
+    retrieval_confidence_dense_weight: float = 0.10
+    retrieval_confidence_keyword_weight: float = 0.05
+    retrieval_confidence_fusion_weight: float = 0.85
 
     # B7-a 实时通道演示参数：
     # - workflow_step_delay_ms：工作流节点间推进延迟，让 WS / 轮询能观察到 phase

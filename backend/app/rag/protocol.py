@@ -48,7 +48,10 @@ class RetrievalCandidate(_StrictModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     dense_score: float = 0.0
     keyword_score: float = 0.0
+    normalized_dense_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    normalized_keyword_score: float = Field(default=0.0, ge=0.0, le=1.0)
     fusion_score: float = 0.0
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
     @field_validator("id", "content")
     @classmethod
@@ -63,6 +66,8 @@ class EvidenceItem(_StrictModel):
     source: dict[str, Any] = Field(default_factory=dict)
     score: float = Field(ge=0.0, le=1.0)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    reason_codes: list[str] = Field(default_factory=list)
 
     @field_validator("content")
     @classmethod
@@ -75,4 +80,7 @@ class EvidenceItem(_StrictModel):
 class RAGResponse(_StrictModel):
     evidence: list[EvidenceItem] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    evidence_count: int = Field(default=0, ge=0)
+    source_count: int = Field(default=0, ge=0)
+    reason_codes: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)

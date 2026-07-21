@@ -70,9 +70,10 @@ def test_empty_no_answer_metrics_are_not_fabricated():
 
 
 def test_empty_result_does_not_fabricate_incomplete_source_fields():
-    from app.rag.evaluation import source_completeness
+    from app.rag.evaluation import source_completeness, source_coverage
 
     assert source_completeness([]) == 1.0
+    assert source_coverage([]) == 1.0
 
 
 def test_multiple_relevant_documents_reward_complete_ranking():

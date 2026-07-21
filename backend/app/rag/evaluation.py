@@ -173,6 +173,14 @@ def source_completeness(items: list[dict[str, Any]]) -> float:
     return complete / len(items)
 
 
+def source_coverage(items: list[dict[str, Any]]) -> float:
+    """返回结果中的来源多样性：唯一文档数/结果数。"""
+    if not items:
+        return 1.0
+    documents = {document_id for document_id, _ in map(_identity, items) if document_id}
+    return len(documents) / len(items)
+
+
 def _percentile(values: list[float], percentile: float) -> float | None:
     if not values:
         return None
@@ -243,13 +251,33 @@ def _candidate_score(item: dict[str, Any]) -> float:
 
 
 class RetrievalEvaluator:
-    def __init__(self, old_retriever: Any, pipeline: TrustedRetrievalPipeline) -> None:
+    def __init__(
+        self,
+        old_retriever: Any,
+        pipeline: TrustedRetrievalPipeline,
+        *,
+        old_system_name: str = "hybrid_retriever",
+        new_system_name: str = "trusted_pipeline",
+    ) -> None:
         self.old_retriever = old_retriever
         self.pipeline = pipeline
+        self.old_system_name = old_system_name
+        self.new_system_name = new_system_name
 
     def _run_old(self, case: RetrievalEvaluationCase) -> tuple[list[dict[str, Any]], float]:
         started = time.perf_counter()
-        items = self.old_retriever.search(case.query, top_k=5)
+        if isinstance(self.old_retriever, TrustedRetrievalPipeline):
+            response = self.old_retriever.execute(
+                RAGRequest(
+                    query=case.query,
+                    user_id="offline-evaluation",
+                    knowledge_scope=case.knowledge_scope,
+                    top_k=5,
+                )
+            )
+            items = [item.model_dump(mode="json") for item in response.evidence]
+        else:
+            items = self.old_retriever.search(case.query, top_k=5)
         return items, (time.perf_counter() - started) * 1000
 
     def _run_new(self, case: RetrievalEvaluationCase) -> tuple[list[dict[str, Any]], float]:
@@ -278,6 +306,7 @@ class RetrievalEvaluator:
             latency_ms=latency,
             empty_result=not items,
             source_completeness=source_completeness(items),
+            source_coverage=source_coverage(items),
         )
 
     @staticmethod
@@ -335,8 +364,8 @@ class RetrievalEvaluator:
             new_items, new_latency = self._run_new(case)
             results.extend(
                 [
-                    self._result(case, "hybrid_retriever", old_items, old_latency),
-                    self._result(case, "trusted_pipeline", new_items, new_latency),
+                    self._result(case, self.old_system_name, old_items, old_latency),
+                    self._result(case, self.new_system_name, new_items, new_latency),
                 ]
             )
             differences.append(
@@ -344,7 +373,7 @@ class RetrievalEvaluator:
             )
 
         summaries: dict[str, dict[str, float | None]] = {}
-        for system in ("hybrid_retriever", "trusted_pipeline"):
+        for system in (self.old_system_name, self.new_system_name):
             rows = [result for result in results if result.system == system]
             metric_names = sorted({name for row in rows for name in row.metrics})
             summary: dict[str, float | None] = {}
@@ -353,6 +382,17 @@ class RetrievalEvaluator:
                 summary[name] = sum(values) / len(values) if values else None
             summary["empty_result_rate"] = sum(row.empty_result for row in rows) / len(rows) if rows else None
             summary["source_completeness"] = sum(row.source_completeness for row in rows) / len(rows) if rows else None
+            summary["source_coverage"] = sum(row.source_coverage for row in rows) / len(rows) if rows else None
+            confidence_values = [score for row in rows for score in row.scores]
+            summary["confidence_min"] = min(confidence_values) if confidence_values else None
+            summary["confidence_mean"] = (
+                sum(confidence_values) / len(confidence_values)
+                if confidence_values
+                else None
+            )
+            summary["confidence_p50"] = _percentile(confidence_values, 0.50)
+            summary["confidence_p95"] = _percentile(confidence_values, 0.95)
+            summary["confidence_max"] = max(confidence_values) if confidence_values else None
             latencies = [row.latency_ms for row in rows]
             summary["latency_p50_ms"] = _percentile(latencies, 0.50)
             summary["latency_p95_ms"] = _percentile(latencies, 0.95)

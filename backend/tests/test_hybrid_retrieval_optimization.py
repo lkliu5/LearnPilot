@@ -1,6 +1,8 @@
 """TASK-003-D1候选协议、融合与治理测试。"""
 from __future__ import annotations
 
+import pytest
+
 from app.core.config import settings
 from app.rag.protocol import RetrievalCandidate
 from app.rag.retriever import HybridRetriever
@@ -43,7 +45,8 @@ def test_retrieval_candidate_protocol_contains_all_stage_scores():
     )
     assert set(candidate.model_dump()) == {
         "id", "content", "source", "metadata",
-        "dense_score", "keyword_score", "fusion_score",
+        "dense_score", "keyword_score", "normalized_dense_score",
+        "normalized_keyword_score", "fusion_score", "confidence_score",
     }
 
 
@@ -136,6 +139,32 @@ def test_strong_keyword_overlap_can_recover_legacy_collection_candidate():
     retriever.min_query_overlap = 0.35
     retriever.min_strong_keyword_overlap = 0.6
     assert retriever.search("反向传播梯度计算")
+
+
+def test_min_max_calibration_and_configurable_weights_drive_confidence_order():
+    retriever = _ControlledRetriever([], [])
+    retriever.confidence_dense_weight = 1.0
+    retriever.confidence_keyword_weight = 0.0
+    retriever.confidence_fusion_weight = 0.0
+    candidates = [
+        RetrievalCandidate(id="low", content="低", dense_score=0.2, keyword_score=10.0, fusion_score=0.02),
+        RetrievalCandidate(id="high", content="高", dense_score=0.8, keyword_score=1.0, fusion_score=0.01),
+    ]
+    ranked = retriever._calibrate_scores(candidates)
+    assert [item.id for item in ranked] == ["high", "low"]
+    assert ranked[0].normalized_dense_score == ranked[0].confidence_score == 1.0
+    assert ranked[1].normalized_dense_score == ranked[1].confidence_score == 0.0
+
+
+def test_invalid_calibration_weights_fail_explicitly():
+    retriever = _ControlledRetriever([], [])
+    retriever.confidence_dense_weight = 0.0
+    retriever.confidence_keyword_weight = 0.0
+    retriever.confidence_fusion_weight = 0.0
+    with pytest.raises(ValueError, match="权重"):
+        retriever._calibrate_scores(
+            [RetrievalCandidate(id="a", content="正文", dense_score=0.5)]
+        )
 
 
 def test_low_relevance_candidates_produce_explicit_empty_result():

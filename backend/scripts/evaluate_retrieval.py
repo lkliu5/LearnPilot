@@ -40,6 +40,11 @@ def main() -> None:
         action="store_true",
         help="使用TASK-003-C1旧Hybrid算法作为before基线",
     )
+    parser.add_argument(
+        "--compare-d1",
+        action="store_true",
+        help="关闭Score Calibration，使用TASK-003-D1排序作为before基线",
+    )
     args = parser.parse_args()
 
     cases = load_evaluation_cases(args.dataset)
@@ -68,8 +73,22 @@ def main() -> None:
 
     if args.collection:
         store = _ChromaStore(settings.chroma_dir, collection=args.collection, profile=profile)
-        old_class = LegacyHybridRetriever if args.compare_legacy else HybridRetriever
-        old = old_class(store_getter=lambda: store)
+        if args.compare_legacy and args.compare_d1:
+            parser.error("--compare-legacy和--compare-d1不能同时使用")
+        if args.compare_legacy:
+            old = LegacyHybridRetriever(store_getter=lambda: store)
+            old_system_name = "hybrid_retriever"
+        else:
+            old_retriever = HybridRetriever(
+                store_getter=lambda: store,
+                enable_score_calibration=not args.compare_d1,
+            )
+            old = (
+                TrustedRetrievalPipeline(retriever=old_retriever)
+                if args.compare_d1
+                else old_retriever
+            )
+            old_system_name = "d1_baseline" if args.compare_d1 else "hybrid_retriever"
         new_retriever = HybridRetriever(store_getter=lambda: store)
         available = store.get_all()
         validate_evaluation_dataset(
@@ -81,10 +100,19 @@ def main() -> None:
         old = get_retriever()
         new_retriever = old
     pipeline = TrustedRetrievalPipeline(retriever=new_retriever)
-    report = RetrievalEvaluator(old, pipeline).evaluate(cases)
+    report = RetrievalEvaluator(
+        old,
+        pipeline,
+        old_system_name=old_system_name if args.collection else "hybrid_retriever",
+        new_system_name="d2a_calibrated" if args.compare_d1 else "trusted_pipeline",
+    ).evaluate(cases)
     sample_request = cases[0]
     latency = measure_latency_phases(
-        lambda: old.search(sample_request.query, top_k=5),
+        lambda: (
+            old.execute({"query": sample_request.query, "user_id": "offline-evaluation", "top_k": 5})
+            if isinstance(old, TrustedRetrievalPipeline)
+            else old.search(sample_request.query, top_k=5)
+        ),
         lambda: pipeline.execute({"query": sample_request.query, "user_id": "offline-evaluation", "top_k": 5}),
         steady_rounds=args.steady_rounds,
     )

@@ -61,6 +61,10 @@ class TrustedRetrievalPipeline:
     def _score(candidate: dict[str, Any]) -> float:
         raw = candidate.get("score")
         if raw is None:
+            raw = candidate.get("confidence_score")
+        if raw is None:
+            raw = candidate.get("confidenceScore")
+        if raw is None:
             raw = candidate.get("fusion_score")
         if raw is None:
             raw = candidate.get("rrfScore")
@@ -88,6 +92,9 @@ class TrustedRetrievalPipeline:
             "denseScore": candidate.get("dense_score"),
             "keywordScore": candidate.get("keyword_score"),
             "fusionScore": candidate.get("fusion_score"),
+            "normalizedDenseScore": candidate.get("normalized_dense_score"),
+            "normalizedKeywordScore": candidate.get("normalized_keyword_score"),
+            "confidenceScore": candidate.get("confidence_score"),
         }
         retrieval_metadata = {
             key: value for key, value in retrieval_metadata.items() if value is not None
@@ -97,7 +104,33 @@ class TrustedRetrievalPipeline:
             source=source,
             score=cls._score(candidate),
             metadata=retrieval_metadata,
+            score_breakdown={
+                "denseScore": float(candidate.get("dense_score") or candidate.get("vectorScore") or 0.0),
+                "keywordScore": float(candidate.get("keyword_score") or candidate.get("bm25Score") or 0.0),
+                "normalizedDenseScore": float(candidate.get("normalized_dense_score") or 0.0),
+                "normalizedKeywordScore": float(candidate.get("normalized_keyword_score") or 0.0),
+                "fusionScore": float(candidate.get("fusion_score") or candidate.get("rrfScore") or 0.0),
+                "confidenceScore": cls._score(candidate),
+            },
         )
+
+    @staticmethod
+    def _reason_codes(
+        *, evidence: list[EvidenceItem], filters: dict[str, Any]
+    ) -> list[str]:
+        reasons: list[str] = []
+        if not evidence:
+            reasons.extend(["NO_EVIDENCE", "LOW_SCORE"])
+            if filters:
+                reasons.append("FILTERED_RESULT")
+            if filters.get("knowledge_scope") is not None:
+                reasons.append("OUT_OF_SCOPE")
+        source_ids = {
+            item.source.get("documentId") for item in evidence if item.source.get("documentId")
+        }
+        if evidence and len(source_ids) <= 1:
+            reasons.append("SINGLE_SOURCE")
+        return reasons
 
     def execute(self, request: RAGRequest | dict[str, Any]) -> RAGResponse:
         total_started = time.perf_counter()
@@ -121,6 +154,12 @@ class TrustedRetrievalPipeline:
         retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
         evidence_started = time.perf_counter()
         evidence = [self._evidence(candidate) for candidate in candidates]
+        source_ids = {
+            item.source.get("documentId") for item in evidence if item.source.get("documentId")
+        }
+        reason_codes = self._reason_codes(evidence=evidence, filters=plan.filters)
+        for item in evidence:
+            item.reason_codes = list(reason_codes)
         confidence = max((item.score for item in evidence), default=0.0)
         evidence_ms = (time.perf_counter() - evidence_started) * 1000
         total_ms = (time.perf_counter() - total_started) * 1000
@@ -147,6 +186,9 @@ class TrustedRetrievalPipeline:
         return RAGResponse(
             evidence=evidence,
             confidence=confidence,
+            evidence_count=len(evidence),
+            source_count=len(source_ids),
+            reason_codes=reason_codes,
             metadata={
                 "schemaVersion": self.schema_version,
                 "queryPlan": plan.model_dump(mode="json"),
