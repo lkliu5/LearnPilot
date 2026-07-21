@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # CORS 允许来源（默认放行前端 Vite 3000/3001）
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
+    # 统一日志：默认保持适合本地开发的文本输出，可经环境变量调整。
+    log_level: str = "INFO"
+    log_format: str = "text"  # text | json
+    log_request_completed: bool = True
+
     # LLM Provider（mock / deepseek / qwen / anthropic）
     llm_provider: str = "mock"
 
@@ -170,6 +175,22 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR or CRITICAL")
+        return normalized
+
+    @field_validator("log_format")
+    @classmethod
+    def _validate_log_format(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"text", "json"}:
+            raise ValueError("LOG_FORMAT must be text or json")
+        return normalized
 
 
 settings = Settings()

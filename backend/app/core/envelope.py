@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 from contextvars import ContextVar
 from typing import Any
@@ -23,6 +25,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 # 当前请求的 traceId（请求级隔离）
 _trace_id_ctx: ContextVar[str] = ContextVar("trace_id", default="")
+logger = logging.getLogger("app.http")
 
 # HTTP status -> 业务错误码（§1.3）
 _STATUS_TO_CODE: dict[int, int] = {
@@ -41,6 +44,11 @@ def get_trace_id() -> str:
         tid = uuid.uuid4().hex[:12]
         _trace_id_ctx.set(tid)
     return tid
+
+
+def current_trace_id() -> str:
+    """只读取当前 traceId，不在日志等非请求上下文中隐式创建新值。"""
+    return _trace_id_ctx.get()
 
 
 def envelope(data: Any = None, code: int = 0, message: str = "ok") -> dict[str, Any]:
@@ -66,13 +74,31 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         tid = uuid.uuid4().hex[:12]
         token = _trace_id_ctx.set(tid)
+        started_at = time.perf_counter()
         try:
             response = await call_next(request)
+            response.headers["X-Trace-Id"] = _trace_id_ctx.get()
+            from app.core.config import settings
+
+            if settings.log_request_completed:
+                logger.info(
+                    "request_completed method=%s path=%s status=%s durationMs=%.2f",
+                    request.method,
+                    request.url.path,
+                    response.status_code,
+                    (time.perf_counter() - started_at) * 1000,
+                )
+            return response
+        except Exception:
+            logger.exception(
+                "request_failed method=%s path=%s durationMs=%.2f",
+                request.method,
+                request.url.path,
+                (time.perf_counter() - started_at) * 1000,
+            )
+            raise
         finally:
-            response_tid = _trace_id_ctx.get()
             _trace_id_ctx.reset(token)
-        response.headers["X-Trace-Id"] = response_tid
-        return response
 
 
 # ---- 异常处理器（在 main.py 注册）-----------------------------------------

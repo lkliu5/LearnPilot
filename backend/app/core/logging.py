@@ -9,8 +9,12 @@ record.args（格式化参数）一并脱敏，确保 `logger.info("%s", phone)`
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
+from datetime import datetime, timezone
+
+from app.core.config import settings
 
 # 中国大陆手机号：1 开头第二位 3-9，共 11 位（避免误伤更长数字串用边界约束）
 _PHONE_RE = re.compile(r"(?<!\d)(1[3-9]\d)\d{4}(\d{4})(?!\d)")
@@ -52,18 +56,61 @@ class PiiMaskingFilter(logging.Filter):
         return mask_pii(value) if isinstance(value, str) else value
 
 
+class RequestContextFilter(logging.Filter):
+    """为所有日志补充当前请求 traceId；非请求上下文使用短横线。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # 延迟导入，避免 logging 与 envelope 在应用启动时形成循环依赖。
+        from app.core.envelope import current_trace_id
+
+        record.trace_id = current_trace_id() or "-"
+        return True
+
+
+class JsonFormatter(logging.Formatter):
+    """最小结构化日志格式；message 在过滤阶段已经完成敏感信息掩码。"""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "traceId": getattr(record, "trace_id", "-"),
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def _formatter() -> logging.Formatter:
+    if settings.log_format == "json":
+        return JsonFormatter()
+    return logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] [traceId=%(trace_id)s] %(message)s"
+    )
+
+
 def setup_logging() -> None:
-    """安装脱敏过滤器到 root 与 uvicorn 日志器（幂等）。"""
+    """统一配置应用与 Uvicorn 日志（级别、格式、traceId、脱敏，幂等）。"""
     pii_filter = PiiMaskingFilter()
+    context_filter = RequestContextFilter()
+    formatter = _formatter()
     targets = [
         logging.getLogger(),  # root
         logging.getLogger("uvicorn"),
         logging.getLogger("uvicorn.access"),
         logging.getLogger("uvicorn.error"),
     ]
+    logging.getLogger().setLevel(settings.log_level)
     for logger in targets:
         if not any(isinstance(f, PiiMaskingFilter) for f in logger.filters):
             logger.addFilter(pii_filter)
+        if not any(isinstance(f, RequestContextFilter) for f in logger.filters):
+            logger.addFilter(context_filter)
         for handler in logger.handlers:
             if not any(isinstance(f, PiiMaskingFilter) for f in handler.filters):
                 handler.addFilter(pii_filter)
+            if not any(isinstance(f, RequestContextFilter) for f in handler.filters):
+                handler.addFilter(context_filter)
+            handler.setFormatter(formatter)
