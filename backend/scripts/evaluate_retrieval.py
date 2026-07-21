@@ -19,7 +19,7 @@ from app.rag.embeddings import (
     set_embedder_for_evaluation,
 )
 from app.rag.pipeline import TrustedRetrievalPipeline
-from app.rag.retriever import HybridRetriever, get_retriever
+from app.rag.retriever import HybridRetriever, LegacyHybridRetriever, get_retriever
 from app.rag.vector_store import _ChromaStore
 from app.core.config import settings
 
@@ -35,6 +35,11 @@ def main() -> None:
     parser.add_argument("--embedding-mode", choices=["configured", "hash", "real"], default="configured")
     parser.add_argument("--require-real", action="store_true")
     parser.add_argument("--steady-rounds", type=int, default=5)
+    parser.add_argument(
+        "--compare-legacy",
+        action="store_true",
+        help="使用TASK-003-C1旧Hybrid算法作为before基线",
+    )
     args = parser.parse_args()
 
     cases = load_evaluation_cases(args.dataset)
@@ -63,7 +68,8 @@ def main() -> None:
 
     if args.collection:
         store = _ChromaStore(settings.chroma_dir, collection=args.collection, profile=profile)
-        old = HybridRetriever(store_getter=lambda: store)
+        old_class = LegacyHybridRetriever if args.compare_legacy else HybridRetriever
+        old = old_class(store_getter=lambda: store)
         new_retriever = HybridRetriever(store_getter=lambda: store)
         available = store.get_all()
         validate_evaluation_dataset(

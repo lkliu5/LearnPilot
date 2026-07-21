@@ -14,10 +14,11 @@ BM25 语料来自向量库当前全量 chunk，**每次检索按库内容计数�
 from __future__ import annotations
 
 import re
-from typing import Callable
+from typing import Any, Callable
 
 from app.core.config import settings
 from app.rag.embeddings import get_embedder
+from app.rag.protocol import RetrievalCandidate
 from app.rag.vector_store import get_collection_store, get_vector_store
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+|[一-鿿]")
@@ -39,6 +40,12 @@ class HybridRetriever:
         self.dense_weight = settings.rrf_dense_weight
         self.sparse_weight = settings.rrf_sparse_weight
         self.rrf_k = settings.rrf_k
+        self.candidate_top_k = settings.retrieval_candidate_top_k
+        self.final_top_k = settings.retrieval_final_top_k
+        self.max_chunks_per_source = settings.retrieval_max_chunks_per_source
+        self.min_dense_score = settings.retrieval_min_dense_score
+        self.min_query_overlap = settings.retrieval_min_query_overlap
+        self.min_strong_keyword_overlap = settings.retrieval_min_strong_keyword_overlap
         self._store_getter = store_getter or get_vector_store
         # BM25 缓存：(库计数, 索引, 语料元数据)
         self._bm25 = None
@@ -68,7 +75,9 @@ class HybridRetriever:
             range(len(self._bm25_docs)), key=lambda i: scores[i], reverse=True
         )
         out = []
-        for i in ranked[:k]:
+        for i in ranked:
+            if float(scores[i]) <= 0.0:
+                continue
             d = self._bm25_docs[i]
             out.append(
                 {
@@ -78,6 +87,8 @@ class HybridRetriever:
                     "bm25Score": float(scores[i]),
                 }
             )
+            if len(out) >= k:
+                break
         return out
 
     def _dense_search(self, query: str, k: int) -> list[dict]:
@@ -88,40 +99,195 @@ class HybridRetriever:
         return results
 
     # ---- RRF 融合（需求文档 4.3.2） --------------------------------------
-    def _rrf(self, dense: list[dict], sparse: list[dict], top_k: int) -> list[dict]:
-        merged: dict[str, dict] = {}
+    @staticmethod
+    def _source(item: dict[str, Any]) -> dict[str, Any]:
+        metadata = item.get("metadata") or {}
+        return {
+            key: value
+            for key, value in {
+                "chunkId": item.get("id"),
+                "documentId": metadata.get("document_id") or metadata.get("docId"),
+                "title": metadata.get("document_title") or metadata.get("title"),
+                "location": metadata.get("source_location"),
+            }.items()
+            if value is not None
+        }
 
-        def ensure(item: dict) -> dict:
+    @classmethod
+    def _candidate_dict(cls, candidate: RetrievalCandidate) -> dict[str, Any]:
+        """输出新协议，同时保留旧调用方使用的camelCase字段。"""
+        row = candidate.model_dump(mode="json")
+        row.update(
+            {
+                "vectorScore": candidate.dense_score,
+                "bm25Score": candidate.keyword_score,
+                "rrfScore": candidate.fusion_score,
+            }
+        )
+        return row
+
+    def _rrf(self, dense: list[dict], sparse: list[dict]) -> list[RetrievalCandidate]:
+        merged: dict[str, RetrievalCandidate] = {}
+
+        def ensure(item: dict) -> RetrievalCandidate:
             cid = item["id"]
             if cid not in merged:
-                merged[cid] = {
-                    "id": cid,
-                    "content": item["content"],
-                    "metadata": item["metadata"],
-                    "vectorScore": 0.0,
-                    "bm25Score": 0.0,
-                    "rrfScore": 0.0,
-                }
+                merged[cid] = RetrievalCandidate(
+                    id=cid,
+                    content=item["content"],
+                    source=self._source(item),
+                    metadata=item.get("metadata") or {},
+                )
             return merged[cid]
 
         for rank, item in enumerate(dense):
             row = ensure(item)
-            row["vectorScore"] = item.get("vectorScore", 0.0)
-            row["rrfScore"] += self.dense_weight / (self.rrf_k + rank + 1)
+            row.dense_score = float(item.get("vectorScore", 0.0))
+            row.fusion_score += self.dense_weight / (self.rrf_k + rank + 1)
         for rank, item in enumerate(sparse):
             row = ensure(item)
-            row["bm25Score"] = item.get("bm25Score", 0.0)
-            row["rrfScore"] += self.sparse_weight / (self.rrf_k + rank + 1)
+            row.keyword_score = float(item.get("bm25Score", 0.0))
+            row.fusion_score += self.sparse_weight / (self.rrf_k + rank + 1)
 
-        fused = sorted(merged.values(), key=lambda x: x["rrfScore"], reverse=True)
-        return fused[:top_k]
+        return sorted(merged.values(), key=lambda item: item.fusion_score, reverse=True)
 
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
+    @staticmethod
+    def _document_filter(filters: dict[str, Any] | None) -> set[str] | None:
+        if not filters:
+            return None
+        scope = filters.get("knowledge_scope", filters)
+        if isinstance(scope, dict):
+            values = scope.get("document_ids") or scope.get("documentIds")
+            return set(values) if values else None
+        if isinstance(scope, list):
+            return set(scope)
+        return None
+
+    @staticmethod
+    def _metadata_matches(candidate: RetrievalCandidate, filters: dict[str, Any] | None) -> bool:
+        if not filters:
+            return True
+        expected = {key: value for key, value in filters.items() if key != "knowledge_scope"}
+        scope = filters.get("knowledge_scope")
+        if isinstance(scope, dict):
+            expected.update(
+                {
+                    key: value
+                    for key, value in scope.items()
+                    if key not in {"document_ids", "documentIds"}
+                }
+            )
+        for key, value in expected.items():
+            actual = candidate.metadata.get(key)
+            if isinstance(value, list):
+                if actual not in value:
+                    return False
+            elif actual != value:
+                return False
+        return True
+
+    @staticmethod
+    def _query_overlap(query: str, content: str) -> float:
+        query_tokens = set(_tokenize(query))
+        if not query_tokens:
+            return 0.0
+        return len(query_tokens & set(_tokenize(content))) / len(query_tokens)
+
+    def _govern(
+        self,
+        query: str,
+        candidates: list[RetrievalCandidate],
+        *,
+        final_top_k: int,
+        filters: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        allowed_documents = self._document_filter(filters)
+        selected: list[RetrievalCandidate] = []
+        seen_content: set[str] = set()
+        source_counts: dict[str, int] = {}
+        for candidate in candidates:
+            document_id = str(candidate.source.get("documentId") or "")
+            if allowed_documents is not None and document_id not in allowed_documents:
+                continue
+            if not self._metadata_matches(candidate, filters):
+                continue
+            normalized_content = " ".join(candidate.content.split()).lower()
+            if normalized_content in seen_content:
+                continue
+            if source_counts.get(document_id, 0) >= self.max_chunks_per_source:
+                continue
+            overlap = self._query_overlap(query, candidate.content)
+            general_relevance = (
+                candidate.dense_score >= self.min_dense_score
+                and overlap >= self.min_query_overlap
+            )
+            scoped_keyword_relevance = (
+                allowed_documents is not None
+                and candidate.keyword_score > 0.0
+                and overlap >= self.min_query_overlap
+            )
+            strong_keyword_relevance = (
+                candidate.keyword_score > 0.0
+                and overlap >= self.min_strong_keyword_overlap
+            )
+            if not (
+                general_relevance
+                or scoped_keyword_relevance
+                or strong_keyword_relevance
+            ):
+                continue
+            candidate.metadata["queryOverlap"] = round(overlap, 6)
+            selected.append(candidate)
+            seen_content.add(normalized_content)
+            source_counts[document_id] = source_counts.get(document_id, 0) + 1
+            if len(selected) >= final_top_k:
+                break
+        return [self._candidate_dict(candidate) for candidate in selected]
+
+    def search(
+        self,
+        query: str,
+        top_k: int | None = None,
+        *,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict]:
         """执行混合检索，返回融合后的候选（已含 vector/bm25/rrf 分数）。"""
+        final_top_k = top_k or self.final_top_k
+        pool = max(self.candidate_top_k, final_top_k)
+        dense = self._dense_search(query, pool)
+        sparse = self._sparse_search(query, pool)
+        return self._govern(
+            query,
+            self._rrf(dense, sparse),
+            final_top_k=final_top_k,
+            filters=filters,
+        )
+
+
+class LegacyHybridRetriever(HybridRetriever):
+    """TASK-003-C1算法快照，仅供离线before/after评测。"""
+
+    def _sparse_search(self, query: str, k: int) -> list[dict]:
+        self._ensure_bm25()
+        if not self._bm25_docs:
+            return []
+        scores = self._bm25.get_scores(_tokenize(query))
+        ranked = sorted(range(len(self._bm25_docs)), key=lambda i: scores[i], reverse=True)
+        return [
+            {
+                "id": self._bm25_docs[i]["id"],
+                "content": self._bm25_docs[i]["content"],
+                "metadata": self._bm25_docs[i]["metadata"],
+                "bm25Score": float(scores[i]),
+            }
+            for i in ranked[:k]
+        ]
+
+    def search(self, query: str, top_k: int = 5, **_: Any) -> list[dict]:
         pool = max(top_k * 2, top_k)
         dense = self._dense_search(query, pool)
         sparse = self._sparse_search(query, pool)
-        return self._rrf(dense, sparse, top_k)
+        return [self._candidate_dict(item) for item in self._rrf(dense, sparse)[:top_k]]
 
 
 _retriever: HybridRetriever | None = None

@@ -100,3 +100,5 @@ def test_pipeline_returns_valid_empty_response():
     assert response.evidence == []
     assert response.confidence == 0.0
     assert response.metadata["resultCount"] == 0
+    assert response.metadata["retrievalDecision"] == "low_confidence"
+    assert response.metadata["lowConfidence"] is True

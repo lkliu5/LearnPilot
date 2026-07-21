@@ -39,6 +39,25 @@ class QueryPlan(_StrictModel):
         return normalized
 
 
+class RetrievalCandidate(_StrictModel):
+    """Dense、Keyword和Fusion阶段共享的统一候选协议。"""
+
+    id: str
+    content: str
+    source: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    dense_score: float = 0.0
+    keyword_score: float = 0.0
+    fusion_score: float = 0.0
+
+    @field_validator("id", "content")
+    @classmethod
+    def _candidate_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("candidate id/content must not be blank")
+        return value
+
+
 class EvidenceItem(_StrictModel):
     content: str
     source: dict[str, Any] = Field(default_factory=dict)

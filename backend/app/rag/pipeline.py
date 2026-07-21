@@ -20,7 +20,13 @@ logger = logging.getLogger("app.rag.pipeline")
 class Retriever(Protocol):
     """兼容现有HybridRetriever的最小检索接口。"""
 
-    def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]: ...
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        *,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]: ...
 
 
 class QueryPlanner(Protocol):
@@ -55,6 +61,8 @@ class TrustedRetrievalPipeline:
     def _score(candidate: dict[str, Any]) -> float:
         raw = candidate.get("score")
         if raw is None:
+            raw = candidate.get("fusion_score")
+        if raw is None:
             raw = candidate.get("rrfScore")
         if raw is None:
             raw = candidate.get("vectorScore", 0.0)
@@ -77,6 +85,9 @@ class TrustedRetrievalPipeline:
             "vectorScore": candidate.get("vectorScore"),
             "bm25Score": candidate.get("bm25Score"),
             "rrfScore": candidate.get("rrfScore"),
+            "denseScore": candidate.get("dense_score"),
+            "keywordScore": candidate.get("keyword_score"),
+            "fusionScore": candidate.get("fusion_score"),
         }
         retrieval_metadata = {
             key: value for key, value in retrieval_metadata.items() if value is not None
@@ -95,10 +106,18 @@ class TrustedRetrievalPipeline:
         plan = self.planner.plan(validated_request)
         planning_ms = (time.perf_counter() - planning_started) * 1000
         retrieval_started = time.perf_counter()
-        candidates = self.retriever.search(
-            validated_request.query,
-            top_k=validated_request.top_k,
-        )
+        try:
+            candidates = self.retriever.search(
+                validated_request.query,
+                top_k=validated_request.top_k,
+                filters=plan.filters,
+            )
+        except TypeError:
+            # 兼容测试桩和旧适配器；默认HybridRetriever支持filters。
+            candidates = self.retriever.search(
+                validated_request.query,
+                top_k=validated_request.top_k,
+            )
         retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
         evidence_started = time.perf_counter()
         evidence = [self._evidence(candidate) for candidate in candidates]
@@ -134,6 +153,8 @@ class TrustedRetrievalPipeline:
                 "resultCount": len(evidence),
                 "retriever": type(self.retriever).__name__,
                 "confidenceSemantics": "heuristic_max_retrieval_score_not_probability",
+                "retrievalDecision": "evidence_found" if evidence else "low_confidence",
+                "lowConfidence": not evidence,
                 "observability": observability,
             },
         )

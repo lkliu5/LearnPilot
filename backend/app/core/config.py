@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     rrf_dense_weight: float = 0.7
     rrf_sparse_weight: float = 0.3
     rrf_k: int = 60
+    retrieval_candidate_top_k: int = 20
+    retrieval_final_top_k: int = 5
+    retrieval_max_chunks_per_source: int = 2
+    retrieval_min_dense_score: float = 0.35
+    retrieval_min_query_overlap: float = 0.35
+    retrieval_min_strong_keyword_overlap: float = 0.60
 
     # B7-a 实时通道演示参数：
     # - workflow_step_delay_ms：工作流节点间推进延迟，让 WS / 轮询能观察到 phase

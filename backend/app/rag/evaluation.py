@@ -155,7 +155,8 @@ def calculate_case_metrics(
 
 def source_completeness(items: list[dict[str, Any]]) -> float:
     if not items:
-        return 0.0
+        # 空结果质量由EmptyResultRate单独衡量；没有返回项也就没有缺失来源字段。
+        return 1.0
     complete = 0
     for item in items:
         metadata = item.get("metadata") or {}

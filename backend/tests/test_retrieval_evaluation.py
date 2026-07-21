@@ -69,6 +69,12 @@ def test_empty_no_answer_metrics_are_not_fabricated():
     assert metrics["mrr"] is None
 
 
+def test_empty_result_does_not_fabricate_incomplete_source_fields():
+    from app.rag.evaluation import source_completeness
+
+    assert source_completeness([]) == 1.0
+
+
 def test_multiple_relevant_documents_reward_complete_ranking():
     case = _case(expected_document_ids=["doc_a", "doc_b"])
     metrics = calculate_case_metrics(
