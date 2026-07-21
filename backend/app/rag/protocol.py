@@ -1,0 +1,59 @@
+"""统一可信检索协议（TASK-003-B2）。"""
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class RAGRequest(_StrictModel):
+    query: str
+    user_id: str
+    knowledge_scope: str | list[str] | dict[str, Any] | None = None
+    top_k: int = Field(default=5, ge=1, le=100)
+
+    @field_validator("query", "user_id")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+
+class QueryPlan(_StrictModel):
+    intent: str
+    keywords: list[str] = Field(default_factory=list)
+    filters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("intent")
+    @classmethod
+    def _intent_not_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("intent must not be blank")
+        return normalized
+
+
+class EvidenceItem(_StrictModel):
+    content: str
+    source: dict[str, Any] = Field(default_factory=dict)
+    score: float = Field(ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("content")
+    @classmethod
+    def _content_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content must not be blank")
+        return value
+
+
+class RAGResponse(_StrictModel):
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
