@@ -48,3 +48,5 @@ def test_offline_mock_experiment_has_zero_metric_delta():
     assert report["baseline"] == report["rerank"]
     assert report["delta"] == {"mrr": 0.0, "ndcg@3": 0.0, "ndcg@5": 0.0, "top1": 0.0}
     assert report["rankingChanges"] == []
+    assert report["rankChange"] == {"changedCaseCount": 0, "changedCandidateCount": 0}
+    assert report["queryTypeMetrics"]["fact"]["delta"]["mrr"] == 0.0

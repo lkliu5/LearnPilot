@@ -9,7 +9,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import logging
 import math
+from pathlib import Path
 import threading
+import time
 from typing import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -63,6 +65,46 @@ class MockReranker(BaseReranker):
             )
             for rank, candidate in enumerate(candidates, start=1)
         ]
+
+
+class RealCrossEncoderReranker(BaseReranker):
+    """Offline-only CrossEncoder adapter; never registered in production."""
+
+    def __init__(self, model_name: str, *, cache_folder: str, device: str = "cpu",
+                 batch_size: int = 8, max_length: int = 512,
+                 local_files_only: bool = True) -> None:
+        if batch_size < 1 or max_length < 1:
+            raise ValueError("batch_size and max_length must be positive")
+        from sentence_transformers import CrossEncoder
+        self.model_name, self.device = model_name, device
+        self.batch_size, self.max_length = batch_size, max_length
+        self.cache_folder = str(Path(cache_folder).resolve())
+        started = time.perf_counter()
+        self._model = CrossEncoder(model_name, cache_folder=self.cache_folder,
+                                   device=device, max_length=max_length,
+                                   local_files_only=local_files_only)
+        self.load_latency_ms = round((time.perf_counter() - started) * 1000, 3)
+        self.inference_latencies_ms: list[float] = []
+
+    def rerank(self, query: str,
+               candidates: Sequence[RetrievalCandidate]) -> list[RerankResult]:
+        if not candidates:
+            self.inference_latencies_ms.append(0.0)
+            return []
+        started = time.perf_counter()
+        scores = self._model.predict(
+            [(query, candidate.content) for candidate in candidates],
+            batch_size=self.batch_size, show_progress_bar=False, convert_to_numpy=True)
+        self.inference_latencies_ms.append(round((time.perf_counter() - started) * 1000, 3))
+        scored = [(rank, candidate, float(score)) for rank, (candidate, score)
+                  in enumerate(zip(candidates, scores), start=1)]
+        scored.sort(key=lambda item: (-item[2], item[0]))
+        return [RerankResult(candidate_id=candidate.id, original_rank=original_rank,
+                             rerank_rank=rerank_rank,
+                             original_score=candidate.confidence_score,
+                             rerank_score=score)
+                for rerank_rank, (original_rank, candidate, score)
+                in enumerate(scored, start=1)]
 
 
 def _sigmoid(x: float) -> float:

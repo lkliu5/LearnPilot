@@ -62,6 +62,7 @@ def evaluate_fixed_candidates(
     baseline_rows: list[dict[str, float | None]] = []
     rerank_rows: list[dict[str, float | None]] = []
     changes: list[dict[str, Any]] = []
+    per_type: dict[str, dict[str, list[dict[str, float | None]]]] = {}
 
     for fixed in fixed_cases:
         candidates = list(fixed.candidates)
@@ -76,24 +77,48 @@ def evaluate_fixed_candidates(
             _metric_item(by_id[result.candidate_id], result.rerank_score)
             for result in ranked
         ]
-        baseline_rows.append(calculate_case_metrics(fixed.case, baseline_items))
-        rerank_rows.append(calculate_case_metrics(fixed.case, reranked_items))
+        baseline_row = calculate_case_metrics(fixed.case, baseline_items)
+        rerank_row = calculate_case_metrics(fixed.case, reranked_items)
+        baseline_rows.append(baseline_row)
+        rerank_rows.append(rerank_row)
+        bucket = per_type.setdefault(fixed.case.query_type, {"baseline": [], "rerank": []})
+        bucket["baseline"].append(baseline_row)
+        bucket["rerank"].append(rerank_row)
         moved = [
             result.model_dump(mode="json")
             for result in ranked
             if result.original_rank != result.rerank_rank
         ]
         if moved:
-            changes.append({"caseId": fixed.case.case_id, "query": fixed.case.query, "moved": moved})
+            sources = {"mrr": "mrr", "ndcg@3": "ndcg@3", "ndcg@5": "ndcg@5",
+                       "top1": "hit_rate@1"}
+            case_delta = {key: round((rerank_row.get(source) or 0.0) -
+                                     (baseline_row.get(source) or 0.0), 6)
+                          for key, source in sources.items()}
+            changes.append({"caseId": fixed.case.case_id, "query": fixed.case.query,
+                            "queryType": fixed.case.query_type,
+                            "metricDelta": case_delta, "moved": moved})
 
     baseline = _summary(baseline_rows)
     reranked = _summary(rerank_rows)
+    type_metrics = {}
+    for query_type, rows in per_type.items():
+        type_baseline, type_rerank = _summary(rows["baseline"]), _summary(rows["rerank"])
+        type_metrics[query_type] = {
+            "caseCount": len(rows["baseline"]), "baseline": type_baseline,
+            "rerank": type_rerank,
+            "delta": {key: round(type_rerank[key] - type_baseline[key], 6)
+                      for key in type_baseline},
+        }
     return {
         "caseCount": len(fixed_cases),
         "candidateStrategy": "fixed_hybrid_top20",
         "baseline": baseline,
         "rerank": reranked,
         "delta": {key: round(reranked[key] - baseline[key], 6) for key in baseline},
+        "rankChange": {"changedCaseCount": len(changes),
+                       "changedCandidateCount": sum(len(change["moved"]) for change in changes)},
+        "queryTypeMetrics": type_metrics,
         "rankingChanges": changes,
     }
 
