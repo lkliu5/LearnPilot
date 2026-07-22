@@ -1,0 +1,282 @@
+"""Fail-closed offline admission gate for Trusted RAG canary evaluation."""
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class CanaryDecisionValue(str, Enum):
+    PASS = "PASS"
+    BLOCK = "BLOCK"
+
+
+class TrustedRAGGateConfig(_StrictModel):
+    min_sample_count: int = Field(default=100, ge=1)
+    min_evidence_overlap: float = Field(default=0.70, ge=0.0, le=1.0)
+    min_source_coverage: float = Field(default=0.80, ge=0.0, le=1.0)
+    min_confidence: float = Field(default=0.80, ge=0.0, le=1.0)
+    max_p95_latency_ms: float = Field(default=1500.0, gt=0.0)
+    max_timeout_rate: float = Field(default=0.01, ge=0.0, le=1.0)
+    max_error_rate: float = Field(default=0.02, ge=0.0, le=1.0)
+    max_fault_failure_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    max_rerank_degraded_cases: int = Field(default=0, ge=0)
+
+
+class RerankMetrics(_StrictModel):
+    independent_validation: bool
+    metrics_provisional: bool
+    human_review_complete: bool
+    mrr_delta: float | None = None
+    ndcg_at_3_delta: float | None = None
+    ndcg_at_5_delta: float | None = None
+    degraded_case_count: int | None = Field(default=None, ge=0)
+
+    @classmethod
+    def from_blind_evaluation(cls, payload: dict[str, Any]) -> "RerankMetrics":
+        delta = payload.get("delta") or {}
+        review = payload.get("humanPreference") or {}
+        relevance_review = payload.get("relevanceReview") or {}
+        human_complete = (
+            review.get("status") == "completed"
+            and relevance_review.get("status") == "completed"
+        )
+        return cls(
+            independent_validation=(
+                payload.get("evaluationType")
+                == "offline_independent_blind_candidate_ranking"
+            ),
+            metrics_provisional=bool(payload.get("metricsProvisional", True)),
+            human_review_complete=human_complete,
+            mrr_delta=delta.get("mrr"),
+            ndcg_at_3_delta=delta.get("ndcg@3"),
+            ndcg_at_5_delta=delta.get("ndcg@5"),
+            degraded_case_count=payload.get("degradedCaseCount"),
+        )
+
+
+class ShadowMetrics(_StrictModel):
+    """Aggregated, content-free Shadow evidence supplied to the offline gate."""
+
+    sample_count: int | None = Field(default=None, ge=0)
+    evidence_overlap_mean: float | None = Field(default=None, ge=0.0, le=1.0)
+    source_coverage_mean: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence_mean: float | None = Field(default=None, ge=0.0, le=1.0)
+    p95_latency_ms: float | None = Field(default=None, ge=0.0)
+    timeout_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    error_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    performance_verified: bool = False
+    rerank: RerankMetrics | None = None
+
+
+class FaultScenarioResult(_StrictModel):
+    scenario_id: str
+    status: str
+    legacy_preserved: bool
+    trusted_isolated: bool
+    rollback_path: str
+    content_safe: bool
+    structured_reason: str
+
+
+class FaultInjectionResults(_StrictModel):
+    scenario_count: int = Field(ge=0)
+    pass_count: int = Field(ge=0)
+    block_count: int = Field(ge=0)
+    scenarios: list[FaultScenarioResult]
+
+    @classmethod
+    def from_report(cls, payload: dict[str, Any]) -> "FaultInjectionResults":
+        return cls(
+            scenario_count=payload.get("scenarioCount", 0),
+            pass_count=payload.get("passCount", 0),
+            block_count=payload.get("blockCount", 0),
+            scenarios=[
+                FaultScenarioResult(
+                    scenario_id=item.get("scenarioId", ""),
+                    status=item.get("status", ""),
+                    legacy_preserved=bool(item.get("legacyPreserved", False)),
+                    trusted_isolated=bool(item.get("trustedIsolated", False)),
+                    rollback_path=item.get("rollbackPath", ""),
+                    content_safe=bool(item.get("contentSafe", False)),
+                    structured_reason=item.get("structuredReason", "fault.unknown"),
+                )
+                for item in payload.get("scenarios", [])
+            ],
+        )
+
+
+class GateSnapshot(_StrictModel):
+    sample_count: int | None
+    p95_latency_ms: float | None
+    timeout_rate: float | None
+    error_rate: float | None
+    fault_scenario_count: int | None
+    fault_failure_rate: float | None
+
+
+class CanaryDecision(_StrictModel):
+    quality_pass: bool
+    latency_pass: bool
+    reliability_pass: bool
+    rerank_pass: bool
+    final_decision: CanaryDecisionValue
+    block_reasons: list[str]
+    rollback_recommended: bool
+    recommended_action: str
+    snapshot: GateSnapshot
+
+
+class TrustedRAGGate:
+    """Pure evaluator. It has no route, API, Agent, Workflow, or RAG side effects."""
+
+    def __init__(self, config: TrustedRAGGateConfig | None = None) -> None:
+        self.config = config or TrustedRAGGateConfig()
+
+    def evaluate(
+        self,
+        shadow_metrics: ShadowMetrics | None,
+        fault_results: FaultInjectionResults | None,
+    ) -> CanaryDecision:
+        reasons: dict[str, list[str]] = {
+            "quality": [],
+            "latency": [],
+            "reliability": [],
+            "rerank": [],
+        }
+        shadow = shadow_metrics
+
+        if shadow is None:
+            reasons["quality"].append("quality.shadow_metrics_missing")
+            reasons["latency"].append("latency.shadow_metrics_missing")
+            reasons["reliability"].append("reliability.shadow_metrics_missing")
+            reasons["rerank"].append("rerank.metrics_missing")
+        else:
+            quality_rules = (
+                ("evidence_overlap", shadow.evidence_overlap_mean, self.config.min_evidence_overlap),
+                ("source_coverage", shadow.source_coverage_mean, self.config.min_source_coverage),
+                ("confidence", shadow.confidence_mean, self.config.min_confidence),
+            )
+            for name, value, threshold in quality_rules:
+                if value is None:
+                    reasons["quality"].append(f"quality.{name}_missing")
+                elif value < threshold:
+                    reasons["quality"].append(f"quality.{name}_below_threshold")
+
+            if shadow.p95_latency_ms is None:
+                reasons["latency"].append("latency.p95_missing")
+            elif shadow.p95_latency_ms > self.config.max_p95_latency_ms:
+                reasons["latency"].append("latency.p95_exceeded")
+            if not shadow.performance_verified:
+                reasons["latency"].append("latency.performance_not_verified")
+
+            if shadow.sample_count is None:
+                reasons["reliability"].append("reliability.sample_count_missing")
+            elif shadow.sample_count < self.config.min_sample_count:
+                reasons["reliability"].append("reliability.sample_count_below_minimum")
+            for name, value, threshold in (
+                ("timeout_rate", shadow.timeout_rate, self.config.max_timeout_rate),
+                ("error_rate", shadow.error_rate, self.config.max_error_rate),
+            ):
+                if value is None:
+                    reasons["reliability"].append(f"reliability.{name}_missing")
+                elif value > threshold:
+                    reasons["reliability"].append(f"reliability.{name}_exceeded")
+
+            self._evaluate_rerank(shadow.rerank, reasons["rerank"])
+
+        fault_failure_rate: float | None = None
+        if fault_results is None:
+            reasons["reliability"].append("reliability.fault_results_missing")
+        elif fault_results.scenario_count == 0:
+            reasons["reliability"].append("reliability.fault_scenarios_missing")
+        else:
+            if len(fault_results.scenarios) != fault_results.scenario_count:
+                reasons["reliability"].append("reliability.fault_result_count_mismatch")
+            fault_failure_rate = round(
+                fault_results.block_count / fault_results.scenario_count, 6
+            )
+            if fault_failure_rate > self.config.max_fault_failure_rate:
+                reasons["reliability"].append("reliability.fault_failure_rate_exceeded")
+            for scenario in fault_results.scenarios:
+                if scenario.status != "PASS":
+                    reasons["reliability"].append(
+                        f"reliability.fault_blocked:{scenario.structured_reason}"
+                    )
+                if not scenario.legacy_preserved:
+                    reasons["reliability"].append(
+                        f"reliability.legacy_not_preserved:{scenario.scenario_id}"
+                    )
+                if not scenario.trusted_isolated:
+                    reasons["reliability"].append(
+                        f"reliability.trusted_not_isolated:{scenario.scenario_id}"
+                    )
+                if scenario.rollback_path != "legacy":
+                    reasons["reliability"].append(
+                        f"reliability.rollback_path_invalid:{scenario.scenario_id}"
+                    )
+                if not scenario.content_safe:
+                    reasons["reliability"].append(
+                        f"reliability.content_safety_failed:{scenario.scenario_id}"
+                    )
+
+        passes = {name: not values for name, values in reasons.items()}
+        block_reasons = list(dict.fromkeys(reason for values in reasons.values() for reason in values))
+        final = (
+            CanaryDecisionValue.PASS
+            if all(passes.values())
+            else CanaryDecisionValue.BLOCK
+        )
+        return CanaryDecision(
+            quality_pass=passes["quality"],
+            latency_pass=passes["latency"],
+            reliability_pass=passes["reliability"],
+            rerank_pass=passes["rerank"],
+            final_decision=final,
+            block_reasons=block_reasons,
+            rollback_recommended=final is CanaryDecisionValue.BLOCK,
+            recommended_action=(
+                "eligible_for_manual_canary_review"
+                if final is CanaryDecisionValue.PASS
+                else "keep_legacy_and_set_canary_weight_to_zero"
+            ),
+            snapshot=GateSnapshot(
+                sample_count=shadow.sample_count if shadow else None,
+                p95_latency_ms=shadow.p95_latency_ms if shadow else None,
+                timeout_rate=shadow.timeout_rate if shadow else None,
+                error_rate=shadow.error_rate if shadow else None,
+                fault_scenario_count=(fault_results.scenario_count if fault_results else None),
+                fault_failure_rate=fault_failure_rate,
+            ),
+        )
+
+    def _evaluate_rerank(
+        self, rerank: RerankMetrics | None, reasons: list[str]
+    ) -> None:
+        if rerank is None:
+            reasons.append("rerank.metrics_missing")
+            return
+        if not rerank.independent_validation:
+            reasons.append("rerank.independent_validation_required")
+        if rerank.metrics_provisional:
+            reasons.append("rerank.metrics_still_provisional")
+        if not rerank.human_review_complete:
+            reasons.append("rerank.human_review_incomplete")
+        for name, value in (
+            ("mrr", rerank.mrr_delta),
+            ("ndcg_at_3", rerank.ndcg_at_3_delta),
+            ("ndcg_at_5", rerank.ndcg_at_5_delta),
+        ):
+            if value is None:
+                reasons.append(f"rerank.{name}_delta_missing")
+            elif value < 0:
+                reasons.append(f"rerank.{name}_regressed")
+        if rerank.degraded_case_count is None:
+            reasons.append("rerank.degraded_case_count_missing")
+        elif rerank.degraded_case_count > self.config.max_rerank_degraded_cases:
+            reasons.append("rerank.degraded_cases_exceeded")

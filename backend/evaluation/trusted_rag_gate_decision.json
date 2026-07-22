@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "trusted-rag-canary-gate-v1",
+  "evaluationType": "offline_canary_admission_gate",
+  "generatedAt": "2026-07-22T08:48:18.593049+00:00",
+  "productionMutation": false,
+  "inputs": {
+    "shadowMetrics": null,
+    "faultResults": "F:\\软件杯\\backend\\evaluation\\trusted_rag_fault_results.json",
+    "rerankResults": "F:\\软件杯\\backend\\evaluation\\rerank_blind_results.json"
+  },
+  "quality_pass": false,
+  "latency_pass": false,
+  "reliability_pass": false,
+  "rerank_pass": false,
+  "final_decision": "BLOCK",
+  "block_reasons": [
+    "quality.evidence_overlap_missing",
+    "quality.source_coverage_missing",
+    "quality.confidence_missing",
+    "latency.p95_missing",
+    "latency.performance_not_verified",
+    "reliability.sample_count_missing",
+    "reliability.timeout_rate_missing",
+    "reliability.error_rate_missing",
+    "reliability.fault_failure_rate_exceeded",
+    "reliability.fault_blocked:timeout.hard_hang_no_hard_deadline",
+    "reliability.trusted_not_isolated:retriever_hard_hang",
+    "rerank.metrics_still_provisional",
+    "rerank.human_review_incomplete",
+    "rerank.degraded_cases_exceeded"
+  ],
+  "rollback_recommended": true,
+  "recommended_action": "keep_legacy_and_set_canary_weight_to_zero",
+  "snapshot": {
+    "sample_count": null,
+    "p95_latency_ms": null,
+    "timeout_rate": null,
+    "error_rate": null,
+    "fault_scenario_count": 11,
+    "fault_failure_rate": 0.090909
+  }
+}
