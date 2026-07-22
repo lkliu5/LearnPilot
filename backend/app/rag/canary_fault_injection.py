@@ -15,6 +15,7 @@ from app.agents.tools.registry import RAG_TOOL_NAME, ToolRegistry
 from app.rag.protocol import EvidenceItem, RAGResponse, RetrievalCandidate, TrustReport
 from app.rag.rerank_gate import DecisionReranker, OfflineRerankGate
 from app.rag.reranker import BaseReranker
+from app.rag.shadow_admission import ShadowDeadlineExecutor, ShadowTaskStatus
 
 
 _SENSITIVE_QUERY = "FAULT-INJECTION-SENSITIVE-QUERY"
@@ -51,10 +52,13 @@ class FaultScenarioResult(_StrictModel):
     elapsedMs: float = Field(ge=0.0)
     componentFallback: Literal["legacy", "hybrid_then_legacy"] = "legacy"
     limitation: str | None = None
+    deadlineEnforced: bool = False
+    cancellationRequested: bool = False
+    timeoutReason: str | None = None
 
 
 class FaultInjectionReport(_StrictModel):
-    schemaVersion: Literal["trusted-rag-fault-injection-v1"]
+    schemaVersion: Literal["trusted-rag-fault-injection-v2"]
     productionMutation: Literal[False]
     legacyAuthority: Literal[True]
     scenarioCount: int = Field(ge=1)
@@ -207,6 +211,49 @@ class CanaryFaultInjectionEvaluator:
         self.hard_timeout_budget_ms = hard_timeout_budget_ms
         self.hang_probe_ms = hang_probe_ms
 
+    def _run_hard_hang(self) -> FaultScenarioResult:
+        """Probe the E2 Shadow-only deadline without invoking a production route."""
+        legacy = _LegacyProbeAgent().run(task_id="task-retriever_hard_hang")
+        executor = ShadowDeadlineExecutor(max_isolated_workers=1)
+        outcome = executor.run(
+            lambda _cancellation: _FaultTool(
+                _valid_response(), delay_ms=self.hang_probe_ms
+            ).search(),
+            deadline_ms=self.hard_timeout_budget_ms,
+        )
+        legacy_preserved = legacy.output.get("markdown") == _LEGACY_OUTPUT
+        isolated = (
+            outcome.status is ShadowTaskStatus.DEADLINE_EXCEEDED
+            and outcome.worker_isolated
+            and legacy_preserved
+        )
+        return FaultScenarioResult(
+            scenarioId="retriever_hard_hang",
+            component="retriever",
+            fault="isolated_hang_probe",
+            timeoutKind="hard_hang",
+            status=ScenarioStatus.PASS if isolated else ScenarioStatus.BLOCK,
+            legacyPreserved=legacy_preserved,
+            trustedIsolated=isolated,
+            structuredReason=(
+                "timeout.hard_hang_deadline_isolated"
+                if isolated
+                else "timeout.hard_hang_deadline_failed"
+            ),
+            recordedErrorType="ShadowDeadlineExceeded",
+            rollbackPath=RollbackPath.LEGACY,
+            metricsIsolated=True,
+            contentSafe=True,
+            elapsedMs=outcome.elapsed_ms,
+            limitation=(
+                "Offline Shadow worker uses daemon isolation; cooperative cancellation "
+                "cannot forcibly terminate a blocking Python dependency."
+            ),
+            deadlineEnforced=True,
+            cancellationRequested=outcome.cancellation_requested,
+            timeoutReason=outcome.timeout_reason,
+        )
+
     def _run_shadow(
         self,
         *,
@@ -304,20 +351,7 @@ class CanaryFaultInjectionEvaluator:
                 outcome=_valid_response(empty=True),
                 empty_is_failure=True,
             ),
-            self._run_shadow(
-                scenario_id="retriever_hard_hang",
-                component="retriever",
-                fault="non_cancellable_hang_probe",
-                structured_reason="timeout.hard_hang_no_hard_deadline",
-                outcome=_valid_response(),
-                timeout_kind="hard_hang",
-                delay_ms=self.hang_probe_ms,
-                expected_block=True,
-                limitation=(
-                    "Bounded sleep simulates a dependency that does not raise TimeoutError. "
-                    "The existing Shadow adapter waits for completion and has no hard cancellation."
-                ),
-            ),
+            self._run_hard_hang(),
             self._run_shadow(
                 scenario_id="vector_collection_unavailable",
                 component="vector_store",
@@ -381,7 +415,7 @@ class CanaryFaultInjectionEvaluator:
         block_reasons = [item.structuredReason for item in cases if item.status is ScenarioStatus.BLOCK]
         block_count = len(block_reasons)
         return FaultInjectionReport(
-            schemaVersion="trusted-rag-fault-injection-v1",
+            schemaVersion="trusted-rag-fault-injection-v2",
             productionMutation=False,
             legacyAuthority=True,
             scenarioCount=len(cases),

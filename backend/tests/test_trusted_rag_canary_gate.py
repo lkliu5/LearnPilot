@@ -9,6 +9,7 @@ from app.rag.trusted_rag_gate import (
     ShadowMetrics,
     TrustedRAGGate,
 )
+from app.rag.shadow_admission import ShadowEvaluationDataset
 
 
 def _rerank(**overrides) -> RerankMetrics:
@@ -72,6 +73,7 @@ def test_all_gate_checks_pass():
     assert result.rerank_pass
     assert result.final_decision is CanaryDecisionValue.PASS
     assert result.block_reasons == []
+    assert result.remediation == []
     assert result.rollback_recommended is False
 
 
@@ -145,3 +147,48 @@ def test_task004_reports_are_supported_without_trusting_provisional_rerank():
         "rerank.human_review_incomplete",
         "rerank.degraded_cases_exceeded",
     }
+
+
+def test_gate_accepts_complete_shadow_evaluation_dataset():
+    query_types = (
+        "concept_explanation", "process_explanation", "code_technical",
+        "multi_hop_reasoning", "no_answer_refusal",
+    )
+    samples = []
+    for query_type in query_types:
+        for index in range(20):
+            samples.append({
+                "request_id": f"{query_type}-{index}",
+                "query_type": query_type,
+                "latency": {"total_ms": 100 + index},
+                "quality_metrics": {
+                    "evidence_overlap": 0.75,
+                    "source_coverage": 0.85,
+                    "confidence": 0.9,
+                },
+                "reliability_metrics": {"legacy_preserved": True},
+            })
+    dataset = ShadowEvaluationDataset(
+        environment="target-canary-review",
+        evaluation_window="frozen-window-v1",
+        performance_verified=True,
+        samples=samples,
+    )
+
+    result = TrustedRAGGate().evaluate(dataset, _faults(), rerank_metrics=_rerank())
+
+    assert result.final_decision is CanaryDecisionValue.PASS
+    assert result.snapshot.shadow_input_type == "dataset"
+    assert result.snapshot.query_type_counts == {name: 20 for name in sorted(query_types)}
+
+
+def test_dataset_underrepresented_query_type_blocks_with_remediation():
+    dataset = ShadowEvaluationDataset(
+        environment="fixture",
+        evaluation_window="fixture",
+        samples=[],
+    )
+    result = TrustedRAGGate().evaluate(dataset, _faults(), rerank_metrics=_rerank())
+
+    assert result.final_decision is CanaryDecisionValue.BLOCK
+    assert "complete_stratified_shadow_dataset" in result.remediation

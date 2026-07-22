@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "trusted-rag-canary-gate-v1",
+  "schemaVersion": "trusted-rag-canary-gate-v2",
   "evaluationType": "offline_canary_admission_gate",
-  "generatedAt": "2026-07-22T08:48:18.593049+00:00",
+  "generatedAt": "2026-07-22T09:27:47.932638+00:00",
   "productionMutation": false,
   "inputs": {
     "shadowMetrics": null,
@@ -22,12 +22,15 @@
     "reliability.sample_count_missing",
     "reliability.timeout_rate_missing",
     "reliability.error_rate_missing",
-    "reliability.fault_failure_rate_exceeded",
-    "reliability.fault_blocked:timeout.hard_hang_no_hard_deadline",
-    "reliability.trusted_not_isolated:retriever_hard_hang",
     "rerank.metrics_still_provisional",
     "rerank.human_review_incomplete",
     "rerank.degraded_cases_exceeded"
+  ],
+  "remediation": [
+    "collect_and_review_shadow_quality_metrics",
+    "verify_target_environment_shadow_latency",
+    "reduce_shadow_timeout_error_rate_and_preserve_legacy",
+    "apply_query_type_gate_or_hybrid_fallback_and_revalidate_rerank"
   ],
   "rollback_recommended": true,
   "recommended_action": "keep_legacy_and_set_canary_weight_to_zero",
@@ -37,6 +40,8 @@
     "timeout_rate": null,
     "error_rate": null,
     "fault_scenario_count": 11,
-    "fault_failure_rate": 0.090909
+    "fault_failure_rate": 0.0,
+    "query_type_counts": null,
+    "shadow_input_type": "aggregate"
   }
 }

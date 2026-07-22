@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T07:34:43.609640+00:00",
+  "generatedAt": "2026-07-22T09:27:43.682126+00:00",
   "evaluationType": "offline_fault_injection",
   "productionPerformance": false,
   "environment": {
@@ -11,12 +11,12 @@
     "hardTimeoutBudgetMs": 10.0,
     "hangProbeMs": 80.0
   },
-  "schemaVersion": "trusted-rag-fault-injection-v1",
+  "schemaVersion": "trusted-rag-fault-injection-v2",
   "productionMutation": false,
   "legacyAuthority": true,
   "scenarioCount": 11,
-  "passCount": 10,
-  "blockCount": 1,
+  "passCount": 11,
+  "blockCount": 0,
   "scenarios": [
     {
       "scenarioId": "retriever_timeout_exception",
@@ -31,9 +31,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 1.0774,
+      "elapsedMs": 1.5335,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "retriever_runtime_error",
@@ -48,9 +51,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 1.5695,
+      "elapsedMs": 0.6558,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "retriever_empty_evidence",
@@ -65,26 +71,32 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 1.1448,
+      "elapsedMs": 0.6415,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "retriever_hard_hang",
       "component": "retriever",
-      "fault": "non_cancellable_hang_probe",
+      "fault": "isolated_hang_probe",
       "timeoutKind": "hard_hang",
-      "status": "BLOCK",
+      "status": "PASS",
       "legacyPreserved": true,
-      "trustedIsolated": false,
-      "structuredReason": "timeout.hard_hang_no_hard_deadline",
-      "recordedErrorType": null,
+      "trustedIsolated": true,
+      "structuredReason": "timeout.hard_hang_deadline_isolated",
+      "recordedErrorType": "ShadowDeadlineExceeded",
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 81.7993,
+      "elapsedMs": 23.4478,
       "componentFallback": "legacy",
-      "limitation": "Bounded sleep simulates a dependency that does not raise TimeoutError. The existing Shadow adapter waits for completion and has no hard cancellation."
+      "limitation": "Offline Shadow worker uses daemon isolation; cooperative cancellation cannot forcibly terminate a blocking Python dependency.",
+      "deadlineEnforced": true,
+      "cancellationRequested": true,
+      "timeoutReason": "shadow.deadline_exceeded"
     },
     {
       "scenarioId": "vector_collection_unavailable",
@@ -99,9 +111,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.9054,
+      "elapsedMs": 1.5285,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "vector_query_error",
@@ -116,9 +131,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.6212,
+      "elapsedMs": 1.4915,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "vector_data_error",
@@ -133,9 +151,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.7422,
+      "elapsedMs": 0.7661,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "reranker_load_failure",
@@ -150,9 +171,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.6177,
+      "elapsedMs": 0.6678,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "reranker_inference_failure",
@@ -167,9 +191,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.7388,
+      "elapsedMs": 0.873,
       "componentFallback": "hybrid_then_legacy",
-      "limitation": "DecisionReranker fallback verification=true"
+      "limitation": "DecisionReranker fallback verification=true",
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "llm_controlled_degradation",
@@ -184,9 +211,12 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 0.9838,
+      "elapsedMs": 0.7216,
       "componentFallback": "legacy",
-      "limitation": "Trusted RAG Service itself has no LLM call; this probes the isolated candidate-generation boundary only."
+      "limitation": "Trusted RAG Service itself has no LLM call; this probes the isolated candidate-generation boundary only.",
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     },
     {
       "scenarioId": "metrics_sink_failure",
@@ -201,18 +231,20 @@
       "rollbackPath": "legacy",
       "metricsIsolated": true,
       "contentSafe": true,
-      "elapsedMs": 1.2691,
+      "elapsedMs": 0.9618,
       "componentFallback": "legacy",
-      "limitation": null
+      "limitation": null,
+      "deadlineEnforced": false,
+      "cancellationRequested": false,
+      "timeoutReason": null
     }
   ],
-  "finalDecision": "BLOCK",
-  "blockReasons": [
-    "timeout.hard_hang_no_hard_deadline"
-  ],
+  "finalDecision": "PASS",
+  "blockReasons": [],
   "limitations": [
     "No production API, Agent, Workflow, Service or route is mutated.",
-    "The hard-hang probe is bounded; it demonstrates missing hard deadline/cancellation without leaving a permanent thread.",
+    "The hard-hang probe is bounded and validates the E2 offline Shadow deadline/isolation layer.",
+    "Python cannot forcibly terminate a blocking thread; daemon isolation, cooperative cancellation and bounded slots contain it.",
     "LLM failure is tested at the candidate-generation boundary because Trusted RAG Service has no LLM call."
   ]
 }

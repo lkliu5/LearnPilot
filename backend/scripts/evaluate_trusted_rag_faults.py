@@ -45,7 +45,8 @@ def main() -> None:
         **report.model_dump(mode="json"),
         "limitations": [
             "No production API, Agent, Workflow, Service or route is mutated.",
-            "The hard-hang probe is bounded; it demonstrates missing hard deadline/cancellation without leaving a permanent thread.",
+            "The hard-hang probe is bounded and validates the E2 offline Shadow deadline/isolation layer.",
+            "Python cannot forcibly terminate a blocking thread; daemon isolation, cooperative cancellation and bounded slots contain it.",
             "LLM failure is tested at the candidate-generation boundary because Trusted RAG Service has no LLM call.",
         ],
     }

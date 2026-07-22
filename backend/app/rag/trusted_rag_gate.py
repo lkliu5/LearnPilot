@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.rag.shadow_admission import ShadowEvaluationDataset
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -26,6 +28,14 @@ class TrustedRAGGateConfig(_StrictModel):
     max_error_rate: float = Field(default=0.02, ge=0.0, le=1.0)
     max_fault_failure_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     max_rerank_degraded_cases: int = Field(default=0, ge=0)
+    min_query_type_samples: int = Field(default=20, ge=1)
+    required_query_types: tuple[str, ...] = (
+        "concept_explanation",
+        "process_explanation",
+        "code_technical",
+        "multi_hop_reasoning",
+        "no_answer_refusal",
+    )
 
 
 class RerankMetrics(_StrictModel):
@@ -118,6 +128,8 @@ class GateSnapshot(_StrictModel):
     error_rate: float | None
     fault_scenario_count: int | None
     fault_failure_rate: float | None
+    query_type_counts: dict[str, int] | None = None
+    shadow_input_type: str
 
 
 class CanaryDecision(_StrictModel):
@@ -127,6 +139,7 @@ class CanaryDecision(_StrictModel):
     rerank_pass: bool
     final_decision: CanaryDecisionValue
     block_reasons: list[str]
+    remediation: list[str]
     rollback_recommended: bool
     recommended_action: str
     snapshot: GateSnapshot
@@ -140,8 +153,9 @@ class TrustedRAGGate:
 
     def evaluate(
         self,
-        shadow_metrics: ShadowMetrics | None,
+        shadow_metrics: ShadowMetrics | ShadowEvaluationDataset | None,
         fault_results: FaultInjectionResults | None,
+        rerank_metrics: RerankMetrics | None = None,
     ) -> CanaryDecision:
         reasons: dict[str, list[str]] = {
             "quality": [],
@@ -149,7 +163,28 @@ class TrustedRAGGate:
             "reliability": [],
             "rerank": [],
         }
-        shadow = shadow_metrics
+        dataset = (
+            shadow_metrics
+            if isinstance(shadow_metrics, ShadowEvaluationDataset)
+            else None
+        )
+        query_type_counts: dict[str, int] | None = None
+        if dataset is not None:
+            aggregate = dataset.aggregate()
+            query_type_counts = aggregate.query_type_counts
+            shadow = ShadowMetrics(
+                sample_count=aggregate.sample_count,
+                evidence_overlap_mean=aggregate.evidence_overlap_mean,
+                source_coverage_mean=aggregate.source_coverage_mean,
+                confidence_mean=aggregate.confidence_mean,
+                p95_latency_ms=aggregate.p95_latency_ms,
+                timeout_rate=aggregate.timeout_rate,
+                error_rate=aggregate.error_rate,
+                performance_verified=dataset.performance_verified,
+                rerank=rerank_metrics,
+            )
+        else:
+            shadow = shadow_metrics
 
         if shadow is None:
             reasons["quality"].append("quality.shadow_metrics_missing")
@@ -187,6 +222,21 @@ class TrustedRAGGate:
                     reasons["reliability"].append(f"reliability.{name}_missing")
                 elif value > threshold:
                     reasons["reliability"].append(f"reliability.{name}_exceeded")
+
+            if dataset is not None:
+                for query_type in self.config.required_query_types:
+                    if query_type_counts.get(query_type, 0) < self.config.min_query_type_samples:
+                        reasons["reliability"].append(
+                            f"reliability.query_type_underrepresented:{query_type}"
+                        )
+                if not aggregate.all_timeouts_isolated:
+                    reasons["reliability"].append(
+                        "reliability.deadline_timeout_not_isolated"
+                    )
+                if not aggregate.all_legacy_preserved:
+                    reasons["reliability"].append(
+                        "reliability.legacy_not_preserved_in_shadow_dataset"
+                    )
 
             self._evaluate_rerank(shadow.rerank, reasons["rerank"])
 
@@ -227,6 +277,7 @@ class TrustedRAGGate:
 
         passes = {name: not values for name, values in reasons.items()}
         block_reasons = list(dict.fromkeys(reason for values in reasons.values() for reason in values))
+        remediation = self._remediation(block_reasons)
         final = (
             CanaryDecisionValue.PASS
             if all(passes.values())
@@ -239,6 +290,7 @@ class TrustedRAGGate:
             rerank_pass=passes["rerank"],
             final_decision=final,
             block_reasons=block_reasons,
+            remediation=remediation,
             rollback_recommended=final is CanaryDecisionValue.BLOCK,
             recommended_action=(
                 "eligible_for_manual_canary_review"
@@ -252,8 +304,34 @@ class TrustedRAGGate:
                 error_rate=shadow.error_rate if shadow else None,
                 fault_scenario_count=(fault_results.scenario_count if fault_results else None),
                 fault_failure_rate=fault_failure_rate,
+                query_type_counts=query_type_counts,
+                shadow_input_type=(
+                    "dataset" if dataset is not None
+                    else "aggregate" if shadow is not None
+                    else "missing"
+                ),
             ),
         )
+
+    @staticmethod
+    def _remediation(block_reasons: list[str]) -> list[str]:
+        actions: list[str] = []
+        for reason in block_reasons:
+            if reason.startswith("quality."):
+                actions.append("collect_and_review_shadow_quality_metrics")
+            elif reason.startswith("latency."):
+                actions.append("verify_target_environment_shadow_latency")
+            elif "query_type_underrepresented" in reason:
+                actions.append("complete_stratified_shadow_dataset")
+            elif "deadline" in reason or "trusted_not_isolated" in reason:
+                actions.append("enforce_shadow_deadline_and_worker_isolation")
+            elif reason.startswith("reliability.fault"):
+                actions.append("rerun_fault_injection_until_all_scenarios_pass")
+            elif reason.startswith("reliability."):
+                actions.append("reduce_shadow_timeout_error_rate_and_preserve_legacy")
+            elif reason.startswith("rerank."):
+                actions.append("apply_query_type_gate_or_hybrid_fallback_and_revalidate_rerank")
+        return list(dict.fromkeys(actions))
 
     def _evaluate_rerank(
         self, rerank: RerankMetrics | None, reasons: list[str]

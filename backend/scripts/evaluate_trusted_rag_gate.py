@@ -18,6 +18,7 @@ from app.rag.trusted_rag_gate import (
     ShadowMetrics,
     TrustedRAGGate,
 )
+from app.rag.shadow_admission import ShadowEvaluationDataset
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -44,19 +45,28 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    shadow: ShadowMetrics | None = None
+    shadow: ShadowMetrics | ShadowEvaluationDataset | None = None
+    rerank = RerankMetrics.from_blind_evaluation(
+        _read_json(Path(args.rerank_results))
+    )
     if args.shadow_metrics:
-        shadow = ShadowMetrics.model_validate(_read_json(Path(args.shadow_metrics)))
+        shadow_payload = _read_json(Path(args.shadow_metrics))
+        if shadow_payload.get("schema_version") == "trusted-rag-shadow-evaluation-v1":
+            shadow = ShadowEvaluationDataset.model_validate(shadow_payload)
+        else:
+            shadow = ShadowMetrics.model_validate(shadow_payload)
     else:
         # Rerank evidence is known, while production Shadow quality/performance is absent.
-        shadow = ShadowMetrics(rerank=RerankMetrics.from_blind_evaluation(
-            _read_json(Path(args.rerank_results))
-        ))
+        shadow = ShadowMetrics(rerank=rerank)
 
     faults = FaultInjectionResults.from_report(_read_json(Path(args.fault_results)))
-    decision = TrustedRAGGate().evaluate(shadow, faults)
+    decision = TrustedRAGGate().evaluate(
+        shadow,
+        faults,
+        rerank_metrics=rerank if isinstance(shadow, ShadowEvaluationDataset) else None,
+    )
     payload = {
-        "schemaVersion": "trusted-rag-canary-gate-v1",
+        "schemaVersion": "trusted-rag-canary-gate-v2",
         "evaluationType": "offline_canary_admission_gate",
         "generatedAt": datetime.now(UTC).isoformat(),
         "productionMutation": False,
