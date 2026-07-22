@@ -1,4 +1,4 @@
-"""TASK-003-E3 Resource Agent Trusted RAG shadow tests."""
+"""TASK-003-E3/E4-B Resource Agent Trusted RAG shadow tests."""
 from __future__ import annotations
 
 import json
@@ -63,12 +63,14 @@ def _response() -> RAGResponse:
         evidence_count=2,
         source_count=2,
         coverage=1.0,
+        reason_codes=["evidence_found"],
     )
     return RAGResponse(
         evidence=evidence,
         confidence=0.91,
         evidence_count=2,
         source_count=2,
+        reason_codes=["evidence_found"],
         trust_report=report,
         metadata={
             "traceId": "trace-e3",
@@ -132,13 +134,13 @@ def test_shadow_runs_legacy_and_tool_in_parallel_and_keeps_legacy_authoritative(
 
     assert result.legacy_result.output == {"markdown": "# Legacy authoritative result"}
     assert result.tool_failed is False
-    assert [event.type for event in result.events] == ["tool.request", "tool.result"]
+    assert [event.type for event in result.events] == ["shadow.request", "shadow.result"]
     assert {event.traceId for event in result.events} == {"trace-e3"}
     assert created[0][1] == {"user_id": "private-user", "trace_id": "trace-e3"}
     assert created[0][0].calls[0][2] == 2
 
 
-def test_shadow_records_trust_latency_and_reference_difference_without_content():
+def test_shadow_records_standard_result_event_without_content():
     result = ResourceGenerationRAGShadowAdapter(
         _LegacyAgent(),
         user_id="private-user",
@@ -147,20 +149,14 @@ def test_shadow_records_trust_latency_and_reference_difference_without_content()
     ).run(task_id="task-e3", agent_input=_input())
 
     event = result.events[-1]
+    assert event.type == "shadow.result"
     assert event.evidence_count == 2
-    assert event.latency_ms is not None and event.latency_ms >= 0
-    assert event.trust_report is not None
-    assert event.trust_report.retrieval_confidence == 0.91
-    assert event.result_difference is not None
-    assert event.result_difference.model_dump() == {
-        "legacy_evidence_count": 2,
-        "trusted_evidence_count": 2,
-        "evidence_count_delta": 0,
-        "shared_reference_count": 1,
-        "legacy_only_count": 1,
-        "trusted_only_count": 1,
-        "reference_jaccard": 1 / 3,
-    }
+    assert event.source_count == 2
+    assert event.confidence == 0.91
+    assert event.latency is not None and event.latency >= 0
+    assert result.total_latency >= 0
+    assert result.rag_latency == 1.2
+    assert result.tool_latency >= 0
     serialized_events = json.dumps(
         [item.model_dump(mode="json") for item in result.events], ensure_ascii=False
     )
@@ -186,7 +182,8 @@ def test_tool_error_is_observed_without_replacing_legacy_result():
 
     assert result.tool_failed is True
     assert result.legacy_result.output["markdown"] == "# Legacy authoritative result"
-    assert [event.type for event in result.events] == ["tool.request", "tool.error"]
+    assert [event.type for event in result.events] == ["shadow.request", "shadow.error"]
     assert result.events[-1].error_type == "RAGToolError"
-    assert result.events[-1].trust_report is None
-    assert result.events[-1].result_difference is None
+    assert result.events[-1].evidence_count is None
+    assert result.events[-1].source_count is None
+    assert result.events[-1].confidence is None
