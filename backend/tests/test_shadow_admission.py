@@ -23,13 +23,26 @@ def _dataset_payload() -> dict:
             {
                 "request_id": "req-1",
                 "query_type": "concept_explanation",
-                "latency": {"total_ms": 10, "rag_ms": 8, "tool_ms": 9},
+                "latency_metrics": {"total_ms": 10, "rag_ms": 8, "tool_ms": 9},
                 "quality_metrics": {
                     "evidence_overlap": 0.8,
                     "source_coverage": 0.9,
                     "confidence": 0.85,
                 },
-                "reliability_metrics": {"legacy_preserved": True},
+                "reliability_metrics": {
+                    "timed_out": False,
+                    "error_type": None,
+                    "timeout_reason": None,
+                    "cancellation_requested": False,
+                    "worker_isolated": False,
+                    "legacy_preserved": True,
+                },
+                "gate_features": {
+                    "quality_metrics_complete": True,
+                    "latency_metrics_complete": True,
+                    "reliability_metrics_complete": True,
+                    "target_environment_sample": True,
+                },
             }
         ],
     }
@@ -88,10 +101,66 @@ def test_dataset_aggregates_content_free_quality_latency_and_reliability():
 
 
 def test_dataset_rejects_query_user_and_knowledge_content():
-    for forbidden_field in ("query", "user_info", "knowledge_content"):
+    for forbidden_field in ("query", "user_identity", "knowledge_content"):
         payload = _dataset_payload()
         payload["samples"][0][forbidden_field] = "sensitive"
         with pytest.raises(ValidationError):
             ShadowEvaluationDataset.model_validate(payload)
     serialized = json.dumps(_dataset_payload(), ensure_ascii=False)
     assert "query正文" not in serialized
+
+
+def test_dataset_stratified_coverage_accepts_twenty_per_required_type():
+    query_types = (
+        "concept_explanation",
+        "method_comparison",
+        "operation_steps",
+        "programming_practice",
+        "comprehensive_question",
+    )
+    template = _dataset_payload()["samples"][0]
+    payload = _dataset_payload()
+    payload["samples"] = []
+    for query_type in query_types:
+        for index in range(20):
+            sample = json.loads(json.dumps(template))
+            sample["request_id"] = f"{query_type}-{index}"
+            sample["query_type"] = query_type
+            payload["samples"].append(sample)
+
+    dataset = ShadowEvaluationDataset.model_validate(payload)
+    integrity = dataset.check_integrity()
+
+    assert integrity.valid
+    assert integrity.sample_count == 100
+    assert integrity.query_type_counts == {name: 20 for name in sorted(query_types)}
+
+
+def test_missing_gate_data_blocks_dataset_validation():
+    for field in (
+        "latency_metrics",
+        "quality_metrics",
+        "reliability_metrics",
+        "gate_features",
+    ):
+        payload = _dataset_payload()
+        del payload["samples"][0][field]
+        with pytest.raises(ValidationError):
+            ShadowEvaluationDataset.model_validate(payload)
+
+    nested = _dataset_payload()
+    del nested["samples"][0]["reliability_metrics"]["error_type"]
+    with pytest.raises(ValidationError):
+        ShadowEvaluationDataset.model_validate(nested)
+
+
+def test_duplicate_request_and_out_of_range_metric_are_rejected():
+    duplicate = _dataset_payload()
+    duplicate["samples"].append(json.loads(json.dumps(duplicate["samples"][0])))
+    with pytest.raises(ValidationError, match="request_id must be unique"):
+        ShadowEvaluationDataset.model_validate(duplicate)
+
+    invalid_range = _dataset_payload()
+    invalid_range["samples"][0]["quality_metrics"]["confidence"] = 1.01
+    with pytest.raises(ValidationError):
+        ShadowEvaluationDataset.model_validate(invalid_range)

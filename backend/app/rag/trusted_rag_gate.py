@@ -31,10 +31,10 @@ class TrustedRAGGateConfig(_StrictModel):
     min_query_type_samples: int = Field(default=20, ge=1)
     required_query_types: tuple[str, ...] = (
         "concept_explanation",
-        "process_explanation",
-        "code_technical",
-        "multi_hop_reasoning",
-        "no_answer_refusal",
+        "method_comparison",
+        "operation_steps",
+        "programming_practice",
+        "comprehensive_question",
     )
 
 

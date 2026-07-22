@@ -110,23 +110,23 @@ class ShadowDeadlineExecutor:
 
 class ShadowLatencyMetrics(_StrictModel):
     total_ms: float = Field(ge=0.0)
-    rag_ms: float | None = Field(default=None, ge=0.0)
-    tool_ms: float | None = Field(default=None, ge=0.0)
+    rag_ms: float = Field(ge=0.0)
+    tool_ms: float = Field(ge=0.0)
 
 
 class ShadowQualityMetrics(_StrictModel):
-    evidence_overlap: float | None = Field(default=None, ge=0.0, le=1.0)
-    source_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence_overlap: float = Field(ge=0.0, le=1.0)
+    source_coverage: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
 
 
 class ShadowReliabilityMetrics(_StrictModel):
-    timed_out: bool = False
-    error_type: str | None = None
-    timeout_reason: str | None = None
-    cancellation_requested: bool = False
-    worker_isolated: bool = False
-    legacy_preserved: bool = True
+    timed_out: bool
+    error_type: str | None
+    timeout_reason: str | None
+    cancellation_requested: bool
+    worker_isolated: bool
+    legacy_preserved: bool
 
     @model_validator(mode="after")
     def validate_timeout(self) -> "ShadowReliabilityMetrics":
@@ -137,12 +137,40 @@ class ShadowReliabilityMetrics(_StrictModel):
         return self
 
 
+class ShadowQueryType(str, Enum):
+    CONCEPT_EXPLANATION = "concept_explanation"
+    METHOD_COMPARISON = "method_comparison"
+    OPERATION_STEPS = "operation_steps"
+    PROGRAMMING_PRACTICE = "programming_practice"
+    COMPREHENSIVE_QUESTION = "comprehensive_question"
+
+
+class ShadowGateFeatures(_StrictModel):
+    """Presence/provenance facts consumed by admission checks, never content."""
+
+    quality_metrics_complete: bool
+    latency_metrics_complete: bool
+    reliability_metrics_complete: bool
+    target_environment_sample: bool
+
+    @model_validator(mode="after")
+    def validate_completeness(self) -> "ShadowGateFeatures":
+        if not (
+            self.quality_metrics_complete
+            and self.latency_metrics_complete
+            and self.reliability_metrics_complete
+        ):
+            raise ValueError("frozen Shadow samples require complete gate metrics")
+        return self
+
+
 class ShadowEvaluationSample(_StrictModel):
     request_id: str = Field(min_length=1)
-    query_type: str = Field(min_length=1)
-    latency: ShadowLatencyMetrics
+    query_type: ShadowQueryType
+    latency_metrics: ShadowLatencyMetrics
     quality_metrics: ShadowQualityMetrics
     reliability_metrics: ShadowReliabilityMetrics
+    gate_features: ShadowGateFeatures
 
 
 class ShadowEvaluationAggregate(_StrictModel):
@@ -158,11 +186,18 @@ class ShadowEvaluationAggregate(_StrictModel):
     all_legacy_preserved: bool
 
 
+class ShadowDatasetIntegrity(_StrictModel):
+    valid: bool
+    sample_count: int = Field(ge=0)
+    query_type_counts: dict[str, int]
+    errors: list[str]
+
+
 class ShadowEvaluationDataset(_StrictModel):
     """Versioned metric-only dataset; content and user fields are rejected."""
 
-    schema_version: Literal["trusted-rag-shadow-evaluation-v1"] = (
-        "trusted-rag-shadow-evaluation-v1"
+    schema_version: Literal["trusted-rag-shadow-evaluation-v2"] = (
+        "trusted-rag-shadow-evaluation-v2"
     )
     environment: str = Field(min_length=1)
     evaluation_window: str = Field(min_length=1)
@@ -174,6 +209,12 @@ class ShadowEvaluationDataset(_StrictModel):
         request_ids = [item.request_id for item in self.samples]
         if len(request_ids) != len(set(request_ids)):
             raise ValueError("request_id must be unique")
+        if self.performance_verified and not all(
+            item.gate_features.target_environment_sample for item in self.samples
+        ):
+            raise ValueError(
+                "performance_verified requires every sample from target environment"
+            )
         return self
 
     def aggregate(self) -> ShadowEvaluationAggregate:
@@ -188,11 +229,10 @@ class ShadowEvaluationDataset(_StrictModel):
             values = [
                 getattr(item.quality_metrics, attribute)
                 for item in successful
-                if getattr(item.quality_metrics, attribute) is not None
             ]
             return round(sum(values) / len(values), 6) if values else None
 
-        latencies = sorted(item.latency.total_ms for item in self.samples)
+        latencies = sorted(item.latency_metrics.total_ms for item in self.samples)
         p95 = latencies[max(0, math.ceil(len(latencies) * 0.95) - 1)] if latencies else None
         timeouts = [item for item in self.samples if item.reliability_metrics.timed_out]
         errors = [
@@ -216,3 +256,29 @@ class ShadowEvaluationDataset(_StrictModel):
                 item.reliability_metrics.legacy_preserved for item in self.samples
             ),
         )
+
+    def check_integrity(self, *, minimum_per_query_type: int = 20) -> ShadowDatasetIntegrity:
+        """Return a deterministic freeze check; any error blocks dataset use."""
+        if minimum_per_query_type < 1:
+            raise ValueError("minimum_per_query_type must be positive")
+        counts = Counter(item.query_type.value for item in self.samples)
+        errors: list[str] = []
+        for query_type in ShadowQueryType:
+            count = counts.get(query_type.value, 0)
+            if count < minimum_per_query_type:
+                errors.append(
+                    f"query_type_underrepresented:{query_type.value}:{count}"
+                )
+        return ShadowDatasetIntegrity(
+            valid=not errors,
+            sample_count=len(self.samples),
+            query_type_counts=dict(sorted(counts.items())),
+            errors=errors,
+        )
+
+    def assert_integrity(self, *, minimum_per_query_type: int = 20) -> None:
+        result = self.check_integrity(
+            minimum_per_query_type=minimum_per_query_type
+        )
+        if not result.valid:
+            raise ValueError("Shadow dataset integrity failed: " + "; ".join(result.errors))

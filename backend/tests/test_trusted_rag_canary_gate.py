@@ -151,8 +151,8 @@ def test_task004_reports_are_supported_without_trusting_provisional_rerank():
 
 def test_gate_accepts_complete_shadow_evaluation_dataset():
     query_types = (
-        "concept_explanation", "process_explanation", "code_technical",
-        "multi_hop_reasoning", "no_answer_refusal",
+        "concept_explanation", "method_comparison", "operation_steps",
+        "programming_practice", "comprehensive_question",
     )
     samples = []
     for query_type in query_types:
@@ -160,13 +160,30 @@ def test_gate_accepts_complete_shadow_evaluation_dataset():
             samples.append({
                 "request_id": f"{query_type}-{index}",
                 "query_type": query_type,
-                "latency": {"total_ms": 100 + index},
+                "latency_metrics": {
+                    "total_ms": 100 + index,
+                    "rag_ms": 90 + index,
+                    "tool_ms": 0,
+                },
                 "quality_metrics": {
                     "evidence_overlap": 0.75,
                     "source_coverage": 0.85,
                     "confidence": 0.9,
                 },
-                "reliability_metrics": {"legacy_preserved": True},
+                "reliability_metrics": {
+                    "timed_out": False,
+                    "error_type": None,
+                    "timeout_reason": None,
+                    "cancellation_requested": False,
+                    "worker_isolated": False,
+                    "legacy_preserved": True,
+                },
+                "gate_features": {
+                    "quality_metrics_complete": True,
+                    "latency_metrics_complete": True,
+                    "reliability_metrics_complete": True,
+                    "target_environment_sample": True,
+                },
             })
     dataset = ShadowEvaluationDataset(
         environment="target-canary-review",

@@ -51,7 +51,7 @@ def main() -> None:
     )
     if args.shadow_metrics:
         shadow_payload = _read_json(Path(args.shadow_metrics))
-        if shadow_payload.get("schema_version") == "trusted-rag-shadow-evaluation-v1":
+        if shadow_payload.get("schema_version") == "trusted-rag-shadow-evaluation-v2":
             shadow = ShadowEvaluationDataset.model_validate(shadow_payload)
         else:
             shadow = ShadowMetrics.model_validate(shadow_payload)
