@@ -175,3 +175,32 @@ def test_low_relevance_candidates_produce_explicit_empty_result():
     retriever.min_dense_score = 0.35
     retriever.min_query_overlap = 0.35
     assert retriever.search("量子纠错表面码", top_k=5) == []
+
+
+def test_quality_gate_triggers_keyword_fallback_and_keeps_distinct_sources():
+    dense = [
+        _item("doc_noise#0", "doc_noise", "注意力无关噪声", 0.99),
+        _item("doc_noise#1", "doc_noise", "注意力重复噪声", 0.98),
+    ]
+    sparse = []
+    for rank, document_id, relative in (
+        (1, "doc_a", 1.0),
+        (2, "doc_b", 0.95),
+        (3, "doc_a", 0.93),
+        (4, "doc_c", 0.89),
+    ):
+        sparse.append({
+            "id": f"{document_id}#0",
+            "content": "注意力机制查询键和值",
+            "metadata": {
+                "document_id": document_id,
+                "document_title": document_id,
+                "keywordRank": rank,
+                "keywordRelativeScore": relative,
+            },
+            "bm25Score": 10.0 * relative,
+        })
+    retriever = _ControlledRetriever(dense, sparse)
+    results = retriever.search("注意力机制", top_k=3)
+    assert [item["source"]["documentId"] for item in results] == ["doc_a", "doc_b"]
+    assert all(item["metadata"]["retrievalPath"] == "keyword_fallback" for item in results)

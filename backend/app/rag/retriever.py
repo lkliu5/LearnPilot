@@ -18,15 +18,28 @@ from typing import Any, Callable
 
 from app.core.config import settings
 from app.rag.embeddings import get_embedder
+from app.rag.evidence_quality_gate import EvidenceQualityGate
 from app.rag.protocol import RetrievalCandidate
 from app.rag.vector_store import get_collection_store, get_vector_store
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+|[一-鿿]")
+_WORD_OR_ZH_RUN_RE = re.compile(r"[a-z0-9_+#.-]+|[一-鿿]+")
 
 
 def _tokenize(text: str) -> list[str]:
     """简易中英混合分词：英文/数字按词，中文按单字。"""
     return _TOKEN_RE.findall((text or "").lower())
+
+
+def _phrase_tokenize(text: str, size: int) -> list[str]:
+    """English words plus Chinese n-grams used by the field-aware BM25 index."""
+    tokens: list[str] = []
+    for value in _WORD_OR_ZH_RUN_RE.findall((text or "").lower()):
+        if re.fullmatch(r"[一-鿿]+", value):
+            tokens.extend(value[index:index + size] for index in range(len(value) - size + 1))
+        else:
+            tokens.append(value)
+    return tokens
 
 
 class HybridRetriever:
@@ -55,9 +68,12 @@ class HybridRetriever:
         self.confidence_keyword_weight = settings.retrieval_confidence_keyword_weight
         self.confidence_fusion_weight = settings.retrieval_confidence_fusion_weight
         self.enable_score_calibration = enable_score_calibration
+        self.evidence_quality_gate = EvidenceQualityGate()
         self._store_getter = store_getter or get_vector_store
         # BM25 缓存：(库计数, 索引, 语料元数据)
         self._bm25 = None
+        self._bm25_content_trigram = None
+        self._bm25_source_bigram = None
         self._bm25_count = -1
         self._bm25_docs: list[dict] = []
 
@@ -73,26 +89,48 @@ class HybridRetriever:
         corpus = [_tokenize(d["content"]) for d in self._bm25_docs]
         # 空语料时给一个占位 token，避免 BM25Okapi 对空集报错
         self._bm25 = BM25Okapi(corpus or [["_"]])
+        self._bm25_content_trigram = BM25Okapi(
+            [_phrase_tokenize(d["content"], 3) for d in self._bm25_docs] or [["_"]]
+        )
+        source_corpus = []
+        for document in self._bm25_docs:
+            metadata = document.get("metadata") or {}
+            source_text = " ".join(
+                str(metadata.get(key) or "")
+                for key in ("document_title", "title", "source_location")
+            )
+            source_corpus.append(_phrase_tokenize(source_text, 2))
+        self._bm25_source_bigram = BM25Okapi(source_corpus or [["_"]])
         self._bm25_count = count
 
     def _sparse_search(self, query: str, k: int) -> list[dict]:
         self._ensure_bm25()
         if not self._bm25_docs:
             return []
-        scores = self._bm25.get_scores(_tokenize(query))
+        scores = (
+            2.0 * self._bm25.get_scores(_tokenize(query))
+            + 0.25 * self._bm25_content_trigram.get_scores(_phrase_tokenize(query, 3))
+            + 2.0 * self._bm25_source_bigram.get_scores(_phrase_tokenize(query, 2))
+        )
         ranked = sorted(
             range(len(self._bm25_docs)), key=lambda i: scores[i], reverse=True
         )
         out = []
-        for i in ranked:
+        best_score = float(scores[ranked[0]]) if ranked else 0.0
+        for keyword_rank, i in enumerate(ranked, start=1):
             if float(scores[i]) <= 0.0:
                 continue
             d = self._bm25_docs[i]
+            metadata = dict(d["metadata"])
+            metadata["keywordRank"] = keyword_rank
+            metadata["keywordRelativeScore"] = round(
+                float(scores[i]) / best_score if best_score > 0.0 else 0.0, 6
+            )
             out.append(
                 {
                     "id": d["id"],
                     "content": d["content"],
-                    "metadata": d["metadata"],
+                    "metadata": metadata,
                     "bm25Score": float(scores[i]),
                 }
             )
@@ -156,6 +194,7 @@ class HybridRetriever:
             row.fusion_score += self.dense_weight / (self.rrf_k + rank + 1)
         for rank, item in enumerate(sparse):
             row = ensure(item)
+            row.metadata.update(item.get("metadata") or {})
             row.keyword_score = float(item.get("bm25Score", 0.0))
             row.fusion_score += self.sparse_weight / (self.rrf_k + rank + 1)
 
@@ -268,7 +307,20 @@ class HybridRetriever:
         selected: list[RetrievalCandidate] = []
         seen_content: set[str] = set()
         source_counts: dict[str, int] = {}
+        # Top3 first consumes different documents. Remaining candidates retain
+        # their original ranking and may fill the tail up to the configured cap.
+        diverse: list[RetrievalCandidate] = []
+        deferred: list[RetrievalCandidate] = []
+        diversity_sources: set[str] = set()
         for candidate in candidates:
+            document_id = str(candidate.source.get("documentId") or "")
+            if document_id and document_id not in diversity_sources:
+                diverse.append(candidate)
+                diversity_sources.add(document_id)
+            else:
+                deferred.append(candidate)
+        ordered = diverse + deferred
+        for candidate in ordered:
             document_id = str(candidate.source.get("documentId") or "")
             if allowed_documents is not None and document_id not in allowed_documents:
                 continue
@@ -307,6 +359,35 @@ class HybridRetriever:
                 break
         return [self._candidate_dict(candidate) for candidate in selected]
 
+    def _keyword_fallback(
+        self,
+        sparse: list[dict[str, Any]],
+        *,
+        final_top_k: int,
+        filters: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """Keep only near-best keyword candidates and enforce distinct sources."""
+        allowed_documents = self._document_filter(filters)
+        selected: list[RetrievalCandidate] = []
+        seen_sources: set[str] = set()
+        for candidate in self._rrf([], sparse):
+            document_id = str(candidate.source.get("documentId") or "")
+            relative = float(candidate.metadata.get("keywordRelativeScore") or 0.0)
+            if relative < self.evidence_quality_gate.min_relevance:
+                continue
+            if allowed_documents is not None and document_id not in allowed_documents:
+                continue
+            if not self._metadata_matches(candidate, filters) or document_id in seen_sources:
+                continue
+            candidate.normalized_keyword_score = relative
+            candidate.confidence_score = relative
+            candidate.metadata["retrievalPath"] = "keyword_fallback"
+            selected.append(candidate)
+            seen_sources.add(document_id)
+            if len(selected) >= min(3, final_top_k):
+                break
+        return [self._candidate_dict(candidate) for candidate in selected]
+
     def search(
         self,
         query: str,
@@ -319,12 +400,30 @@ class HybridRetriever:
         pool = max(self.candidate_top_k, final_top_k)
         dense = self._dense_search(query, pool)
         sparse = self._sparse_search(query, pool)
-        return self._govern(
+        fused = self._govern(
             query,
             self._calibrate_scores(self._rrf(dense, sparse)),
             final_top_k=final_top_k,
             filters=filters,
         )
+        assessment = self.evidence_quality_gate.evaluate(fused)
+        if assessment.passed:
+            return fused
+        fallback = self._keyword_fallback(
+            sparse, final_top_k=final_top_k, filters=filters
+        )
+        fallback_assessment = self.evidence_quality_gate.evaluate(fallback)
+        if fallback_assessment.passed or not fused:
+            return fallback
+        # Fail closed: a fallback that improves all protected dimensions is
+        # preferable even if one threshold remains unmet.
+        if (
+            fallback_assessment.relevance > assessment.relevance
+            and fallback_assessment.source_count >= assessment.source_count
+            and fallback_assessment.support
+        ):
+            return fallback
+        return fused
 
 
 class LegacyHybridRetriever(HybridRetriever):
