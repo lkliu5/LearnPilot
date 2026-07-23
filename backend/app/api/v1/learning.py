@@ -69,7 +69,8 @@ async def feynman(
     try:
         if streaming:
             events = learning_service.feynman_sse_stream(
-                db, kp_id=body.kpId, session_id=body.sessionId, explanation=body.explanation
+                db, kp_id=body.kpId, session_id=body.sessionId,
+                explanation=body.explanation, user_id=user.id
             )
             return StreamingResponse(
                 events,
@@ -77,7 +78,8 @@ async def feynman(
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
         data = learning_service.feynman_chat(
-            db, kp_id=body.kpId, session_id=body.sessionId, explanation=body.explanation
+            db, kp_id=body.kpId, session_id=body.sessionId,
+            explanation=body.explanation, user_id=user.id
         )
     except learning_service.UnknownKnowledgePoint:
         return fail(code=1004, message="知识点不存在", status_code=404)

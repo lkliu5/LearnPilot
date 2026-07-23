@@ -3,8 +3,12 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Iterable
+from datetime import timezone
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from app.models.entities import LearningEventAnomalyRecord, LearningEventRecord
 from app.schemas.knowledge_state import LearningEvent
 from app.services.knowledge_state import replay_learning_events
 
@@ -93,6 +97,7 @@ def evaluate_shadow(events: Iterable[LearningEvent]) -> dict[str, Any]:
 
     return {
         "mode": "shadow",
+        "userCount": len({event.user_id for event in unique.values()}),
         "eventCount": len(unique),
         "nodeCount": len(nodes),
         "comparableNodeCount": len(mastery_diffs),
@@ -109,3 +114,44 @@ def evaluate_shadow(events: Iterable[LearningEvent]) -> dict[str, Any]:
         },
         "nodes": nodes,
     }
+
+
+def accumulated_shadow_statistics(db: Session) -> dict[str, Any]:
+    """汇总真实旁路累计量、来源分布、状态差异与异常治理结果。"""
+    rows = db.query(LearningEventRecord).order_by(
+        LearningEventRecord.timestamp, LearningEventRecord.event_id
+    ).all()
+    events = [
+        LearningEvent(
+            event_id=row.event_id,
+            user_id=row.user_id,
+            knowledge_id=row.knowledge_id,
+            event_type=row.event_type,
+            source_type=row.source_type,
+            source_id=row.source_id,
+            algorithm_version=row.algorithm_version,
+            score=row.score,
+            timestamp=row.timestamp.replace(tzinfo=timezone.utc),
+        )
+        for row in rows
+    ]
+    report = evaluate_shadow(events) if events else {
+        "mode": "shadow",
+        "userCount": 0,
+        "eventCount": 0,
+        "nodeCount": 0,
+        "comparableNodeCount": 0,
+        "meanMasteryDifference": None,
+        "meanAbsoluteMasteryDifference": None,
+        "meanConfidenceDifference": None,
+        "distributionChange": {},
+        "nodes": [],
+    }
+    source_counts = Counter(row.source_type for row in rows)
+    anomaly_counts = Counter(
+        row.anomaly_type for row in db.query(LearningEventAnomalyRecord).all()
+    )
+    report["sourceCounts"] = dict(sorted(source_counts.items()))
+    report["anomalyCounts"] = dict(sorted(anomaly_counts.items()))
+    report["anomalyCount"] = sum(anomaly_counts.values())
+    return report

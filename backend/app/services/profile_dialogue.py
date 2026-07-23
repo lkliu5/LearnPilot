@@ -28,6 +28,7 @@ import re
 import time
 import uuid
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -41,6 +42,7 @@ from app.core.llm import (
     _sanitize_portrait_updates,
 )
 from app.services import diagnostic_microtest, student_portrait
+from app.services.learning_evidence import capture_shadow_event, from_diagnostic
 
 # 会话 TTL：30 分钟（与 8.7 苏格拉底辅导同口径）
 SESSION_TTL_SECONDS = 30 * 60
@@ -168,6 +170,17 @@ def _run_turn(
         mt["results"].append(
             {"kpId": pend.get("kpId"), "kpName": pend.get("kpName"), "correct": correct}
         )
+        if correct is not None and pend.get("kpId") and pend.get("questionId"):
+            capture_shadow_event(
+                from_diagnostic(
+                    user_id=session["userId"],
+                    result={"kpId": pend["kpId"], "correct": correct},
+                    source_id=(
+                        f"diagnostic:{session['sessionId']}:{pend['questionId']}"
+                    ),
+                    occurred_at=datetime.now(timezone.utc),
+                )
+            )
         mt["idx"] += 1
         if mt["idx"] < len(mt["queue"]):
             q = mt["queue"][mt["idx"]]

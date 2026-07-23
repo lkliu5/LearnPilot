@@ -22,13 +22,16 @@ from app.models.entities import (
 )
 from app.schemas.knowledge_state import LearningEvent, UserKnowledgeState
 
-ALGORITHM_VERSION = "ks-logodds-v1"
+ALGORITHM_VERSION = "ks-logodds-v1.1-shadow"
 NEUTRAL_MASTERY = 0.5
 LEARNING_RATE = 2.0
 CONFIDENCE_RATE = 1.0
 MASTERY_DECAY_DAYS = 30.0
 CONFIDENCE_DECAY_DAYS = 60.0
 EPSILON = 1e-6
+CONFLICT_WINDOW_HOURS = 24.0
+CONFLICT_SCORE_GAP = 0.40
+CONFLICT_CONFIDENCE_FACTOR = 0.75
 
 EVENT_WEIGHTS = {
     "quiz": 1.00,
@@ -107,6 +110,22 @@ def _advance_values(
     return mastery, confidence
 
 
+def is_conflicting_evidence(
+    previous_score: float,
+    previous_at: datetime,
+    score: float,
+    timestamp: datetime,
+) -> bool:
+    """识别短窗口内方向相反且差异显著的证据，仅用于 Shadow 降置信。"""
+    elapsed_hours = abs((timestamp - previous_at).total_seconds()) / 3600.0
+    opposite = (previous_score < 0.5 <= score) or (score < 0.5 <= previous_score)
+    return (
+        elapsed_hours <= CONFLICT_WINDOW_HOURS
+        and opposite
+        and abs(score - previous_score) >= CONFLICT_SCORE_GAP
+    )
+
+
 def replay_learning_events(events: Iterable[LearningEvent]) -> UserKnowledgeState:
     """按 (timestamp, event_id) 重放单用户单节点历史，供离线工具与 Shadow 共用。"""
     unique: dict[str, LearningEvent] = {}
@@ -124,16 +143,24 @@ def replay_learning_events(events: Iterable[LearningEvent]) -> UserKnowledgeStat
     mastery = NEUTRAL_MASTERY
     confidence = 0.0
     previous_at: datetime | None = None
+    prior_evidence: list[tuple[float, datetime]] = []
     for item in ordered:
+        current_at = _utc_naive(item.timestamp)
         mastery, confidence = _advance_values(
             mastery,
             confidence,
             previous_at,
             item.event_type.value,
             item.score,
-            _utc_naive(item.timestamp),
+            current_at,
         )
-        previous_at = _utc_naive(item.timestamp)
+        if any(
+            is_conflicting_evidence(score, occurred_at, item.score, current_at)
+            for score, occurred_at in prior_evidence
+        ):
+            confidence *= CONFLICT_CONFIDENCE_FACTOR
+        previous_at = current_at
+        prior_evidence.append((item.score, current_at))
     assert previous_at is not None
     return UserKnowledgeState(
         user_id=owner[0],
@@ -222,11 +249,18 @@ class KnowledgeStateService:
         mastery = NEUTRAL_MASTERY
         confidence = 0.0
         previous_at: datetime | None = None
+        prior_evidence: list[tuple[float, datetime]] = []
         for item in history:
             mastery, confidence = _advance_values(
                 mastery, confidence, previous_at, item.event_type, item.score, item.timestamp
             )
+            if any(
+                is_conflicting_evidence(score, occurred_at, item.score, item.timestamp)
+                for score, occurred_at in prior_evidence
+            ):
+                confidence *= CONFLICT_CONFIDENCE_FACTOR
             previous_at = item.timestamp
+            prior_evidence.append((item.score, item.timestamp))
 
         state_row = self.db.scalar(
             select(UserKnowledgeStateRecord).where(

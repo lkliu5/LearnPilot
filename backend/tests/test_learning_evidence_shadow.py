@@ -14,6 +14,7 @@ from app.models.entities import (
     UserKnowledgeStateRecord,
 )
 from app.services.knowledge_state import (
+    ALGORITHM_VERSION,
     DuplicateEventConflict,
     KnowledgeStateService,
     replay_learning_events,
@@ -93,7 +94,7 @@ def test_adapter_converts_all_supported_evidence_sources():
     assert (feynman.event_type.value, feynman.score) == ("feynman", 0.82)
     assert (step.event_type.value, step.score) == ("learning_step", 1.0)
     assert len({quiz.event_id, diagnostic.event_id, feynman.event_id, step.event_id}) == 4
-    assert all(item.algorithm_version == "ks-logodds-v1" for item in [quiz, diagnostic, feynman, step])
+    assert all(item.algorithm_version == ALGORITHM_VERSION for item in [quiz, diagnostic, feynman, step])
     with pytest.raises(EvidenceAdapterError):
         from_learning_step(
             LearningStepProgress(

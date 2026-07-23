@@ -166,6 +166,20 @@ class LearningEventRecord(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
+class LearningEventAnomalyRecord(Base):
+    """TASK-005-D Shadow 旁路异常审计，不参与线上 Mastery 或路径计算。"""
+
+    __tablename__ = "learning_event_anomalies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    knowledge_id: Mapped[str] = mapped_column(String(32), index=True)
+    anomaly_type: Mapped[str] = mapped_column(String(32), index=True)
+    detail: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
 class Journey(Base):
     """学习旅程（接口文档 7.4）。currentStep 由 B2 按规则推导，不入库。"""
 

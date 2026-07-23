@@ -27,6 +27,7 @@ from app.core.llm import (
 from app.models.entities import KnowledgePoint, QuizAttempt, QuizQuestion
 from app.schemas.resource import QuizAnswerItem
 from app.services import mastery as mastery_service
+from app.services.learning_evidence import capture_shadow_event, from_quiz_result
 
 PASS_SCORE = 70
 
@@ -147,17 +148,18 @@ def submit(
         mastery_updated = {"id": kp_id, "status": status}
 
     # 行为数据埋点（C-fix 批3）：落一行作答历史，供学习评估 Agent 聚合（解耦判分）
-    db.add(
-        QuizAttempt(
-            user_id=user_id,
-            kp_id=kp_id,
-            score=score,
-            correct_count=objective_correct,
-            total=total,
-            passed=passed,
-        )
+    attempt = QuizAttempt(
+        user_id=user_id,
+        kp_id=kp_id,
+        score=score,
+        correct_count=objective_correct,
+        total=total,
+        passed=passed,
     )
+    db.add(attempt)
     db.commit()
+    db.refresh(attempt)
+    capture_shadow_event(from_quiz_result(attempt))
 
     return {
         "score": score,

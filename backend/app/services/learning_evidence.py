@@ -6,12 +6,27 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from app.models.entities import LearningStepProgress, QuizAttempt
+from sqlalchemy import select
+
+from app.core.database import SessionLocal
+from app.models.entities import (
+    LearningEventAnomalyRecord,
+    LearningEventRecord,
+    LearningStepProgress,
+    QuizAttempt,
+)
 from app.schemas.knowledge_state import LearningEvent
-from app.services.knowledge_state import ALGORITHM_VERSION
+from app.services.knowledge_state import (
+    ALGORITHM_VERSION,
+    KnowledgeStateService,
+    is_conflicting_evidence,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class EvidenceAdapterError(ValueError):
@@ -131,3 +146,100 @@ def from_learning_step(progress: LearningStepProgress) -> LearningEvent:
         score=1.0,
         occurred_at=progress.updated_at,
     )
+
+
+def _same_business_event(row: LearningEventRecord, event: LearningEvent) -> bool:
+    """重试时忽略采集时钟和算法版本差异，业务证据内容必须保持一致。"""
+    return (
+        row.user_id,
+        row.knowledge_id,
+        row.event_type,
+        row.source_type,
+        row.source_id,
+        row.score,
+    ) == (
+        event.user_id,
+        event.knowledge_id,
+        event.event_type.value,
+        event.source_type.value,
+        event.source_id,
+        event.score,
+    )
+
+
+def _add_anomaly(
+    db: Any, event: LearningEvent, anomaly_type: str, detail: str
+) -> None:
+    db.add(
+        LearningEventAnomalyRecord(
+            event_id=event.event_id,
+            user_id=event.user_id,
+            knowledge_id=event.knowledge_id,
+            anomaly_type=anomaly_type,
+            detail=detail[:1000],
+        )
+    )
+
+
+def capture_shadow_event(event: LearningEvent) -> str:
+    """以独立事务 fail-open 写入 Shadow；任何失败均不得影响线上调用方。"""
+    db = SessionLocal()
+    try:
+        existing = db.scalar(
+            select(LearningEventRecord).where(
+                LearningEventRecord.event_id == event.event_id
+            )
+        )
+        if existing is not None:
+            if _same_business_event(existing, event):
+                _add_anomaly(db, event, "duplicate", "同一业务证据重复投递，已幂等忽略")
+                db.commit()
+                return "duplicate"
+            _add_anomaly(
+                db,
+                event,
+                "duplicate_conflict",
+                "同一 event_id 携带不同业务内容，已拒绝覆盖原事件",
+            )
+            db.commit()
+            return "duplicate_conflict"
+
+        history = list(
+            db.scalars(
+                select(LearningEventRecord)
+                .where(
+                    LearningEventRecord.user_id == event.user_id,
+                    LearningEventRecord.knowledge_id == event.knowledge_id,
+                )
+                .order_by(LearningEventRecord.timestamp, LearningEventRecord.event_id)
+            ).all()
+        )
+        conflicting = next(
+            (
+                item
+                for item in reversed(history)
+                if is_conflicting_evidence(
+                    item.score,
+                    item.timestamp.replace(tzinfo=timezone.utc),
+                    event.score,
+                    event.timestamp,
+                )
+            ),
+            None,
+        )
+        if conflicting is not None:
+            _add_anomaly(
+                db,
+                event,
+                "evidence_conflict",
+                f"与 {conflicting.event_id} 在 24h 内方向相反且分差达到阈值；Shadow confidence 降权",
+            )
+
+        KnowledgeStateService(db).update_state(event)
+        return "captured_with_conflict" if conflicting is not None else "captured"
+    except Exception:
+        db.rollback()
+        logger.exception("LearningEvent Shadow 旁路采集失败: %s", event.event_id)
+        return "capture_failed"
+    finally:
+        db.close()

@@ -31,6 +31,11 @@ from app.core.database import SessionLocal
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
 from app.models.entities import KnowledgePoint, LearningNote, LearningStepProgress
 from app.services import mastery as mastery_service
+from app.services.learning_evidence import (
+    capture_shadow_event,
+    from_feynman,
+    from_learning_step,
+)
 
 # 学习步骤固定 6 项（接口文档 18.3，视频/讲义/图解/笔记/费曼/实操）
 STEP_KEYS: list[str] = ["video", "lecture", "diagram", "note", "feynman", "practice"]
@@ -158,9 +163,14 @@ def _enrich_gaps(db: Session, gaps: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _eval_turn(
-    db: Session, session: dict[str, Any], kp: KnowledgePoint, explanation: str
+    db: Session,
+    session: dict[str, Any],
+    kp: KnowledgePoint,
+    explanation: str,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """单轮费曼评估：Agent 评估 → 注入 gaps.review → 记会话历史。"""
+    turn_number = len(session["history"]) // 2 + 1
     result = feynman_agent.respond(
         kp_id=kp.id,
         kp_name=kp.name,
@@ -170,6 +180,16 @@ def _eval_turn(
     )
     gaps = _enrich_gaps(db, result["gaps"])
     _append_turn(session, explanation, result["feedback"])
+    if user_id is not None:
+        capture_shadow_event(
+            from_feynman(
+                user_id=user_id,
+                knowledge_id=kp.id,
+                result=result,
+                source_id=f"feynman:{session['sessionId']}:turn-{turn_number}",
+                occurred_at=_now(),
+            )
+        )
     return {
         "feedback": result["feedback"],
         "gaps": gaps,
@@ -180,12 +200,17 @@ def _eval_turn(
 
 
 def feynman_chat(
-    db: Session, *, kp_id: str, session_id: str | None, explanation: str
+    db: Session,
+    *,
+    kp_id: str,
+    session_id: str | None,
+    explanation: str,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """JSON 整体评估（接口文档 18.2 非流式）。"""
     kp = _require_kp(db, kp_id)
     session = _get_session(session_id, kp_id)
-    result = _eval_turn(db, session, kp, explanation)
+    result = _eval_turn(db, session, kp, explanation, user_id=user_id)
     return {
         "sessionId": session["sessionId"],
         "feedback": result["feedback"],
@@ -211,7 +236,12 @@ def _chunk_feedback(feedback: str) -> list[str]:
 
 
 def feynman_sse_stream(
-    db: Session, *, kp_id: str, session_id: str | None, explanation: str
+    db: Session,
+    *,
+    kp_id: str,
+    session_id: str | None,
+    explanation: str,
+    user_id: str | None = None,
 ) -> Iterator[str]:
     """SSE 流式评估（接口文档 18.2）。调用方需先确认 kp 存在（404 走 JSON 信封）。
 
@@ -228,7 +258,9 @@ def feynman_sse_stream(
         inner = SessionLocal()
         try:
             kp = _require_kp(inner, kp_id)
-            result = _eval_turn(inner, session, kp, explanation)
+            result = _eval_turn(
+                inner, session, kp, explanation, user_id=user_id
+            )
             delay = settings.tutor_stream_delay_ms / 1000
             for chunk in _chunk_feedback(result["feedback"]):
                 if delay > 0:
@@ -307,6 +339,9 @@ def set_step(
         row.done = bool(done)
         row.updated_at = _now()
     db.commit()
+    db.refresh(row)
+    if row.done:
+        capture_shadow_event(from_learning_step(row))
     return get_steps(db, user_id=user_id, kp_id=kp_id)
 
 
