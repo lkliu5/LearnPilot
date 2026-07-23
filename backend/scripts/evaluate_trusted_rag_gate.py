@@ -19,6 +19,7 @@ from app.rag.trusted_rag_gate import (
     TrustedRAGGate,
 )
 from app.rag.shadow_admission import ShadowEvaluationDataset
+from app.rag.evidence_quality_evaluation import QualityEvaluationResult
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -26,7 +27,11 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TASK-004-E1 offline canary Gate")
+    parser = argparse.ArgumentParser(description="TASK-004-E3-B offline canary Gate")
+    parser.add_argument(
+        "--quality-results",
+        help="Optional privacy-safe Evidence quality evaluation JSON.",
+    )
     parser.add_argument(
         "--shadow-metrics",
         help="Optional aggregated real Shadow metrics JSON; omitted means unavailable.",
@@ -60,13 +65,19 @@ def main() -> None:
         shadow = ShadowMetrics(rerank=rerank)
 
     faults = FaultInjectionResults.from_report(_read_json(Path(args.fault_results)))
+    quality = (
+        QualityEvaluationResult.model_validate(_read_json(Path(args.quality_results)))
+        if args.quality_results
+        else None
+    )
     decision = TrustedRAGGate().evaluate(
         shadow,
         faults,
         rerank_metrics=rerank if isinstance(shadow, ShadowEvaluationDataset) else None,
+        quality_evaluation=quality,
     )
     payload = {
-        "schemaVersion": "trusted-rag-canary-gate-v2",
+        "schemaVersion": "trusted-rag-canary-gate-v3",
         "evaluationType": "offline_canary_admission_gate",
         "generatedAt": datetime.now(UTC).isoformat(),
         "productionMutation": False,
@@ -74,6 +85,7 @@ def main() -> None:
             "shadowMetrics": args.shadow_metrics,
             "faultResults": str(Path(args.fault_results)),
             "rerankResults": str(Path(args.rerank_results)),
+            "qualityResults": args.quality_results,
         },
         **decision.model_dump(mode="json"),
     }

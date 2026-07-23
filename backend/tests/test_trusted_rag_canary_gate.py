@@ -10,6 +10,42 @@ from app.rag.trusted_rag_gate import (
     TrustedRAGGate,
 )
 from app.rag.shadow_admission import ShadowEvaluationDataset
+from app.rag.evidence_quality_evaluation import EvidenceEvaluationRecord, QualityEvaluationResult
+
+
+def _quality(**overrides) -> QualityEvaluationResult:
+    values = {
+        "evaluation_window": "fixture", "request_count": 100,
+        "evidence_record_count": 100, "evidence_overlap": 0.75,
+        "source_coverage": 0.85, "human_relevance": 0.9,
+        "support_rate": 0.9, "completeness": 0.8, "source_quality": 0.9,
+        "review_complete": True,
+        "evaluated_request_ids": [f"req-{index}" for index in range(100)],
+        "records": [EvidenceEvaluationRecord(
+            request_id=f"req-{index}", evidence_rank=1, relevance_score=3,
+            completeness_score=3, supports_answer=True, source_quality=3,
+        ) for index in range(100)],
+    }
+    values.update(overrides)
+    return QualityEvaluationResult(**values)
+
+
+def _quality_for_dataset(dataset: ShadowEvaluationDataset) -> QualityEvaluationResult:
+    request_ids = [sample.request_id for sample in dataset.samples]
+    aggregate = dataset.aggregate()
+    return QualityEvaluationResult(
+        evaluation_window="fixture", request_count=len(request_ids),
+        evidence_record_count=len(request_ids),
+        evidence_overlap=aggregate.evidence_overlap_mean or 0.0,
+        source_coverage=aggregate.source_coverage_mean or 0.0,
+        human_relevance=0.9, support_rate=0.9, completeness=0.8,
+        source_quality=0.9, review_complete=True,
+        evaluated_request_ids=request_ids,
+        records=[EvidenceEvaluationRecord(
+            request_id=request_id, evidence_rank=1, relevance_score=3,
+            completeness_score=3, supports_answer=True, source_quality=3,
+        ) for request_id in request_ids],
+    )
 
 
 def _rerank(**overrides) -> RerankMetrics:
@@ -65,7 +101,7 @@ def _faults(*, blocked: bool = False) -> FaultInjectionResults:
 
 
 def test_all_gate_checks_pass():
-    result = TrustedRAGGate().evaluate(_shadow(), _faults())
+    result = TrustedRAGGate().evaluate(_shadow(), _faults(), quality_evaluation=_quality())
 
     assert result.quality_pass
     assert result.latency_pass
@@ -78,7 +114,7 @@ def test_all_gate_checks_pass():
 
 
 def test_single_metric_failure_blocks_p95():
-    result = TrustedRAGGate().evaluate(_shadow(p95_latency_ms=1500.01), _faults())
+    result = TrustedRAGGate().evaluate(_shadow(p95_latency_ms=1500.01), _faults(), quality_evaluation=_quality())
 
     assert result.quality_pass and result.reliability_pass and result.rerank_pass
     assert result.latency_pass is False
@@ -95,6 +131,7 @@ def test_multiple_metric_failures_are_all_reported():
             rerank=_rerank(degraded_case_count=1),
         ),
         _faults(blocked=True),
+        quality_evaluation=_quality(),
     )
 
     assert not result.quality_pass
@@ -120,7 +157,7 @@ def test_missing_inputs_fail_closed():
 
 
 def test_block_decision_recommends_automatic_rollback():
-    result = TrustedRAGGate().evaluate(_shadow(), _faults(blocked=True))
+    result = TrustedRAGGate().evaluate(_shadow(), _faults(blocked=True), quality_evaluation=_quality())
 
     assert result.final_decision is CanaryDecisionValue.BLOCK
     assert result.rollback_recommended is True
@@ -139,7 +176,7 @@ def test_task004_reports_are_supported_without_trusting_provisional_rerank():
         }
     )
 
-    result = TrustedRAGGate().evaluate(_shadow(rerank=rerank), _faults())
+    result = TrustedRAGGate().evaluate(_shadow(rerank=rerank), _faults(), quality_evaluation=_quality())
 
     assert result.rerank_pass is False
     assert set(result.block_reasons) >= {
@@ -192,7 +229,10 @@ def test_gate_accepts_complete_shadow_evaluation_dataset():
         samples=samples,
     )
 
-    result = TrustedRAGGate().evaluate(dataset, _faults(), rerank_metrics=_rerank())
+    result = TrustedRAGGate().evaluate(
+        dataset, _faults(), rerank_metrics=_rerank(),
+        quality_evaluation=_quality_for_dataset(dataset),
+    )
 
     assert result.final_decision is CanaryDecisionValue.PASS
     assert result.snapshot.shadow_input_type == "dataset"
@@ -205,7 +245,22 @@ def test_dataset_underrepresented_query_type_blocks_with_remediation():
         evaluation_window="fixture",
         samples=[],
     )
-    result = TrustedRAGGate().evaluate(dataset, _faults(), rerank_metrics=_rerank())
+    result = TrustedRAGGate().evaluate(dataset, _faults(), rerank_metrics=_rerank(), quality_evaluation=_quality())
 
     assert result.final_decision is CanaryDecisionValue.BLOCK
     assert "complete_stratified_shadow_dataset" in result.remediation
+
+
+def test_human_quality_result_is_required_and_gate_recalculates_it():
+    missing = TrustedRAGGate().evaluate(_shadow(), _faults())
+    assert "quality.human_evaluation_missing" in missing.block_reasons
+
+    low = TrustedRAGGate().evaluate(
+        _shadow(), _faults(),
+        quality_evaluation=_quality(human_relevance=0.69, support_rate=0.79),
+    )
+    assert set(low.block_reasons) >= {
+        "quality.human_relevance_below_threshold",
+        "quality.support_rate_below_threshold",
+    }
+    assert low.snapshot.quality_evaluation_request_count == 100

@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.rag.shadow_admission import ShadowEvaluationDataset
+from app.rag.evidence_quality_evaluation import QualityEvaluationResult
 
 
 class _StrictModel(BaseModel):
@@ -23,6 +24,8 @@ class TrustedRAGGateConfig(_StrictModel):
     min_evidence_overlap: float = Field(default=0.70, ge=0.0, le=1.0)
     min_source_coverage: float = Field(default=0.80, ge=0.0, le=1.0)
     min_confidence: float = Field(default=0.80, ge=0.0, le=1.0)
+    min_human_relevance: float = Field(default=0.70, ge=0.0, le=1.0)
+    min_support_rate: float = Field(default=0.80, ge=0.0, le=1.0)
     max_p95_latency_ms: float = Field(default=1500.0, gt=0.0)
     max_timeout_rate: float = Field(default=0.01, ge=0.0, le=1.0)
     max_error_rate: float = Field(default=0.02, ge=0.0, le=1.0)
@@ -130,6 +133,9 @@ class GateSnapshot(_StrictModel):
     fault_failure_rate: float | None
     query_type_counts: dict[str, int] | None = None
     shadow_input_type: str
+    quality_evaluation_request_count: int | None = None
+    human_relevance: float | None = None
+    support_rate: float | None = None
 
 
 class CanaryDecision(_StrictModel):
@@ -156,6 +162,7 @@ class TrustedRAGGate:
         shadow_metrics: ShadowMetrics | ShadowEvaluationDataset | None,
         fault_results: FaultInjectionResults | None,
         rerank_metrics: RerankMetrics | None = None,
+        quality_evaluation: QualityEvaluationResult | None = None,
     ) -> CanaryDecision:
         reasons: dict[str, list[str]] = {
             "quality": [],
@@ -202,6 +209,28 @@ class TrustedRAGGate:
                     reasons["quality"].append(f"quality.{name}_missing")
                 elif value < threshold:
                     reasons["quality"].append(f"quality.{name}_below_threshold")
+
+            if quality_evaluation is None:
+                reasons["quality"].append("quality.human_evaluation_missing")
+            else:
+                if not quality_evaluation.review_complete:
+                    reasons["quality"].append("quality.human_review_incomplete")
+                if quality_evaluation.request_count < self.config.min_sample_count:
+                    reasons["quality"].append("quality.human_sample_count_below_minimum")
+                if quality_evaluation.human_relevance < self.config.min_human_relevance:
+                    reasons["quality"].append("quality.human_relevance_below_threshold")
+                if quality_evaluation.support_rate < self.config.min_support_rate:
+                    reasons["quality"].append("quality.support_rate_below_threshold")
+                if dataset is not None:
+                    dataset_request_ids = {item.request_id for item in dataset.samples}
+                    if set(quality_evaluation.evaluated_request_ids) != dataset_request_ids:
+                        reasons["quality"].append("quality.request_ids_mismatch")
+                    for name, reviewed, measured in (
+                        ("evidence_overlap", quality_evaluation.evidence_overlap, shadow.evidence_overlap_mean),
+                        ("source_coverage", quality_evaluation.source_coverage, shadow.source_coverage_mean),
+                    ):
+                        if measured is None or abs(reviewed - measured) > 0.000001:
+                            reasons["quality"].append(f"quality.{name}_input_mismatch")
 
             if shadow.p95_latency_ms is None:
                 reasons["latency"].append("latency.p95_missing")
@@ -309,6 +338,15 @@ class TrustedRAGGate:
                     "dataset" if dataset is not None
                     else "aggregate" if shadow is not None
                     else "missing"
+                ),
+                quality_evaluation_request_count=(
+                    quality_evaluation.request_count if quality_evaluation else None
+                ),
+                human_relevance=(
+                    quality_evaluation.human_relevance if quality_evaluation else None
+                ),
+                support_rate=(
+                    quality_evaluation.support_rate if quality_evaluation else None
                 ),
             ),
         )

@@ -1,27 +1,26 @@
 {
-  "schemaVersion": "trusted-rag-canary-gate-v2",
+  "schemaVersion": "trusted-rag-canary-gate-v3",
   "evaluationType": "offline_canary_admission_gate",
-  "generatedAt": "2026-07-22T09:27:47.932638+00:00",
+  "generatedAt": "2026-07-23T01:22:11.161618+00:00",
   "productionMutation": false,
   "inputs": {
-    "shadowMetrics": null,
+    "shadowMetrics": "evaluation/trusted_rag_shadow_e3a_frozen.json",
     "faultResults": "F:\\软件杯\\backend\\evaluation\\trusted_rag_fault_results.json",
-    "rerankResults": "F:\\软件杯\\backend\\evaluation\\rerank_blind_results.json"
+    "rerankResults": "F:\\软件杯\\backend\\evaluation\\rerank_blind_results.json",
+    "qualityResults": "evaluation/trusted_rag_quality_e3b.json"
   },
   "quality_pass": false,
   "latency_pass": false,
-  "reliability_pass": false,
+  "reliability_pass": true,
   "rerank_pass": false,
   "final_decision": "BLOCK",
   "block_reasons": [
-    "quality.evidence_overlap_missing",
-    "quality.source_coverage_missing",
-    "quality.confidence_missing",
-    "latency.p95_missing",
+    "quality.evidence_overlap_below_threshold",
+    "quality.source_coverage_below_threshold",
+    "quality.confidence_below_threshold",
+    "quality.human_relevance_below_threshold",
+    "quality.support_rate_below_threshold",
     "latency.performance_not_verified",
-    "reliability.sample_count_missing",
-    "reliability.timeout_rate_missing",
-    "reliability.error_rate_missing",
     "rerank.metrics_still_provisional",
     "rerank.human_review_incomplete",
     "rerank.degraded_cases_exceeded"
@@ -29,19 +28,27 @@
   "remediation": [
     "collect_and_review_shadow_quality_metrics",
     "verify_target_environment_shadow_latency",
-    "reduce_shadow_timeout_error_rate_and_preserve_legacy",
     "apply_query_type_gate_or_hybrid_fallback_and_revalidate_rerank"
   ],
   "rollback_recommended": true,
   "recommended_action": "keep_legacy_and_set_canary_weight_to_zero",
   "snapshot": {
-    "sample_count": null,
-    "p95_latency_ms": null,
-    "timeout_rate": null,
-    "error_rate": null,
+    "sample_count": 100,
+    "p95_latency_ms": 45.0323,
+    "timeout_rate": 0.0,
+    "error_rate": 0.0,
     "fault_scenario_count": 11,
     "fault_failure_rate": 0.0,
-    "query_type_counts": null,
-    "shadow_input_type": "aggregate"
+    "query_type_counts": {
+      "comprehensive_question": 20,
+      "concept_explanation": 20,
+      "method_comparison": 20,
+      "operation_steps": 20,
+      "programming_practice": 20
+    },
+    "shadow_input_type": "dataset",
+    "quality_evaluation_request_count": 100,
+    "human_relevance": 0.271084,
+    "support_rate": 0.32
   }
 }
