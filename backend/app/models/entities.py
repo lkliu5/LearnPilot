@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -109,6 +110,55 @@ class Mastery(Base):
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100，None=未测
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-1
     score_source: Mapped[str | None] = mapped_column(String(16), nullable=True)  # diagnostic|quiz
+
+
+class UserKnowledgeStateRecord(Base):
+    """节点级知识状态快照（TASK-005-B，内部模型，不改变 Mastery 契约）。"""
+
+    __tablename__ = "user_knowledge_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "knowledge_id", name="uq_knowledge_state_user_node"),
+        CheckConstraint(
+            "mastery_score >= 0 AND mastery_score <= 1",
+            name="ck_knowledge_state_mastery_score",
+        ),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1",
+            name="ck_knowledge_state_confidence",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
+    knowledge_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("knowledge_points.id"), index=True
+    )
+    mastery_score: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class LearningEventRecord(Base):
+    """知识状态更新的追加式反馈历史（TASK-005-B）。"""
+
+    __tablename__ = "learning_events"
+    __table_args__ = (
+        CheckConstraint("score >= 0 AND score <= 1", name="ck_learning_event_score"),
+        CheckConstraint(
+            "event_type IN ('quiz','practice','feynman','diagnostic','retrieval',"
+            "'learning_step','self_report')",
+            name="ck_learning_event_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
+    knowledge_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("knowledge_points.id"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(32), index=True)
+    score: Mapped[float] = mapped_column(Float)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
 class Journey(Base):
