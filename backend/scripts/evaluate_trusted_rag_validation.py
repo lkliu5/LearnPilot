@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import platform
 import statistics
 import sys
 import time
@@ -28,6 +29,7 @@ from app.rag.shadow_admission import ShadowDeadlineExecutor, ShadowEvaluationDat
 from app.rag.trusted_rag_gate import FaultInjectionResults, RerankMetrics, TrustedRAGGate
 from app.rag.trusted_rag_validation import (
     TrustedRAGValidationCase,
+    TrustedRAGValidationDataset,
     build_validation_dataset,
     query_fingerprint,
 )
@@ -127,25 +129,46 @@ def main() -> None:
     parser.add_argument("--e3-source", default=str(_BACKEND_ROOT / "evaluation" / "trusted_rag_shadow_dataset.json"))
     parser.add_argument("--fault-results", default=str(_BACKEND_ROOT / "evaluation" / "trusted_rag_fault_results.json"))
     parser.add_argument("--collection", default="kb_chunks")
+    parser.add_argument("--dataset-input")
+    parser.add_argument("--environment", default="local-offline-final-validation")
+    parser.add_argument("--performance-verified", action="store_true")
+    parser.add_argument("--require-declared-profile", action="store_true")
+    parser.add_argument("--profile-provider", default="hash")
+    parser.add_argument("--profile-model", default="deterministic-hash-v1")
+    parser.add_argument("--profile-dimension", type=int, default=settings.embedding_dimension)
+    parser.add_argument("--rerank-policy", choices=("conditional", "never"), default="conditional")
     parser.add_argument("--deadline-ms", type=float, default=1500.0)
     parser.add_argument("--top-k", type=int, default=5)
     args = parser.parse_args()
 
-    dataset = build_validation_dataset()
-    independence = _assert_independent(dataset, Path(args.e3_source))
-    Path(args.dataset_output).write_text(
-        json.dumps(dataset.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    dataset = (
+        TrustedRAGValidationDataset.model_validate(
+            json.loads(Path(args.dataset_input).read_text(encoding="utf-8"))
+        )
+        if args.dataset_input
+        else build_validation_dataset()
     )
+    independence = _assert_independent(dataset, Path(args.e3_source))
+    if not args.dataset_input:
+        Path(args.dataset_output).write_text(
+            json.dumps(dataset.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
-    profile = EmbeddingProfile("hash", "deterministic-hash-v1", settings.embedding_dimension)
-    embedder = Embedder(profile=profile, allow_fallback=True)
+    profile = EmbeddingProfile(args.profile_provider, args.profile_model, args.profile_dimension)
+    embedder = Embedder(profile=profile, allow_fallback=args.profile_provider == "hash")
     set_embedder_for_evaluation(embedder)
     store = _ChromaStore(settings.chroma_dir, collection=args.collection, profile=profile)
     embedding_status = embedder.status(load=True)
     collection_metadata = dict(store._col.metadata or {})
     sample_vectors = store._col.get(limit=1, include=["embeddings"]).get("embeddings")
     stored_dimension = len(sample_vectors[0]) if sample_vectors is not None and len(sample_vectors) else None
+    declared_profile_id = collection_metadata.get("embedding_profile_id")
+    if args.require_declared_profile and declared_profile_id != profile.profile_id:
+        raise ValueError(
+            "collection/query embedding profile mismatch: "
+            f"collection={declared_profile_id!r}, query={profile.profile_id!r}"
+        )
     embedding_profile = {
         "collection": store._name,
         "profile_id": profile.profile_id,
@@ -153,7 +176,7 @@ def main() -> None:
         "stored_dimension": stored_dimension,
         "embedding_mode": embedding_status["mode"],
         "classification": "Hash" if embedding_status["mode"] == "hash_fallback" else "Real BGE",
-        "collection_declared_profile_id": collection_metadata.get("embedding_profile_id"),
+        "collection_declared_profile_id": declared_profile_id,
         "collection_profile_metadata_complete": all(
             key in collection_metadata for key in
             ("embedding_provider", "embedding_model", "embedding_dimension", "embedding_profile_id")
@@ -237,16 +260,16 @@ def main() -> None:
                 "quality_metrics_complete": True,
                 "latency_metrics_complete": True,
                 "reliability_metrics_complete": True,
-                "target_environment_sample": False,
+                "target_environment_sample": args.performance_verified,
             },
         })
         retrieval_rows.append({"case": case, "evidence": evidence, "confidence": confidence})
 
     evaluation_window = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     shadow = ShadowEvaluationDataset(
-        environment="local-offline-final-validation",
+        environment=args.environment,
         evaluation_window=evaluation_window,
-        performance_verified=False,
+        performance_verified=args.performance_verified,
         samples=shadow_samples,
     )
     shadow.assert_integrity()
@@ -260,96 +283,120 @@ def main() -> None:
         expected_request_ids=request_ids,
     )
 
-    reranker = RealCrossEncoderReranker(
-        settings.reranker_model_name,
-        cache_folder=settings.model_cache_dir,
-        device="cpu",
-        batch_size=4,
-        max_length=256,
-        local_files_only=True,
-    )
-    conditional_gate = OfflineRerankGate(
-        "conditional", beneficial_query_types=frozenset({"concept_explanation"}), min_confidence=.9883
-    )
     baseline_values: list[tuple[float, float, float]] = []
-    always_values: list[tuple[float, float, float]] = []
-    conditional_values: list[tuple[float, float, float]] = []
-    degraded: dict[str, list[str]] = defaultdict(list)
-    conditional_enabled = 0
-    rerank_started = time.perf_counter()
     for row in retrieval_rows:
         case: TrustedRAGValidationCase = row["case"]
-        candidates = [
-            RetrievalCandidate(
-                id=str(item["source"].get("chunkId") or f"{case.case_id}-{index}"),
-                content=item["content"],
-                source=item["source"],
-                metadata=item.get("metadata") or {},
-                confidence_score=float(item.get("score") or 0.0),
-            )
-            for index, item in enumerate(row["evidence"], 1)
+        baseline_documents = [
+            str(item["source"].get("documentId") or "") for item in row["evidence"]
         ]
-        source_by_id = {candidate.id: str(candidate.source.get("documentId") or "") for candidate in candidates}
-        baseline_documents = [source_by_id[candidate.id] for candidate in candidates]
         expected = set(case.expected_document_ids)
-        baseline_metric = _metric(baseline_documents, expected)
-        baseline_values.append(baseline_metric)
-        ranked = reranker.rerank(case.query, candidates)
-        always_documents = [source_by_id[item.candidate_id] for item in sorted(ranked, key=lambda item: item.rerank_rank)]
-        always_metric = _metric(always_documents, expected)
-        always_values.append(always_metric)
-        if sum(always_metric) + 1e-9 < sum(baseline_metric):
-            degraded[case.query_type].append(case.case_id)
-        decision = conditional_gate.decide(case.query_type, float(row["confidence"]))
-        conditional_enabled += int(decision.enabled)
-        conditional_values.append(always_metric if decision.enabled else baseline_metric)
-    rerank_total_ms = round((time.perf_counter() - rerank_started) * 1000, 6)
+        baseline_values.append(_metric(baseline_documents, expected))
     baseline_metrics = _mean_metric(baseline_values)
-    always_metrics = _mean_metric(always_values)
-    conditional_metrics = _mean_metric(conditional_values)
-    conditional_degraded_count = sum(
-        sum(after) + 1e-9 < sum(before)
-        for before, after, row in zip(baseline_values, conditional_values, retrieval_rows)
-    )
-    rerank_summary = {
-        "model": settings.reranker_model_name,
-        "independent_validation": True,
-        "human_review_complete": False,
-        "metrics_provisional": True,
-        "baseline": baseline_metrics,
-        "always": {
-            "metrics": always_metrics,
-            "delta": _delta(always_metrics, baseline_metrics),
-            "degraded_by_query_type": dict(sorted((name, len(ids)) for name, ids in degraded.items())),
-        },
-        "conditional": {
-            "rule": {"query_types": ["concept_explanation"], "min_confidence": .9883},
-            "enabled_count": conditional_enabled,
-            "disabled_count": len(retrieval_rows) - conditional_enabled,
-            "metrics": conditional_metrics,
-            "delta": _delta(conditional_metrics, baseline_metrics),
-            "degraded_case_count": conditional_degraded_count,
-        },
-        "operation_steps_always_degraded": len(degraded.get("operation_steps", [])),
-        "comprehensive_question_always_degraded": len(degraded.get("comprehensive_question", [])),
-        "retain_conditional_policy": (
-            len(degraded.get("operation_steps", [])) > 0
-            or len(degraded.get("comprehensive_question", [])) > 0
-            or conditional_degraded_count == 0
-        ),
-        "model_load_ms": reranker.load_latency_ms,
-        "evaluation_total_ms": rerank_total_ms,
-        "inference_p95_ms": _percentile(reranker.inference_latencies_ms, .95),
-    }
-    rerank_gate_metrics = RerankMetrics(
-        independent_validation=True,
-        metrics_provisional=True,
-        human_review_complete=False,
-        mrr_delta=rerank_summary["conditional"]["delta"]["mrr"],
-        ndcg_at_3_delta=rerank_summary["conditional"]["delta"]["ndcg@3"],
-        ndcg_at_5_delta=rerank_summary["conditional"]["delta"]["ndcg@5"],
-        degraded_case_count=conditional_degraded_count,
-    )
+    if args.rerank_policy == "never":
+        policies = [
+            {
+                "query_type": name,
+                "enabled": False,
+                "fallback": "hybrid",
+                "reason": "independent_validation_regression_policy_disabled",
+            }
+            for name in sorted(Counter(case.query_type for case in dataset.cases))
+        ]
+        rerank_summary = {
+            "policy_version": "rerank-policy-v1",
+            "model": settings.reranker_model_name,
+            "enabled_count": 0,
+            "disabled_count": len(retrieval_rows),
+            "fallback": "hybrid",
+            "policies": policies,
+            "baseline": baseline_metrics,
+            "effective_metrics": baseline_metrics,
+            "delta": {"mrr": 0.0, "ndcg@3": 0.0, "ndcg@5": 0.0},
+            "degraded_case_count": 0,
+        }
+        rerank_gate_metrics = RerankMetrics(
+            independent_validation=True,
+            metrics_provisional=False,
+            human_review_complete=False,
+            mrr_delta=0.0,
+            ndcg_at_3_delta=0.0,
+            ndcg_at_5_delta=0.0,
+            degraded_case_count=0,
+            policy_enabled=False,
+            fallback="hybrid",
+            reason="independent_validation_regression_policy_disabled",
+        )
+    else:
+        reranker = RealCrossEncoderReranker(
+            settings.reranker_model_name,
+            cache_folder=settings.model_cache_dir,
+            device="cpu",
+            batch_size=4,
+            max_length=256,
+            local_files_only=True,
+        )
+        conditional_gate = OfflineRerankGate(
+            "conditional", beneficial_query_types=frozenset({"concept_explanation"}), min_confidence=.9883
+        )
+        always_values: list[tuple[float, float, float]] = []
+        conditional_values: list[tuple[float, float, float]] = []
+        degraded: dict[str, list[str]] = defaultdict(list)
+        conditional_enabled = 0
+        rerank_started = time.perf_counter()
+        for row, baseline_metric in zip(retrieval_rows, baseline_values):
+            case = row["case"]
+            candidates = [
+                RetrievalCandidate(
+                    id=str(item["source"].get("chunkId") or f"{case.case_id}-{index}"),
+                    content=item["content"], source=item["source"],
+                    metadata=item.get("metadata") or {},
+                    confidence_score=float(item.get("score") or 0.0),
+                )
+                for index, item in enumerate(row["evidence"], 1)
+            ]
+            source_by_id = {item.id: str(item.source.get("documentId") or "") for item in candidates}
+            ranked = reranker.rerank(case.query, candidates)
+            always_metric = _metric(
+                [source_by_id[item.candidate_id] for item in sorted(ranked, key=lambda item: item.rerank_rank)],
+                set(case.expected_document_ids),
+            )
+            always_values.append(always_metric)
+            if sum(always_metric) + 1e-9 < sum(baseline_metric):
+                degraded[case.query_type].append(case.case_id)
+            decision = conditional_gate.decide(case.query_type, float(row["confidence"]))
+            conditional_enabled += int(decision.enabled)
+            conditional_values.append(always_metric if decision.enabled else baseline_metric)
+        rerank_total_ms = round((time.perf_counter() - rerank_started) * 1000, 6)
+        always_metrics = _mean_metric(always_values)
+        conditional_metrics = _mean_metric(conditional_values)
+        conditional_degraded_count = sum(
+            sum(after) + 1e-9 < sum(before)
+            for before, after in zip(baseline_values, conditional_values)
+        )
+        rerank_summary = {
+            "model": settings.reranker_model_name,
+            "independent_validation": True,
+            "human_review_complete": False,
+            "metrics_provisional": True,
+            "baseline": baseline_metrics,
+            "always": {"metrics": always_metrics, "delta": _delta(always_metrics, baseline_metrics),
+                       "degraded_by_query_type": dict(sorted((name, len(ids)) for name, ids in degraded.items()))},
+            "conditional": {"rule": {"query_types": ["concept_explanation"], "min_confidence": .9883},
+                            "enabled_count": conditional_enabled,
+                            "disabled_count": len(retrieval_rows) - conditional_enabled,
+                            "metrics": conditional_metrics, "delta": _delta(conditional_metrics, baseline_metrics),
+                            "degraded_case_count": conditional_degraded_count},
+            "model_load_ms": reranker.load_latency_ms,
+            "evaluation_total_ms": rerank_total_ms,
+            "inference_p95_ms": _percentile(reranker.inference_latencies_ms, .95),
+        }
+        rerank_gate_metrics = RerankMetrics(
+            independent_validation=True, metrics_provisional=True, human_review_complete=False,
+            mrr_delta=rerank_summary["conditional"]["delta"]["mrr"],
+            ndcg_at_3_delta=rerank_summary["conditional"]["delta"]["ndcg@3"],
+            ndcg_at_5_delta=rerank_summary["conditional"]["delta"]["ndcg@5"],
+            degraded_case_count=conditional_degraded_count,
+        )
     faults = _load_faults(Path(args.fault_results))
     gate = TrustedRAGGate().evaluate(
         shadow,
@@ -358,7 +405,8 @@ def main() -> None:
         quality_evaluation=quality,
     )
     gate_payload = {
-        "schemaVersion": "trusted-rag-canary-gate-v3",
+        "schemaVersion": "trusted-rag-canary-gate-v4",
+        "qualityGateVersion": "quality-gate-v2",
         "evaluationType": "offline_final_admission_validation",
         "generatedAt": datetime.now(UTC).isoformat(),
         "productionMutation": False,
@@ -372,7 +420,7 @@ def main() -> None:
 
     latency_values = [item.latency_metrics.total_ms for item in shadow.samples]
     results = {
-        "schema_version": "trusted-rag-final-validation-v1",
+        "schema_version": "trusted-rag-final-validation-v2",
         "generated_at": datetime.now(UTC).isoformat(),
         "production_mutation": False,
         "canary_enabled": False,
@@ -393,11 +441,25 @@ def main() -> None:
         },
         "latency": {
             "environment": shadow.environment,
+            "environment_fingerprint": {
+                "system": platform.system(),
+                "release": platform.release(),
+                "machine": platform.machine(),
+                "python": platform.python_version(),
+                "device": "cpu",
+                "execution": "local_target_validation_host",
+            },
             "performance_verified": shadow.performance_verified,
+            "sample_count": len(shadow.samples),
             "p50_ms": _percentile(latency_values, .50),
             "p95_ms": _percentile(latency_values, .95),
             "timeout_count": sum(item.reliability_metrics.timed_out for item in shadow.samples),
             "timeout_rate": aggregate.timeout_rate,
+            "error_count": sum(
+                item.reliability_metrics.error_type is not None
+                for item in shadow.samples
+            ),
+            "error_rate": aggregate.error_rate,
             "fallback_trigger_count": len(fallback_latencies),
             "fallback_overhead_mean_ms": round(statistics.mean(fallback_latencies), 6) if fallback_latencies else 0.0,
             "fallback_overhead_p95_ms": _percentile(fallback_latencies, .95),

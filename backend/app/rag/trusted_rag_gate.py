@@ -20,12 +20,13 @@ class CanaryDecisionValue(str, Enum):
 
 
 class TrustedRAGGateConfig(_StrictModel):
+    quality_gate_version: str = "quality-gate-v2"
     min_sample_count: int = Field(default=100, ge=1)
-    min_evidence_overlap: float = Field(default=0.70, ge=0.0, le=1.0)
-    min_source_coverage: float = Field(default=0.80, ge=0.0, le=1.0)
-    min_confidence: float = Field(default=0.80, ge=0.0, le=1.0)
-    min_human_relevance: float = Field(default=0.70, ge=0.0, le=1.0)
+    # At least two of every three reviewed Evidence records must be relevant.
+    min_relevance: float = Field(default=0.67, ge=0.0, le=1.0)
     min_support_rate: float = Field(default=0.80, ge=0.0, le=1.0)
+    min_completeness: float = Field(default=0.30, ge=0.0, le=1.0)
+    min_source_coverage: float = Field(default=0.80, ge=0.0, le=1.0)
     max_p95_latency_ms: float = Field(default=1500.0, gt=0.0)
     max_timeout_rate: float = Field(default=0.01, ge=0.0, le=1.0)
     max_error_rate: float = Field(default=0.02, ge=0.0, le=1.0)
@@ -49,6 +50,9 @@ class RerankMetrics(_StrictModel):
     ndcg_at_3_delta: float | None = None
     ndcg_at_5_delta: float | None = None
     degraded_case_count: int | None = Field(default=None, ge=0)
+    policy_enabled: bool = True
+    fallback: str = "hybrid"
+    reason: str = "validated_policy"
 
     @classmethod
     def from_blind_evaluation(cls, payload: dict[str, Any]) -> "RerankMetrics":
@@ -125,6 +129,7 @@ class FaultInjectionResults(_StrictModel):
 
 
 class GateSnapshot(_StrictModel):
+    quality_gate_version: str
     sample_count: int | None
     p95_latency_ms: float | None
     timeout_rate: float | None
@@ -136,6 +141,10 @@ class GateSnapshot(_StrictModel):
     quality_evaluation_request_count: int | None = None
     human_relevance: float | None = None
     support_rate: float | None = None
+    completeness: float | None = None
+    source_coverage: float | None = None
+    evidence_overlap_diagnostic: float | None = None
+    confidence_diagnostic: float | None = None
 
 
 class CanaryDecision(_StrictModel):
@@ -199,17 +208,6 @@ class TrustedRAGGate:
             reasons["reliability"].append("reliability.shadow_metrics_missing")
             reasons["rerank"].append("rerank.metrics_missing")
         else:
-            quality_rules = (
-                ("evidence_overlap", shadow.evidence_overlap_mean, self.config.min_evidence_overlap),
-                ("source_coverage", shadow.source_coverage_mean, self.config.min_source_coverage),
-                ("confidence", shadow.confidence_mean, self.config.min_confidence),
-            )
-            for name, value, threshold in quality_rules:
-                if value is None:
-                    reasons["quality"].append(f"quality.{name}_missing")
-                elif value < threshold:
-                    reasons["quality"].append(f"quality.{name}_below_threshold")
-
             if quality_evaluation is None:
                 reasons["quality"].append("quality.human_evaluation_missing")
             else:
@@ -217,10 +215,14 @@ class TrustedRAGGate:
                     reasons["quality"].append("quality.human_review_incomplete")
                 if quality_evaluation.request_count < self.config.min_sample_count:
                     reasons["quality"].append("quality.human_sample_count_below_minimum")
-                if quality_evaluation.human_relevance < self.config.min_human_relevance:
-                    reasons["quality"].append("quality.human_relevance_below_threshold")
+                if quality_evaluation.human_relevance < self.config.min_relevance:
+                    reasons["quality"].append("quality.relevance_below_threshold")
                 if quality_evaluation.support_rate < self.config.min_support_rate:
                     reasons["quality"].append("quality.support_rate_below_threshold")
+                if quality_evaluation.completeness < self.config.min_completeness:
+                    reasons["quality"].append("quality.completeness_below_threshold")
+                if quality_evaluation.source_coverage < self.config.min_source_coverage:
+                    reasons["quality"].append("quality.source_coverage_below_threshold")
                 if dataset is not None:
                     dataset_request_ids = {item.request_id for item in dataset.samples}
                     if set(quality_evaluation.evaluated_request_ids) != dataset_request_ids:
@@ -327,6 +329,7 @@ class TrustedRAGGate:
                 else "keep_legacy_and_set_canary_weight_to_zero"
             ),
             snapshot=GateSnapshot(
+                quality_gate_version=self.config.quality_gate_version,
                 sample_count=shadow.sample_count if shadow else None,
                 p95_latency_ms=shadow.p95_latency_ms if shadow else None,
                 timeout_rate=shadow.timeout_rate if shadow else None,
@@ -348,6 +351,16 @@ class TrustedRAGGate:
                 support_rate=(
                     quality_evaluation.support_rate if quality_evaluation else None
                 ),
+                completeness=(
+                    quality_evaluation.completeness if quality_evaluation else None
+                ),
+                source_coverage=(
+                    quality_evaluation.source_coverage if quality_evaluation else None
+                ),
+                evidence_overlap_diagnostic=(
+                    shadow.evidence_overlap_mean if shadow else None
+                ),
+                confidence_diagnostic=(shadow.confidence_mean if shadow else None),
             ),
         )
 
@@ -376,6 +389,12 @@ class TrustedRAGGate:
     ) -> None:
         if rerank is None:
             reasons.append("rerank.metrics_missing")
+            return
+        if not rerank.policy_enabled:
+            if rerank.fallback != "hybrid":
+                reasons.append("rerank.disabled_fallback_must_be_hybrid")
+            if rerank.degraded_case_count not in (0, None):
+                reasons.append("rerank.disabled_policy_degraded_cases_present")
             return
         if not rerank.independent_validation:
             reasons.append("rerank.independent_validation_required")

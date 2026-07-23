@@ -131,13 +131,14 @@ def test_multiple_metric_failures_are_all_reported():
             rerank=_rerank(degraded_case_count=1),
         ),
         _faults(blocked=True),
-        quality_evaluation=_quality(),
+        quality_evaluation=_quality(completeness=0.29),
     )
 
     assert not result.quality_pass
     assert not result.latency_pass
     assert not result.reliability_pass
     assert not result.rerank_pass
+    assert "quality.completeness_below_threshold" in result.block_reasons
     assert "reliability.fault_failure_rate_exceeded" in result.block_reasons
     assert "reliability.fault_blocked:timeout.hard_hang_no_hard_deadline" in result.block_reasons
     assert "rerank.degraded_cases_exceeded" in result.block_reasons
@@ -257,10 +258,52 @@ def test_human_quality_result_is_required_and_gate_recalculates_it():
 
     low = TrustedRAGGate().evaluate(
         _shadow(), _faults(),
-        quality_evaluation=_quality(human_relevance=0.69, support_rate=0.79),
+        quality_evaluation=_quality(human_relevance=0.66, support_rate=0.79),
     )
     assert set(low.block_reasons) >= {
-        "quality.human_relevance_below_threshold",
+        "quality.relevance_below_threshold",
         "quality.support_rate_below_threshold",
     }
     assert low.snapshot.quality_evaluation_request_count == 100
+
+
+def test_quality_gate_v2_uses_four_metrics_and_overlap_is_diagnostic():
+    result = TrustedRAGGate().evaluate(
+        _shadow(evidence_overlap_mean=0.0, confidence_mean=0.0),
+        _faults(),
+        quality_evaluation=_quality(
+            human_relevance=0.67,
+            support_rate=0.80,
+            completeness=0.30,
+            source_coverage=0.80,
+        ),
+    )
+
+    assert result.quality_pass is True
+    assert result.snapshot.quality_gate_version == "quality-gate-v2"
+    assert result.snapshot.evidence_overlap_diagnostic == 0.0
+    assert result.snapshot.confidence_diagnostic == 0.0
+
+
+def test_explicitly_disabled_rerank_policy_passes_only_with_hybrid_fallback():
+    disabled = _rerank(
+        policy_enabled=False,
+        fallback="hybrid",
+        reason="independent_validation_regression_policy_disabled",
+        metrics_provisional=False,
+        human_review_complete=False,
+        mrr_delta=0.0,
+        ndcg_at_3_delta=0.0,
+        ndcg_at_5_delta=0.0,
+        degraded_case_count=0,
+    )
+    result = TrustedRAGGate().evaluate(
+        _shadow(rerank=disabled), _faults(), quality_evaluation=_quality()
+    )
+    assert result.rerank_pass is True
+
+    unsafe = disabled.model_copy(update={"fallback": "empty"})
+    blocked = TrustedRAGGate().evaluate(
+        _shadow(rerank=unsafe), _faults(), quality_evaluation=_quality()
+    )
+    assert "rerank.disabled_fallback_must_be_hybrid" in blocked.block_reasons
