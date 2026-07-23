@@ -143,6 +143,7 @@ class LearningEventRecord(Base):
 
     __tablename__ = "learning_events"
     __table_args__ = (
+        UniqueConstraint("event_id", name="uq_learning_event_event_id"),
         CheckConstraint("score >= 0 AND score <= 1", name="ck_learning_event_score"),
         CheckConstraint(
             "event_type IN ('quiz','practice','feynman','diagnostic','retrieval',"
@@ -152,11 +153,15 @@ class LearningEventRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
     knowledge_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("knowledge_points.id"), index=True
     )
     event_type: Mapped[str] = mapped_column(String(32), index=True)
+    source_type: Mapped[str] = mapped_column(String(32), index=True)
+    source_id: Mapped[str] = mapped_column(String(128))
+    algorithm_version: Mapped[str] = mapped_column(String(32))
     score: Mapped[float] = mapped_column(Float)
     timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
 

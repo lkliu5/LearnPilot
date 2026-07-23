@@ -611,6 +611,43 @@ def _migrate_genlog_artifact() -> None:
             )
 
 
+def _migrate_learning_event_protocol() -> None:
+    """TASK-005-C：为既有 learning_events 补齐幂等事件协议字段。"""
+    inspector = inspect(engine)
+    if "learning_events" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("learning_events")}
+    with engine.begin() as conn:
+        if "event_id" not in columns:
+            conn.execute(text("ALTER TABLE learning_events ADD COLUMN event_id VARCHAR(64)"))
+        if "source_type" not in columns:
+            conn.execute(text("ALTER TABLE learning_events ADD COLUMN source_type VARCHAR(32)"))
+        if "source_id" not in columns:
+            conn.execute(text("ALTER TABLE learning_events ADD COLUMN source_id VARCHAR(128)"))
+        if "algorithm_version" not in columns:
+            conn.execute(text("ALTER TABLE learning_events ADD COLUMN algorithm_version VARCHAR(32)"))
+        conn.execute(
+            text(
+                "UPDATE learning_events SET "
+                "event_id = COALESCE(event_id, 'legacy_' || id), "
+                "source_type = COALESCE(source_type, CASE event_type "
+                "WHEN 'quiz' THEN 'quiz_result' "
+                "WHEN 'diagnostic' THEN 'diagnostic' "
+                "WHEN 'feynman' THEN 'feynman' "
+                "WHEN 'learning_step' THEN 'learning_step' "
+                "ELSE event_type END), "
+                "source_id = COALESCE(source_id, 'learning_event:' || id), "
+                "algorithm_version = COALESCE(algorithm_version, 'ks-logodds-v1')"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_learning_event_event_id ON learning_events(event_id)"
+            )
+        )
+
+
 def init_db() -> None:
     """建表 + 幂等种子。"""
     _migrate_b6()
@@ -620,6 +657,7 @@ def init_db() -> None:
     _migrate_genlog_source()
     _migrate_genlog_artifact()
     _migrate_kp_catalog()
+    _migrate_learning_event_protocol()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

@@ -19,11 +19,23 @@ from app.services.knowledge_state import (
 )
 
 
-def _event(*, score: float, at: datetime, event_type: str = "quiz") -> LearningEvent:
+def _event(
+    *,
+    score: float,
+    at: datetime,
+    event_type: str = "quiz",
+    knowledge_id: str = "ml",
+) -> LearningEvent:
+    source_type = "quiz_result" if event_type == "quiz" else event_type
+    source_id = f"test:{knowledge_id}:{event_type}:{at.isoformat()}"
     return LearningEvent(
+        event_id=f"le_{abs(hash(source_id))}",
         user_id="u_10001",
-        knowledge_id="ml",
+        knowledge_id=knowledge_id,
         event_type=event_type,
+        source_type=source_type,
+        source_id=source_id,
+        algorithm_version="ks-logodds-v1",
         score=score,
         timestamp=at,
     )
@@ -66,21 +78,16 @@ def test_update_uses_event_weight_and_time_ordered_replay():
         replayed = service.update_state(
             _event(score=1.0, at=base, event_type="diagnostic")
         )
-        chronological_event = LearningEvent(
-            user_id="u_10001",
-            knowledge_id="nn",
-            event_type="diagnostic",
-            score=1.0,
-            timestamp=base,
+        chronological_event = _event(
+            score=1.0, at=base, event_type="diagnostic", knowledge_id="nn"
         )
         service.update_state(chronological_event)
         chronological = service.update_state(
-            LearningEvent(
-                user_id="u_10001",
-                knowledge_id="nn",
-                event_type="quiz",
+            _event(
                 score=0.2,
-                timestamp=base + timedelta(days=1),
+                at=base + timedelta(days=1),
+                event_type="quiz",
+                knowledge_id="nn",
             )
         )
 
@@ -99,12 +106,11 @@ def test_history_is_append_only_ordered_and_can_span_nodes():
         service.update_state(_event(score=0.8, at=base + timedelta(hours=1)))
         service.update_state(_event(score=0.6, at=base, event_type="practice"))
         service.update_state(
-            LearningEvent(
-                user_id="u_10001",
-                knowledge_id="nn",
-                event_type="learning_step",
+            _event(
                 score=1.0,
-                timestamp=base + timedelta(hours=2),
+                at=base + timedelta(hours=2),
+                event_type="learning_step",
+                knowledge_id="nn",
             )
         )
 
@@ -148,22 +154,14 @@ def test_domain_and_database_integrity_constraints():
         service = KnowledgeStateService(db)
         with pytest.raises(UnknownUser):
             service.update_state(
-                LearningEvent(
-                    user_id="missing",
-                    knowledge_id="ml",
-                    event_type="quiz",
-                    score=0.5,
-                    timestamp=datetime.now(timezone.utc),
+                _event(score=0.5, at=datetime.now(timezone.utc)).model_copy(
+                    update={"user_id": "missing"}
                 )
             )
         with pytest.raises(UnknownKnowledgeNode):
             service.update_state(
-                LearningEvent(
-                    user_id="u_10001",
-                    knowledge_id="missing",
-                    event_type="quiz",
-                    score=0.5,
-                    timestamp=datetime.now(timezone.utc),
+                _event(score=0.5, at=datetime.now(timezone.utc)).model_copy(
+                    update={"knowledge_id": "missing"}
                 )
             )
 

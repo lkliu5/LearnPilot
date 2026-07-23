@@ -6,10 +6,12 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Protocol
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -51,6 +53,10 @@ class UnknownKnowledgeNode(KnowledgeStateError):
     pass
 
 
+class DuplicateEventConflict(KnowledgeStateError):
+    """同一 event_id 携带了不同事件内容。"""
+
+
 class KnowledgeStateServiceProtocol(Protocol):
     """供 TASK-005-C 及后续调用方依赖的最小协议；本阶段不接入调用方。"""
 
@@ -78,25 +84,64 @@ def _sigmoid(value: float) -> float:
     return 1.0 / (1.0 + math.exp(-value))
 
 
-def _advance(
+def _advance_values(
     mastery: float,
     confidence: float,
     previous_at: datetime | None,
-    event: LearningEventRecord,
+    event_type: str,
+    score: float,
+    timestamp: datetime,
 ) -> tuple[float, float]:
     if previous_at is not None:
-        elapsed_days = max(0.0, (event.timestamp - previous_at).total_seconds() / 86400.0)
+        elapsed_days = max(0.0, (timestamp - previous_at).total_seconds() / 86400.0)
         mastery = NEUTRAL_MASTERY + (mastery - NEUTRAL_MASTERY) * math.exp(
             -elapsed_days / MASTERY_DECAY_DAYS
         )
         confidence *= math.exp(-elapsed_days / CONFIDENCE_DECAY_DAYS)
 
-    weight = EVENT_WEIGHTS[event.event_type]
+    weight = EVENT_WEIGHTS[event_type]
     bounded = min(1.0 - EPSILON, max(EPSILON, mastery))
     log_odds = math.log(bounded / (1.0 - bounded))
-    mastery = _sigmoid(log_odds + LEARNING_RATE * weight * (2.0 * event.score - 1.0))
+    mastery = _sigmoid(log_odds + LEARNING_RATE * weight * (2.0 * score - 1.0))
     confidence = 1.0 - (1.0 - confidence) * math.exp(-CONFIDENCE_RATE * weight)
     return mastery, confidence
+
+
+def replay_learning_events(events: Iterable[LearningEvent]) -> UserKnowledgeState:
+    """按 (timestamp, event_id) 重放单用户单节点历史，供离线工具与 Shadow 共用。"""
+    unique: dict[str, LearningEvent] = {}
+    for item in events:
+        previous = unique.get(item.event_id)
+        if previous is not None and previous != item:
+            raise DuplicateEventConflict(item.event_id)
+        unique[item.event_id] = item
+    ordered = sorted(unique.values(), key=lambda item: (item.timestamp, item.event_id))
+    if not ordered:
+        raise KnowledgeStateError("LearningEvent 历史不能为空")
+    owner = (ordered[0].user_id, ordered[0].knowledge_id)
+    if any((item.user_id, item.knowledge_id) != owner for item in ordered):
+        raise KnowledgeStateError("一次重放只能包含同一用户、同一知识节点")
+    mastery = NEUTRAL_MASTERY
+    confidence = 0.0
+    previous_at: datetime | None = None
+    for item in ordered:
+        mastery, confidence = _advance_values(
+            mastery,
+            confidence,
+            previous_at,
+            item.event_type.value,
+            item.score,
+            _utc_naive(item.timestamp),
+        )
+        previous_at = _utc_naive(item.timestamp)
+    assert previous_at is not None
+    return UserKnowledgeState(
+        user_id=owner[0],
+        knowledge_id=owner[1],
+        mastery_score=mastery,
+        confidence=confidence,
+        last_updated=_utc_aware(previous_at),
+    )
 
 
 class KnowledgeStateService:
@@ -116,35 +161,84 @@ class KnowledgeStateService:
 
     def update_state(self, event: LearningEvent) -> UserKnowledgeState:
         self._validate_references(event.user_id, event.knowledge_id)
+        existing = self.db.scalar(
+            select(LearningEventRecord).where(
+                LearningEventRecord.event_id == event.event_id
+            )
+        )
+        if existing is not None:
+            self._assert_same_event(existing, event)
+            state = self.get_state(existing.user_id, existing.knowledge_id)
+            if state is None:
+                state = self._rebuild_state(existing.user_id, existing.knowledge_id)
+                self.db.commit()
+            return state
         event_row = LearningEventRecord(
+            event_id=event.event_id,
             user_id=event.user_id,
             knowledge_id=event.knowledge_id,
             event_type=event.event_type.value,
+            source_type=event.source_type.value,
+            source_id=event.source_id,
+            algorithm_version=event.algorithm_version,
             score=event.score,
             timestamp=_utc_naive(event.timestamp),
         )
         self.db.add(event_row)
-        self.db.flush()
+        try:
+            self.db.flush()
+        except IntegrityError:
+            # 并发重复投递可能在“先查后写”窗口命中唯一索引；回滚本次插入后按
+            # 已存在事件处理，保证幂等而不是把正常重试暴露为数据库错误。
+            self.db.rollback()
+            existing = self.db.scalar(
+                select(LearningEventRecord).where(
+                    LearningEventRecord.event_id == event.event_id
+                )
+            )
+            if existing is None:
+                raise
+            self._assert_same_event(existing, event)
+            state = self.get_state(existing.user_id, existing.knowledge_id)
+            if state is None:
+                state = self._rebuild_state(existing.user_id, existing.knowledge_id)
+                self.db.commit()
+            return state
 
-        history = self._history_rows(event.user_id, event.knowledge_id)
-        mastery = NEUTRAL_MASTERY
-        confidence = 0.0
-        previous_at: datetime | None = None
-        for item in history:
-            mastery, confidence = _advance(mastery, confidence, previous_at, item)
-            previous_at = item.timestamp
-
-        state_row = self.db.scalar(
+        self._rebuild_state(event.user_id, event.knowledge_id)
+        self.db.commit()
+        row = self.db.scalar(
             select(UserKnowledgeStateRecord).where(
                 UserKnowledgeStateRecord.user_id == event.user_id,
                 UserKnowledgeStateRecord.knowledge_id == event.knowledge_id,
             )
         )
+        assert row is not None
+        self.db.refresh(row)
+        return self._state_model(row)
+
+    def _rebuild_state(self, user_id: str, knowledge_id: str) -> UserKnowledgeState:
+        history = self._history_rows(user_id, knowledge_id)
+        mastery = NEUTRAL_MASTERY
+        confidence = 0.0
+        previous_at: datetime | None = None
+        for item in history:
+            mastery, confidence = _advance_values(
+                mastery, confidence, previous_at, item.event_type, item.score, item.timestamp
+            )
+            previous_at = item.timestamp
+
+        state_row = self.db.scalar(
+            select(UserKnowledgeStateRecord).where(
+                UserKnowledgeStateRecord.user_id == user_id,
+                UserKnowledgeStateRecord.knowledge_id == knowledge_id,
+            )
+        )
         assert previous_at is not None
         if state_row is None:
             state_row = UserKnowledgeStateRecord(
-                user_id=event.user_id,
-                knowledge_id=event.knowledge_id,
+                user_id=user_id,
+                knowledge_id=knowledge_id,
                 mastery_score=mastery,
                 confidence=confidence,
                 last_updated=previous_at,
@@ -154,8 +248,7 @@ class KnowledgeStateService:
             state_row.mastery_score = mastery
             state_row.confidence = confidence
             state_row.last_updated = previous_at
-        self.db.commit()
-        self.db.refresh(state_row)
+        self.db.flush()
         return self._state_model(state_row)
 
     def get_history(
@@ -165,13 +258,17 @@ class KnowledgeStateService:
         if knowledge_id is not None:
             query = query.where(LearningEventRecord.knowledge_id == knowledge_id)
         rows = self.db.scalars(
-            query.order_by(LearningEventRecord.timestamp, LearningEventRecord.id)
+            query.order_by(LearningEventRecord.timestamp, LearningEventRecord.event_id)
         ).all()
         return [
             LearningEvent(
+                event_id=row.event_id,
                 user_id=row.user_id,
                 knowledge_id=row.knowledge_id,
                 event_type=row.event_type,
+                source_type=row.source_type,
+                source_id=row.source_id,
+                algorithm_version=row.algorithm_version,
                 score=row.score,
                 timestamp=_utc_aware(row.timestamp),
             )
@@ -186,9 +283,34 @@ class KnowledgeStateService:
                     LearningEventRecord.user_id == user_id,
                     LearningEventRecord.knowledge_id == knowledge_id,
                 )
-                .order_by(LearningEventRecord.timestamp, LearningEventRecord.id)
+                .order_by(LearningEventRecord.timestamp, LearningEventRecord.event_id)
             ).all()
         )
+
+    @staticmethod
+    def _assert_same_event(row: LearningEventRecord, event: LearningEvent) -> None:
+        stored = (
+            row.user_id,
+            row.knowledge_id,
+            row.event_type,
+            row.source_type,
+            row.source_id,
+            row.algorithm_version,
+            row.score,
+            _utc_aware(row.timestamp),
+        )
+        incoming = (
+            event.user_id,
+            event.knowledge_id,
+            event.event_type.value,
+            event.source_type.value,
+            event.source_id,
+            event.algorithm_version,
+            event.score,
+            event.timestamp,
+        )
+        if stored != incoming:
+            raise DuplicateEventConflict(event.event_id)
 
     def _validate_references(self, user_id: str, knowledge_id: str) -> None:
         if self.db.get(User, user_id) is None:
