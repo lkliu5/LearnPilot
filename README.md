@@ -129,7 +129,8 @@ Windows 一键后端验证（默认全量 Mock 测试，无 API Key、无网络�
 ```bash
 cd backend
 python -m pytest -q                              # 全量回归（含 app 内置测试；mock 基线，无 Key 可跑）
-python -m pytest tests/test_contract_snapshot.py -q   # 30+6 接口契约快照（防字段漂移）
+python -m pytest tests/test_contract_snapshot.py -q   # 核心接口运行时字段契约（防字段漂移）
+python scripts/export_openapi_snapshot.py --check     # 83 个 HTTP 操作 + Schema 快照（只校验不覆盖）
 
 python scripts/metrics/make_report.py            # 三量化指标 → docs/metrics-report.md
 python scripts/metrics/hallucination_rate.py     # ① 幻觉率（逐句接地，目标 <5%）

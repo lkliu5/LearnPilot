@@ -48,6 +48,7 @@ from app.core.envelope import (
 )
 from app.core.init_db import init_db
 from app.core.logging import setup_logging
+from app.core.openapi_contract import install_openapi_contract
 from app.core.security import UserContextMiddleware
 from app.rag.embeddings import get_embedder
 
@@ -139,3 +140,6 @@ _mnt = static_mount()
 if _mnt is not None:
     _url_path, _directory = _mnt
     app.mount(_url_path, StaticFiles(directory=_directory), name="video-media")
+
+# TASK-006-B：让 /openapi.json 显式描述统一信封和实际 400 校验错误，并支持快照防漂移。
+install_openapi_contract(app)
