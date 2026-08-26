@@ -94,6 +94,8 @@ def _advance_values(
     event_type: str,
     score: float,
     timestamp: datetime,
+    *,
+    event_weight: float | None = None,
 ) -> tuple[float, float]:
     if previous_at is not None:
         elapsed_days = max(0.0, (timestamp - previous_at).total_seconds() / 86400.0)
@@ -102,7 +104,9 @@ def _advance_values(
         )
         confidence *= math.exp(-elapsed_days / CONFIDENCE_DECAY_DAYS)
 
-    weight = EVENT_WEIGHTS[event_type]
+    weight = EVENT_WEIGHTS[event_type] if event_weight is None else event_weight
+    if weight < 0:
+        raise KnowledgeStateError("event_weight 不能为负数")
     bounded = min(1.0 - EPSILON, max(EPSILON, mastery))
     log_odds = math.log(bounded / (1.0 - bounded))
     mastery = _sigmoid(log_odds + LEARNING_RATE * weight * (2.0 * score - 1.0))
@@ -115,14 +119,17 @@ def is_conflicting_evidence(
     previous_at: datetime,
     score: float,
     timestamp: datetime,
+    *,
+    window_hours: float = CONFLICT_WINDOW_HOURS,
+    score_gap: float = CONFLICT_SCORE_GAP,
 ) -> bool:
     """识别短窗口内方向相反且差异显著的证据，仅用于 Shadow 降置信。"""
     elapsed_hours = abs((timestamp - previous_at).total_seconds()) / 3600.0
     opposite = (previous_score < 0.5 <= score) or (score < 0.5 <= previous_score)
     return (
-        elapsed_hours <= CONFLICT_WINDOW_HOURS
+        elapsed_hours <= window_hours
         and opposite
-        and abs(score - previous_score) >= CONFLICT_SCORE_GAP
+        and abs(score - previous_score) >= score_gap
     )
 
 
