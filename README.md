@@ -115,9 +115,20 @@ DEEPSEEK_API_KEY=sk-xxx
 
 ## 六、测试与量化指标
 
+Windows 一键后端验证（默认全量 Mock 测试，无 API Key、无网络调用）：
+
+```powershell
+.\scripts\verify-backend.bat
+# 首次安装开发依赖：.\scripts\verify-backend.bat -Install
+# Python 未加入 PATH：.\scripts\verify-backend.bat -Python C:\path\to\python.exe
+# 只跑契约测试：.\scripts\verify-backend.bat -Tests tests/test_contract_snapshot.py
+```
+
+开发/测试依赖单独固定在 `backend/requirements-dev.txt`；生产依赖仍使用 `backend/requirements.txt`。
+
 ```bash
 cd backend
-python -m pytest tests/ -q                       # 全量回归（mock 基线，无 Key 可跑）
+python -m pytest -q                              # 全量回归（含 app 内置测试；mock 基线，无 Key 可跑）
 python -m pytest tests/test_contract_snapshot.py -q   # 30+6 接口契约快照（防字段漂移）
 
 python scripts/metrics/make_report.py            # 三量化指标 → docs/metrics-report.md
