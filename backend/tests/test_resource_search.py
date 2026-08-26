@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-AGG_KEYS = {"kpId", "kpName", "provider", "online", "items"}
+AGG_KEYS = {"kpId", "kpName", "provider", "online", "items", "generationMeta"}
 ITEM_KEYS = {"id", "type", "title", "source", "url", "relevance", "credibility", "reason"}
 RES_TYPES = {"视频", "论文", "文档", "课程"}
 

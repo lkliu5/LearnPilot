@@ -226,7 +226,8 @@ def test_04_profile_parse(client, learner):
     res = client.post(f"{API}/profile/parse", headers=learner,
                       data={"description": "三年机器学习与深度学习项目经验"})
     data = _data(res)
-    _exact(data, {"education", "major", "goal", "skills", "materials"})
+    _exact(data, {"education", "major", "goal", "skills", "materials"},
+           optional={"generationMeta"})
     for field in ("education", "major", "goal"):
         _exact(data[field], {"value", "source"})
         assert data[field]["source"] in SOURCE_KINDS
@@ -251,7 +252,7 @@ def test_05_profile_narrative(client, learner):
                       "radar": {d: 70 for d in DIMENSIONS}},
     }
     data = _data(client.post(f"{API}/profile/narrative", headers=learner, json=body))
-    _exact(data, {"paragraphs", "sources", "materialCount"})
+    _exact(data, {"paragraphs", "sources", "materialCount"}, optional={"generationMeta"})
     assert len(data["paragraphs"]) == 2  # 恰好两段（4.2）
     for paragraph in data["paragraphs"]:
         assert isinstance(paragraph, list) and paragraph
@@ -401,7 +402,7 @@ def test_17_lecture(client, learner):
     data = _data(client.post(f"{API}/resource/lecture", headers=learner,
                              json={"kpId": "nn", "difficulty": "初级"}))
     _exact(data, {"kpId", "difficulty", "markdown", "sources",
-                  "hallucinationRate", "workflowId"})
+                  "hallucinationRate", "workflowId"}, optional={"generationMeta"})
     assert data["kpId"] == "nn" and data["difficulty"] == "初级"
     assert isinstance(data["markdown"], str) and data["markdown"].startswith("# ")
     assert isinstance(data["sources"], list) and data["sources"]
@@ -423,7 +424,7 @@ def test_18_video(client, learner):
     data = _data(client.post(f"{API}/resource/video", headers=learner,
                              json={"kpId": "nn", "difficulty": "初级"}))
     _exact(data, {"videoUrl", "title", "scenes", "narration", "fps", "width",
-                  "height", "durationInFrames"})
+                  "height", "durationInFrames"}, optional={"generationMeta"})
     assert data["videoUrl"] is None or isinstance(data["videoUrl"], str)
     assert isinstance(data["title"], str) and data["title"]
     # 分镜脚本：3-5 个场景，每场景 title/points/narration 随知识点动态生成
@@ -445,7 +446,7 @@ def test_18_video(client, learner):
 
 def test_19_mindmap(client, learner):
     data = _data(client.get(f"{API}/resource/mindmap/nn", headers=learner))
-    _exact(data, {"markdown"})
+    _exact(data, {"markdown"}, optional={"generationMeta"})
     assert data["markdown"].startswith("# ")  # Markmap 大纲
     _data(client.get(f"{API}/resource/mindmap/nope", headers=learner),
           code=1004, status=404)
@@ -453,7 +454,7 @@ def test_19_mindmap(client, learner):
 
 def test_20_diagram(client, learner):
     data = _data(client.get(f"{API}/resource/diagram/nn", headers=learner))
-    _exact(data, {"mermaid"})
+    _exact(data, {"mermaid"}, optional={"generationMeta"})
     assert data["mermaid"].startswith("flowchart")
     _data(client.get(f"{API}/resource/diagram/nope", headers=learner),
           code=1004, status=404)
@@ -479,7 +480,7 @@ def test_22_tutor_chat(client, learner):
     data = _data(client.post(f"{API}/resource/tutor/chat", headers=learner,
                              json={"kpId": "nn", "sessionId": None,
                                    "message": "为什么需要激活函数？"}))
-    _exact(data, {"sessionId", "reply", "suggestions"})
+    _exact(data, {"sessionId", "reply", "suggestions"}, optional={"generationMeta"})
     assert isinstance(data["reply"], str) and data["reply"]
     assert isinstance(data["suggestions"], list)
     # SSE 模式（15.4）：delta 逐条 + event: done 收尾
@@ -522,7 +523,7 @@ def test_24_quiz_submit(client, learner):
     data = _data(client.post(f"{API}/quiz/nn/submit", headers=learner,
                              json={"answers": answers}))
     _exact(data, {"score", "passed", "correctCount", "total",
-                  "wrong", "shortAnswers", "masteryUpdated"})
+                  "wrong", "shortAnswers", "masteryUpdated"}, optional={"generationMeta"})
     assert data["total"] == len(answers)
     assert data["correctCount"] == len(objective)  # 简答不计入客观答对数
     assert data["wrong"] == []
@@ -542,7 +543,8 @@ def test_25_reinforce(client, learner):
                              json={"kpId": "nn", "wrongQuestionIds": ["nn_q1", "nn_q3"]}))
     assert isinstance(data, list) and len(data) == 2
     for card in data:
-        _exact(card, {"questionId", "point", "recap", "practice"})
+        _exact(card, {"questionId", "point", "recap", "practice"},
+               optional={"generationMeta"})
         _assert_quiz_question(card["practice"])
         assert card["practice"]["question_id"] == f"{card['questionId']}-r"
 

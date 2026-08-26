@@ -27,7 +27,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from app.core import llm_transport
+from app.core import generation_provenance, llm_transport
 from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
 
@@ -1482,6 +1482,7 @@ class LLMClient:
                 question_text, points, reference_answer, answer
             )
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("简答评分真实生成失败，回落确定性评分：%s", exc)
             return self._mock_score_short_answer(answer, points)
 
@@ -1557,6 +1558,7 @@ class LLMClient:
             try:
                 narrative = self._deepseek_eval_narrative(signals, metrics)
             except LLMGenerationError as exc:
+                generation_provenance.mark_degraded()
                 logger.warning("学习评估真实生成失败，回落确定性叙述：%s", exc)
                 narrative = self._mock_eval_narrative(signals, metrics)
         return {
@@ -1677,6 +1679,7 @@ class LLMClient:
         try:
             return self._deepseek_video_script(kp_name, difficulty, description)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("视频分镜脚本真实生成失败，回落主题占位脚本：%s", exc)
             return self._mock_video_script(kp_id, kp_name, difficulty, description)
 
@@ -1790,6 +1793,7 @@ class LLMClient:
         try:
             return {"mermaid": self._deepseek_diagram(kp_name, description)}
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("知识图解真实生成失败，回落主题占位图：%s", exc)
             return {"mermaid": self._mock_diagram(kp_id, kp_name, description)}
 
@@ -1850,6 +1854,7 @@ class LLMClient:
         try:
             return {"cards": self._deepseek_flashcards(source_title, contexts, count)}
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("闪卡真实生成失败，回落确定性 mock：%s", exc)
             return {"cards": self._mock_flashcards(source_title, contexts, count)}
 
@@ -1913,6 +1918,7 @@ class LLMClient:
         try:
             return self._deepseek_overview(source_title, contexts)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("文档概览真实生成失败，回落确定性 mock：%s", exc)
             return self._mock_overview(source_title, contexts)
 
@@ -1980,6 +1986,7 @@ class LLMClient:
         try:
             return {"questions": self._deepseek_doc_quiz(source_title, contexts, count)}
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("文档练习题真实生成失败，回落确定性 mock：%s", exc)
             return {"questions": self._mock_doc_quiz(source_title, contexts, count)}
 
@@ -2277,6 +2284,7 @@ class LLMClient:
         try:
             return self._deepseek_suggest_remedial(kp_name, question)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("资源建议真实生成失败，回落模板清单：%s", exc)
             point = _mock_identify_problem(question, kp_name)
             return {"problemPoint": point, "suggestions": _build_remedial_suggestions(point)}
@@ -2329,6 +2337,7 @@ class LLMClient:
         try:
             return self._deepseek_remedial_content(kind, kp_name, problem_point)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("按需资源真实生成失败，回落确定性内容：%s", exc)
             return self._mock_remedial_content(kind, kp_name, problem_point)
 
@@ -2424,6 +2433,7 @@ class LLMClient:
         try:
             return self._deepseek_aggregate(kp_name, weak_points, cands)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("资源聚合评分真实生成失败，回落确定性评分：%s", exc)
             return self._mock_aggregate(kp_name, weak_points, cands)
 
@@ -2575,6 +2585,7 @@ class LLMClient:
         try:
             return self._deepseek_cornell(kp_id, kp_name, difficulty, description)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("康奈尔线索真实生成失败，回落主题模板：%s", exc)
             return self._mock_cornell(kp_id, kp_name, difficulty, description)
 
@@ -2712,6 +2723,7 @@ class LLMClient:
         try:
             return self._deepseek_feynman(kp_id, kp_name, description, history, explanation)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("费曼讲解评估真实生成失败，回落确定性评估：%s", exc)
             return self._mock_feynman(kp_id, kp_name, explanation)
 
@@ -2904,6 +2916,7 @@ class LLMClient:
         try:
             return self._deepseek_plan_path(profile, steps)
         except LLMGenerationError as exc:
+            generation_provenance.mark_degraded()
             logger.warning("路径规划理由真实生成失败，回落确定性模板：%s", exc)
             return self._mock_plan_path(profile, steps)
 

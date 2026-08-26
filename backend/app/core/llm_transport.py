@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 
-from app.core import llm_deepseek, llm_modelscope, llm_userconf, model_registry
+from app.core import generation_provenance, llm_deepseek, llm_modelscope, llm_userconf, model_registry
+from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError
 
 logger = logging.getLogger("app.core.llm_transport")
@@ -44,15 +45,29 @@ def chat(
     kwargs = _optional_kwargs(system, history)
     if spec.source == "custom":
         try:
-            return llm_userconf.chat(prompt, spec=spec, **kwargs)
+            result = llm_userconf.chat(prompt, spec=spec, **kwargs)
+            generation_provenance.mark_execution(
+                provider=spec.provider, model=spec.model_id, source="custom"
+            )
+            return result
         except LLMGenerationError as exc:
             # exc 信息已在 llm_userconf 做 key 脱敏清洗
             logger.warning("自建模型 %s 调用失败，回落默认 DeepSeek：%s", spec.id, exc)
     elif spec.provider == "modelscope":
         try:
-            return llm_modelscope.chat(prompt, model=spec.model_id, **kwargs)
+            result = llm_modelscope.chat(prompt, model=spec.model_id, **kwargs)
+            generation_provenance.mark_execution(
+                provider=spec.provider, model=spec.model_id, source="builtin"
+            )
+            return result
         except LLMGenerationError as exc:
             logger.warning("魔搭模型 %s 调用失败，回落默认 DeepSeek：%s", spec.id, exc)
+    if spec.source == "custom" or spec.provider == "modelscope":
+        generation_provenance.mark_provider_fallback()
+    else:
+        generation_provenance.mark_execution(
+            provider="deepseek", model=settings.deepseek_model, source="builtin"
+        )
     return llm_deepseek.chat(prompt, **kwargs)
 
 
@@ -73,6 +88,9 @@ def chat_stream(
         got_content = False
         try:
             for delta in llm_userconf.chat_stream(prompt, spec=spec, **kwargs):
+                generation_provenance.mark_execution(
+                    provider=spec.provider, model=spec.model_id, source="custom"
+                )
                 got_content = True
                 yield delta
             return
@@ -84,6 +102,9 @@ def chat_stream(
         got_content = False
         try:
             for delta in llm_modelscope.chat_stream(prompt, model=spec.model_id, **kwargs):
+                generation_provenance.mark_execution(
+                    provider=spec.provider, model=spec.model_id, source="builtin"
+                )
                 got_content = True
                 yield delta
             return
@@ -91,4 +112,10 @@ def chat_stream(
             if got_content:
                 raise
             logger.warning("魔搭模型 %s 流式失败（未产出内容），回落默认 DeepSeek：%s", spec.id, exc)
+    if spec.source == "custom" or spec.provider == "modelscope":
+        generation_provenance.mark_provider_fallback()
+    else:
+        generation_provenance.mark_execution(
+            provider="deepseek", model=settings.deepseek_model, source="builtin"
+        )
     yield from llm_deepseek.chat_stream(prompt, **kwargs)

@@ -164,7 +164,11 @@ def test_all_document_kinds_persist_artifact(client, learner, md_doc):
         body = {"documentId": md_doc, **extra}
         one = _data(client.post(f"/api/v1/document/generate/{kind}", headers=learner, json=body))
         two = _data(client.post(f"/api/v1/document/generate/{kind}", headers=learner, json=body))
+        first_meta = one.pop("generationMeta")
+        cached_meta = two.pop("generationMeta")
         assert one == two, f"{kind} 二次查看应逐字读回同一产物"
+        assert first_meta["source"] in {"mock", "deterministic"}
+        assert cached_meta["source"] == "cache"
         assert _row(client, learner, md_doc, kind)  # 已落库（资源库可见）
 
 

@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
@@ -120,6 +121,7 @@ def _guarded_generate(fn, *args):
 
 
 @router.post("/document/generate/overview")
+@traced_generation
 async def gen_overview(
     body: DocOverviewRequest,
     user: User = Depends(get_current_user),
@@ -130,6 +132,7 @@ async def gen_overview(
 
 
 @router.post("/document/generate/lecture")
+@traced_generation
 async def gen_lecture(
     body: DocLectureRequest,
     user: User = Depends(get_current_user),
@@ -142,6 +145,7 @@ async def gen_lecture(
 
 
 @router.post("/document/generate/video")
+@traced_generation
 async def gen_video(
     body: DocVideoRequest,
     user: User = Depends(get_current_user),
@@ -154,6 +158,7 @@ async def gen_video(
 
 
 @router.post("/document/generate/diagram")
+@traced_generation
 async def gen_diagram(
     body: DocDiagramRequest,
     user: User = Depends(get_current_user),
@@ -164,6 +169,7 @@ async def gen_diagram(
 
 
 @router.post("/document/generate/mindmap")
+@traced_generation
 async def gen_mindmap(
     body: DocMindmapRequest,
     user: User = Depends(get_current_user),
@@ -174,6 +180,7 @@ async def gen_mindmap(
 
 
 @router.post("/document/generate/quiz")
+@traced_generation
 async def gen_quiz(
     body: DocQuizRequest,
     user: User = Depends(get_current_user),
@@ -186,6 +193,7 @@ async def gen_quiz(
 
 
 @router.post("/document/generate/flashcards")
+@traced_generation
 async def gen_flashcards(
     body: DocFlashcardRequest,
     user: User = Depends(get_current_user),
@@ -199,6 +207,7 @@ async def gen_flashcards(
 
 # ---- 和文档对话（严格基于文档、流式即问即答、标出处溯源） -------------------
 @router.post("/document/chat")
+@traced_generation
 async def doc_chat(
     body: DocChatRequest,
     request: Request,

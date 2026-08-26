@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 REMEDIAL_TYPES = {"diagram", "example", "video", "lecture"}
-SUGGEST_KEYS = {"kpId", "kpName", "problemPoint", "suggestions"}
+SUGGEST_KEYS = {"kpId", "kpName", "problemPoint", "suggestions", "generationMeta"}
 SUGGESTION_KEYS = {"id", "type", "title", "expect"}
 
 

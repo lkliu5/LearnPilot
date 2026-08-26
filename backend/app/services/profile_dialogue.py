@@ -33,6 +33,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.generation_provenance import attach_generation_meta
+
 from app.agents import dialogue_agent
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -297,11 +299,11 @@ def sse_stream(
             if result["interaction"]:
                 yield _sse_block(result["interaction"], event="interaction")
             yield _sse_block(
-                {
+                attach_generation_meta({
                     "sessionId": session["sessionId"],
                     "suggestions": result["suggestions"],
                     "diagnosisComplete": result["diagnosisComplete"],
-                },
+                }),
                 event="done",
             )
         except LLMGenerationError as exc:

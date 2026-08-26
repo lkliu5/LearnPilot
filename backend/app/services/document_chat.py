@@ -23,6 +23,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.generation_provenance import attach_generation_meta
 from app.core.llm import LLMGenerationError, get_llm
 from app.services import document_generation as gen
 
@@ -120,7 +121,9 @@ def sse_stream(
                 yield _sse_block({"delta": delta})
             _append_turn(session, message, "".join(parts))
             yield _sse_block(
-                {"sessionId": session["sessionId"], "sources": sources},
+                attach_generation_meta(
+                    {"sessionId": session["sessionId"], "sources": sources}
+                ),
                 event="done",
             )
         except LLMGenerationError as exc:

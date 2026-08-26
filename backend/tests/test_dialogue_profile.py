@@ -32,6 +32,7 @@ DIALOGUE_KEYS = {
     "suggestions",
     "diagnosisComplete",
     "interaction",
+    "generationMeta",
 }
 PORTRAIT_KEYS = {"dimensions", "version", "updatedAt"}
 DIM_KEYS_REQUIRED = {"key", "label", "kind", "value", "confidence", "source"}
@@ -365,7 +366,7 @@ def test_dialogue_sse_emits_interaction_on_microtest(client):
     assert "interaction" in named
     assert named["interaction"]["type"] == "quiz"
     assert "done" in named
-    assert set(named["done"].keys()) == {"sessionId", "suggestions", "diagnosisComplete"}
+    assert set(named["done"].keys()) == {"sessionId", "suggestions", "diagnosisComplete", "generationMeta"}
 
 
 # ---- 首轮 context（表单显式填写）→ manual ------------------------------------

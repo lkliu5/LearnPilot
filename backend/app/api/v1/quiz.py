@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
@@ -38,6 +39,7 @@ async def get_quiz(
 
 
 @router.post("/quiz/{kp_id}/submit")
+@traced_generation
 async def submit_quiz(
     kp_id: str,
     body: QuizSubmitRequest,
@@ -53,6 +55,7 @@ async def submit_quiz(
 
 
 @router.post("/reinforce")
+@traced_generation
 async def reinforce(
     body: ReinforceRequest,
     user: User = Depends(get_current_user),

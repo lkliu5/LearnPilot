@@ -23,8 +23,8 @@ from app.core.config import settings
 from app.main import app
 from app.services import learning_flow as learning_service
 
-CORNELL_KEYS = {"kpId", "difficulty", "cues", "noteOutline", "summaryHint", "sources"}
-FEYNMAN_JSON_KEYS = {"sessionId", "feedback", "score", "gaps", "followups", "complete"}
+CORNELL_KEYS = {"kpId", "difficulty", "cues", "noteOutline", "summaryHint", "sources", "generationMeta"}
+FEYNMAN_JSON_KEYS = {"sessionId", "feedback", "score", "gaps", "followups", "complete", "generationMeta"}
 STEP_KEYS = {"video", "lecture", "diagram", "note", "feynman", "practice"}
 STEPS_RESP_KEYS = {"kpId", "steps", "mastery", "completedCount", "total", "updatedAt"}
 NOTE_KEYS = {"kpId", "cueNotes", "mainNotes", "summary", "updatedAt"}
@@ -269,7 +269,7 @@ def test_feynman_sse_stream(client, learner_headers):
     assert any(r["endpoint"] == "/resource/lecture" for r in gap["review"])
     # event: done 携带 score/followups/complete
     done = named["done"]
-    assert set(done.keys()) == {"sessionId", "score", "followups", "complete"}
+    assert set(done.keys()) == {"sessionId", "score", "followups", "complete", "generationMeta"}
     assert done["sessionId"].startswith("f_")
 
 

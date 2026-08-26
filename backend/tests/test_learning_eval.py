@@ -17,6 +17,7 @@ from app.main import app
 EVAL_KEYS = {
     "overallScore", "level", "trend", "dimensions", "weakPoints",
     "summary", "suggestions", "adjustment", "generatedBy", "signals",
+    "generationMeta",
 }
 DIM_KEYS = {"key", "label", "score", "detail"}
 ADJ_KEYS = {"nextKpId", "nextKpName", "difficultyAdvice", "action"}

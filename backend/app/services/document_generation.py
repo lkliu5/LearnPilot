@@ -25,7 +25,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.agents.generator_agent import run_generator
-from app.core import content_safety, lecture_media
+from app.core import content_safety, generation_provenance, lecture_media
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
 from app.models.entities import Document
 from app.rag.grounding import sentence_grounding
@@ -174,6 +174,7 @@ def generate_lecture(
             db, user_id, doc_ids[0] if doc_ids else "", "lecture", difficulty
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
@@ -232,6 +233,7 @@ def generate_diagram(
             db, user_id, doc_ids[0] if doc_ids else "", "diagram"
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
@@ -257,12 +259,14 @@ def generate_mindmap(
             db, user_id, doc_ids[0] if doc_ids else "", "mindmap"
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
     title = _merged_title(docs)
     markdown = _build_mindmap(docs, title)
     markdown = content_safety.guard(markdown, where="document_mindmap")
+    generation_provenance.mark_deterministic()
     result = {"docId": primary.id, "docIds": [d.id for d in docs], "markdown": markdown}
     generation_log.record_document(db, user_id, primary.id, title, "mindmap", artifact=result)
     return result
@@ -326,6 +330,7 @@ def generate_video(
             db, user_id, doc_ids[0] if doc_ids else "", "video", difficulty
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
@@ -371,6 +376,7 @@ def generate_quiz(
             db, user_id, doc_ids[0] if doc_ids else "", "quiz"
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]
@@ -396,6 +402,7 @@ def generate_flashcards(
             db, user_id, doc_ids[0] if doc_ids else "", "flashcard"
         )
         if cached is not None:
+            generation_provenance.mark_cache()
             return cached
     docs = resolve_docs(db, user_id, doc_ids)
     primary = docs[0]

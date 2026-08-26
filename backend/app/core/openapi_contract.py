@@ -12,6 +12,34 @@ from fastapi import FastAPI
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 ENVELOPE_SCHEMA_NAME = "UnifiedEnvelope"
 ENVELOPE_REF = f"#/components/schemas/{ENVELOPE_SCHEMA_NAME}"
+GENERATION_META_SCHEMA_NAME = "GenerationMeta"
+GENERATION_OPERATION_IDS = {
+    "cornell_cues_api_v1_learning_cornell_cues_post",
+    "dashboard_evaluation_api_v1_dashboard_evaluation_get",
+    "dialogue_api_v1_profile_dialogue_post",
+    "diagram_api_v1_resource_diagram__kp_id__get",
+    "doc_chat_api_v1_document_chat_post",
+    "external_aggregate_api_v1_resource_external_aggregate_post",
+    "feynman_api_v1_learning_feynman_post",
+    "gen_diagram_api_v1_document_generate_diagram_post",
+    "gen_flashcards_api_v1_document_generate_flashcards_post",
+    "gen_lecture_api_v1_document_generate_lecture_post",
+    "gen_mindmap_api_v1_document_generate_mindmap_post",
+    "gen_overview_api_v1_document_generate_overview_post",
+    "gen_quiz_api_v1_document_generate_quiz_post",
+    "gen_video_api_v1_document_generate_video_post",
+    "generate_lecture_api_v1_resource_lecture_post",
+    "generate_video_api_v1_resource_video_post",
+    "job_match_api_v1_job_market_match_post",
+    "mindmap_api_v1_resource_mindmap__kp_id__get",
+    "narrative_api_v1_profile_narrative_post",
+    "parse_api_v1_profile_parse_post",
+    "reinforce_api_v1_reinforce_post",
+    "submit_quiz_api_v1_quiz__kp_id__submit_post",
+    "tutor_chat_api_v1_resource_tutor_chat_post",
+    "tutor_generate_api_v1_resource_tutor_generate_post",
+    "tutor_suggest_api_v1_resource_tutor_suggest_post",
+}
 SSE_OPERATION_IDS = {
     "dialogue_api_v1_profile_dialogue_post",
     "tutor_chat_api_v1_resource_tutor_chat_post",
@@ -41,12 +69,29 @@ def normalize_openapi(schema: dict[str, Any]) -> dict[str, Any]:
             "traceId": {"type": "string"},
         },
     }
+    components[GENERATION_META_SCHEMA_NAME] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["provider", "model", "source", "degraded", "fallbackReason"],
+        "properties": {
+            "provider": {"type": "string"},
+            "model": {"type": "string"},
+            "source": {
+                "type": "string",
+                "enum": ["builtin", "custom", "mock", "cache", "fallback", "deterministic"],
+            },
+            "degraded": {"type": "boolean"},
+            "fallbackReason": {"type": ["string", "null"]},
+        },
+    }
     for path_item in schema.get("paths", {}).values():
         for method in HTTP_METHODS:
             operation = path_item.get(method)
             if operation is None:
                 continue
             operation["x-zhixue-envelope"] = True
+            if operation.get("operationId") in GENERATION_OPERATION_IDS:
+                operation["x-zhixue-generation-meta"] = True
             responses = operation.setdefault("responses", {})
             success = responses.setdefault("200", _envelope_response("Unified success envelope"))
             success_content = success.setdefault("content", {})
@@ -111,6 +156,7 @@ def build_openapi_snapshot(schema: dict[str, Any]) -> dict[str, Any]:
                     "security",
                     "deprecated",
                     "x-zhixue-envelope",
+                    "x-zhixue-generation-meta",
                 )
                 if field in operation
             }

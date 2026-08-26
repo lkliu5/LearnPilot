@@ -19,6 +19,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.generation_provenance import attach_generation_meta
 from app.core.llm import LLMGenerationError, get_llm
 from app.models.entities import KnowledgePoint
 from app.services.resource import UnknownKnowledgePoint
@@ -117,10 +118,10 @@ def sse_stream(
             reply = "".join(parts)
             _append_turn(session, message, reply)
             yield _sse_block(
-                {
+                attach_generation_meta({
                     "sessionId": session["sessionId"],
                     "suggestions": llm.tutor_suggestions(message),
-                },
+                }),
                 event="done",
             )
         except LLMGenerationError as exc:

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
@@ -34,6 +35,7 @@ router = APIRouter(tags=["profile"])
 
 
 @router.post("/profile/parse")
+@traced_generation
 async def parse(
     files: list[UploadFile] | None = File(default=None),
     description: str | None = Form(default=None),
@@ -53,6 +55,7 @@ async def parse(
 
 
 @router.post("/profile/narrative")
+@traced_generation
 async def narrative(
     body: NarrativeRequest,
     user: User = Depends(get_current_user),
@@ -87,6 +90,7 @@ async def ability_portrait(
 
 
 @router.post("/profile/dialogue")
+@traced_generation
 async def dialogue(
     body: DialogueRequest,
     request: Request,

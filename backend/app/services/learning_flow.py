@@ -26,6 +26,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.agents import feynman_agent
+from app.core.generation_provenance import attach_generation_meta
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
@@ -269,12 +270,12 @@ def feynman_sse_stream(
             if result["gaps"]:
                 yield _sse_block({"gaps": result["gaps"]}, event="gaps")
             yield _sse_block(
-                {
+                attach_generation_meta({
                     "sessionId": session["sessionId"],
                     "score": result["score"],
                     "followups": result["followups"],
                     "complete": result["complete"],
-                },
+                }),
                 event="done",
             )
         except LLMGenerationError as exc:

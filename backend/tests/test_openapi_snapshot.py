@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.openapi_contract import (
     ENVELOPE_REF,
+    GENERATION_OPERATION_IDS,
     HTTP_METHODS,
     SSE_OPERATION_IDS,
     build_openapi_snapshot,
@@ -54,7 +55,7 @@ def test_openapi_snapshot_is_current_and_complete():
     expected = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     assert actual == expected
     assert actual["operationCount"] == 83
-    assert actual["schemaCount"] == 55
+    assert actual["schemaCount"] == 56
 
 
 def test_every_http_operation_documents_envelope_and_real_validation_status():
@@ -75,6 +76,15 @@ def test_every_http_operation_documents_envelope_and_real_validation_status():
             assert "text/event-stream" in responses["200"]["content"]
             seen_sse.add(operation["operationId"])
     assert seen_sse == SSE_OPERATION_IDS
+
+
+def test_generation_operations_are_explicitly_marked():
+    marked = {
+        operation["operationId"]
+        for _, _, operation in _http_operations(app.openapi())
+        if operation.get("x-zhixue-generation-meta") is True
+    }
+    assert marked == GENERATION_OPERATION_IDS
 
 
 def test_interface_overview_covers_every_openapi_operation_without_stale_entries():

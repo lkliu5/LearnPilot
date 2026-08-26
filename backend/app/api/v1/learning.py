@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
@@ -34,6 +35,7 @@ router = APIRouter(tags=["learning"])
 
 
 @router.post("/learning/cornell-cues")
+@traced_generation
 async def cornell_cues(
     body: CornellCuesRequest,
     user: User = Depends(get_current_user),
@@ -54,6 +56,7 @@ async def cornell_cues(
 
 
 @router.post("/learning/feynman")
+@traced_generation
 async def feynman(
     body: FeynmanRequest,
     request: Request,

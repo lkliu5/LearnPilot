@@ -431,7 +431,8 @@
       "tags": [
         "dashboard"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "GET /api/v1/dashboard/overview": {
       "operationId": "dashboard_overview_api_v1_dashboard_overview_get",
@@ -960,7 +961,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "GET /api/v1/resource/external/{kp_id}": {
       "operationId": "external_resources_api_v1_resource_external__kp_id__get",
@@ -1210,7 +1212,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "GET /api/v1/tasks/{task_id}": {
       "operationId": "get_task_status_api_v1_tasks__task_id__get",
@@ -1689,7 +1692,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/diagram": {
       "operationId": "gen_diagram_api_v1_document_generate_diagram_post",
@@ -1731,7 +1735,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/flashcards": {
       "operationId": "gen_flashcards_api_v1_document_generate_flashcards_post",
@@ -1773,7 +1778,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/lecture": {
       "operationId": "gen_lecture_api_v1_document_generate_lecture_post",
@@ -1815,7 +1821,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/mindmap": {
       "operationId": "gen_mindmap_api_v1_document_generate_mindmap_post",
@@ -1857,7 +1864,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/overview": {
       "operationId": "gen_overview_api_v1_document_generate_overview_post",
@@ -1899,7 +1907,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/quiz": {
       "operationId": "gen_quiz_api_v1_document_generate_quiz_post",
@@ -1941,7 +1950,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/generate/video": {
       "operationId": "gen_video_api_v1_document_generate_video_post",
@@ -1983,7 +1993,8 @@
       "tags": [
         "document-learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/document/upload": {
       "operationId": "upload_document_api_v1_document_upload_post",
@@ -2067,7 +2078,8 @@
       "tags": [
         "job-market"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/learning-path/generate": {
       "operationId": "generate_learning_path_api_v1_learning_path_generate_post",
@@ -2158,7 +2170,8 @@
       "tags": [
         "learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/learning/feynman": {
       "operationId": "feynman_api_v1_learning_feynman_post",
@@ -2205,7 +2218,8 @@
       "tags": [
         "learning"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/learning/steps/{kp_id}": {
       "operationId": "update_steps_api_v1_learning_steps__kp_id__post",
@@ -2517,7 +2531,8 @@
       "tags": [
         "profile"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/profile/narrative": {
       "operationId": "narrative_api_v1_profile_narrative_post",
@@ -2559,7 +2574,8 @@
       "tags": [
         "profile"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/profile/parse": {
       "operationId": "parse_api_v1_profile_parse_post",
@@ -2600,7 +2616,8 @@
       "tags": [
         "profile"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/quiz/{kp_id}/submit": {
       "operationId": "submit_quiz_api_v1_quiz__kp_id__submit_post",
@@ -2653,7 +2670,8 @@
       "tags": [
         "quiz"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/reinforce": {
       "operationId": "reinforce_api_v1_reinforce_post",
@@ -2695,7 +2713,8 @@
       "tags": [
         "quiz"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/external/aggregate": {
       "operationId": "external_aggregate_api_v1_resource_external_aggregate_post",
@@ -2737,7 +2756,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/history/log": {
       "operationId": "resource_history_log_api_v1_resource_history_log_post",
@@ -2863,7 +2883,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/tutor/chat": {
       "operationId": "tutor_chat_api_v1_resource_tutor_chat_post",
@@ -2910,7 +2931,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/tutor/generate": {
       "operationId": "tutor_generate_api_v1_resource_tutor_generate_post",
@@ -2952,7 +2974,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/tutor/suggest": {
       "operationId": "tutor_suggest_api_v1_resource_tutor_suggest_post",
@@ -2994,7 +3017,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/video": {
       "operationId": "generate_video_api_v1_resource_video_post",
@@ -3036,7 +3060,8 @@
       "tags": [
         "resource"
       ],
-      "x-zhixue-envelope": true
+      "x-zhixue-envelope": true,
+      "x-zhixue-generation-meta": true
     },
     "POST /api/v1/resource/video/render": {
       "operationId": "render_video_api_v1_resource_video_render_post",
@@ -3408,7 +3433,7 @@
       "x-zhixue-envelope": true
     }
   },
-  "schemaCount": 55,
+  "schemaCount": 56,
   "schemas": {
     "Body_parse_api_v1_profile_parse_post": {
       "properties": {
@@ -4044,6 +4069,45 @@
         }
       },
       "title": "GeneratePathRequest",
+      "type": "object"
+    },
+    "GenerationMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "degraded": {
+          "type": "boolean"
+        },
+        "fallbackReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "builtin",
+            "custom",
+            "mock",
+            "cache",
+            "fallback",
+            "deterministic"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "source",
+        "degraded",
+        "fallbackReason"
+      ],
       "type": "object"
     },
     "HTTPValidationError": {

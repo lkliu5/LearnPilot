@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.llm import LLMGenerationError
 from app.core.security import get_current_user
 from app.models.entities import User
@@ -58,6 +59,7 @@ async def knowledge_point_meta(
 
 
 @router.get("/resource/mindmap/{kp_id}")
+@traced_generation
 async def mindmap(
     kp_id: str,
     user: User = Depends(get_current_user),
@@ -72,6 +74,7 @@ async def mindmap(
 
 
 @router.get("/resource/diagram/{kp_id}")
+@traced_generation
 async def diagram(
     kp_id: str,
     user: User = Depends(get_current_user),
@@ -102,6 +105,7 @@ async def external_resources(
 
 
 @router.post("/resource/external/aggregate")
+@traced_generation
 async def external_aggregate(
     body: ExternalAggregateRequest,
     user: User = Depends(get_current_user),
@@ -124,6 +128,7 @@ async def external_aggregate(
 
 
 @router.post("/resource/lecture")
+@traced_generation
 async def generate_lecture(
     body: LectureRequest,
     user: User = Depends(get_current_user),
@@ -144,6 +149,7 @@ async def generate_lecture(
 
 
 @router.post("/resource/video")
+@traced_generation
 async def generate_video(
     body: VideoRequest,
     user: User = Depends(get_current_user),
@@ -186,6 +192,7 @@ async def render_video(
 
 
 @router.post("/resource/tutor/chat")
+@traced_generation
 async def tutor_chat(
     body: TutorChatRequest,
     request: Request,
@@ -220,6 +227,7 @@ async def tutor_chat(
 
 
 @router.post("/resource/tutor/suggest")
+@traced_generation
 async def tutor_suggest(
     body: TutorSuggestRequest,
     user: User = Depends(get_current_user),
@@ -236,6 +244,7 @@ async def tutor_suggest(
 
 
 @router.post("/resource/tutor/generate")
+@traced_generation
 async def tutor_generate(
     body: TutorGenerateRequest,
     user: User = Depends(get_current_user),

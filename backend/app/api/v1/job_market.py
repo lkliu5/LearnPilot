@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.envelope import fail, success
+from app.core.generation_provenance import traced_generation
 from app.core.security import get_current_user
 from app.models.entities import User
 from app.services import job_market as job_market_service
@@ -42,6 +43,7 @@ async def hot_jobs(
 
 
 @router.post("/job-market/match")
+@traced_generation
 async def job_match(
     body: JobMatchRequest,
     user: User = Depends(get_current_user),

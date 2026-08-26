@@ -236,7 +236,7 @@ def test_tutor_json_mode_and_session_reuse(client, learner_headers):
     )
     assert res.status_code == 200, res.text
     data = res.json()["data"]
-    assert set(data.keys()) == {"sessionId", "reply", "suggestions"}
+    assert set(data.keys()) == {"sessionId", "reply", "suggestions", "generationMeta"}
     sid = data["sessionId"]
     assert sid.startswith("s_")
     assert data["reply"] and isinstance(data["suggestions"], list)
@@ -321,7 +321,7 @@ def test_tutor_sse_mock_stream(client, learner_headers):
     assert reply  # 非空回复
     # done 收尾：携带 sessionId + suggestions（15.4）
     done = named["done"]
-    assert set(done.keys()) == {"sessionId", "suggestions"}
+    assert set(done.keys()) == {"sessionId", "suggestions", "generationMeta"}
     assert done["sessionId"].startswith("s_")
     assert isinstance(done["suggestions"], list) and done["suggestions"]
     # 引导式：不直接给答案（mock 引导链以问题收尾）
@@ -397,6 +397,7 @@ def test_video_contract_aligned_with_lecture_video(client, learner_headers):
     assert set(data.keys()) == {
         "videoUrl", "title", "scenes", "narration",
         "fps", "width", "height", "durationInFrames",
+        "generationMeta",
     }
     assert data["videoUrl"] is None  # 走前端 Remotion Player + TTS
     assert data["title"] == "神经网络基础"
@@ -491,7 +492,8 @@ def test_diagram_per_topic_via_llm(client, learner_headers):
     """知识图解经 LLMClient 按主题生成：mock 下不同知识点产出不同 Mermaid，恒以 flowchart 开头。"""
     nn = client.get("/api/v1/resource/diagram/nn", headers=learner_headers).json()["data"]
     cnn = client.get("/api/v1/resource/diagram/cnn", headers=learner_headers).json()["data"]
-    assert set(nn.keys()) == {"mermaid"} and set(cnn.keys()) == {"mermaid"}
+    assert set(nn.keys()) == {"mermaid", "generationMeta"}
+    assert set(cnn.keys()) == {"mermaid", "generationMeta"}
     assert nn["mermaid"].startswith("flowchart")
     assert cnn["mermaid"].startswith("flowchart")
     assert nn["mermaid"] != cnn["mermaid"]  # 按主题真实生成，绝非写死一张

@@ -21,6 +21,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core import generation_provenance
+
 from app.core import lecture_media
 from app.core.llm import LECTURE_DIFFICULTIES, get_llm
 from app.models.entities import (
@@ -219,6 +221,7 @@ def mindmap(db: Session, kp_id: str) -> dict[str, Any]:
     markdown = _MINDMAPS.get(kp_id) or (
         f"# {kp.name}\n## 核心概念\n### {kp.description}\n## 实践应用\n## 进阶方向\n"
     )
+    generation_provenance.mark_deterministic()
     return {"markdown": markdown}
 
 
@@ -245,6 +248,7 @@ def diagram(db: Session, kp_id: str) -> dict[str, Any]:
         .one_or_none()
     )
     if cached is not None:
+        generation_provenance.mark_cache()
         return dict(cached.payload)
 
     payload = llm.generate_diagram(kp.id, kp.name, kp.description or "")
@@ -307,6 +311,7 @@ def generate_video(
         .one_or_none()
     )
     if cached is not None:
+        generation_provenance.mark_cache()
         return dict(cached.payload)
 
     script = llm.generate_video_script(kp.id, kp.name, difficulty, kp.description or "")
@@ -441,6 +446,7 @@ def generate_lecture(
         .one_or_none()
     )
     if cached is not None:
+        generation_provenance.mark_cache()
         # 旧缓存（B10 前）可能缺 workflowId 键，统一补 null 后返回（向后兼容）。
         data = dict(cached.payload)
         data.setdefault("workflowId", None)
