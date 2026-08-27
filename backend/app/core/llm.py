@@ -30,6 +30,11 @@ from typing import Any
 from app.core import generation_provenance, llm_transport
 from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
+from app.core.llm_output import (
+    clean_mermaid as _clean_mermaid,
+    extract_json as _extract_json,
+    strip_markdown_fence as _strip_md_fence,
+)
 
 logger = logging.getLogger("app.core.llm")
 
@@ -184,9 +189,6 @@ _VIDEO_SCRIPT_NN: list[dict[str, Any]] = [
 _EDUCATION_ENUM = ("本科", "硕士", "博士", "其他")
 _MAJOR_ENUM = ("计算机科学", "电子信息", "人工智能", "软件工程", "数据科学", "其他")
 _GOAL_ENUM = ("职业培训", "技能认证", "学术研究", "兴趣学习", "其他")
-
-# 容错 JSON 提取：取首个 { 到末个 } 的最大块（模型常在 JSON 外包裹说明文字）
-_JSON_BLOCK_RE = re.compile(r"\{.*\}", re.S)
 
 # ---- 苏格拉底辅导（接口文档 8.7 / 15.4，B7-a） ---------------------------------
 
@@ -454,50 +456,6 @@ def _mock_extract_portrait(
             add("knowledge_base", f"{major}专业背景", 0.6, "manual", score=65)
 
     return _sanitize_portrait_updates(out)
-
-
-def _extract_json(text: str) -> Any | None:
-    """从模型自由文本中提取 JSON 对象；解析失败返回 None（调用方兜底）。"""
-    for candidate in (text, *_JSON_BLOCK_RE.findall(text or "")):
-        try:
-            return json.loads(candidate)
-        except (json.JSONDecodeError, TypeError):
-            continue
-    return None
-
-
-def _strip_md_fence(text: str) -> str:
-    """剥离模型偶发的 ```markdown 围栏包裹，保留正文。"""
-    t = (text or "").strip()
-    if t.startswith("```"):
-        lines = t.split("\n")
-        if len(lines) >= 2 and lines[-1].strip() == "```":
-            t = "\n".join(lines[1:-1]).strip()
-    return t
-
-
-# 前端 mermaid v11 支持的图型白名单（图解丰富化：按内容选流程图/层次图/关系图/思维导图等）。
-_MERMAID_HEADS: tuple[str, ...] = (
-    "flowchart", "graph", "mindmap", "classdiagram", "sequencediagram",
-    "statediagram", "erdiagram", "journey", "timeline", "quadrantchart",
-    "gitgraph", "requirementdiagram",
-)
-
-
-def _clean_mermaid(raw: str) -> str:
-    """Mermaid 知识图解契约清洗（接口文档 8.5）：剥围栏、校验首行为受支持图型。
-
-    放宽到 _MERMAID_HEADS（流程图/层次图/关系图/思维导图等），让真实生成可按内容选用
-    更贴切的图型；仍拒绝非图解文本。非法输出 → 抛 LLMGenerationError，由调用方回落
-    确定性主题模板，保证图解始终可渲染（演示兜底，不向路由抛错）。
-    """
-    text = _strip_md_fence(raw or "").strip()
-    if not text:
-        raise LLMGenerationError("知识图解输出为空")
-    head = text.splitlines()[0].strip().lower()
-    if not any(head.startswith(h) for h in _MERMAID_HEADS):
-        raise LLMGenerationError("知识图解输出非合法 Mermaid 图（首行图型不受支持）")
-    return text
 
 
 # Mermaid 知识图解模板（接口文档 8.5；mock 与 deepseek 兜底共用）。
