@@ -39,6 +39,20 @@ from app.core.llm_output import (
     extract_json as _extract_json,
     strip_markdown_fence as _strip_md_fence,
 )
+from app.core.llm_portrait import (
+    ABILITY_DIM_KEYS,
+    PORTRAIT_DIMENSIONS,
+    PORTRAIT_DIM_KINDS,
+    PORTRAIT_KEYS as _PORTRAIT_KEYS,
+    PORTRAIT_KINDS as _PORTRAIT_KINDS,
+    PORTRAIT_LABELS as _PORTRAIT_LABELS,
+    PREFERENCE_DIM_KEYS,
+    PREFERENCE_LABELS as _PREFERENCE_LABELS,
+    PREFERENCE_QUESTIONS,
+    SUBJECTIVE_DIM_KEYS,
+    extract_mock_portrait as _mock_extract_portrait,
+    sanitize_portrait_updates as _sanitize_portrait_updates,
+)
 from app.core.llm_practice import audit_practice
 from app.core.llm_scoring import (
     character_bigrams as _char_bigrams,
@@ -83,80 +97,6 @@ LECTURE_DIFFICULTIES: list[str] = ["入门", "初级", "中级", "高级", "精�
 # 学习路径难度阶梯（接口文档 2.3 Lesson.difficulty）：规划 Agent 按画像基础上下浮动
 PATH_DIFFICULTIES: list[str] = ["入门", "初级", "中级", "高级", "精通"]
 
-# 异质学生画像维度（接口文档 17.2，C1-b）：(key, 中文 label)，顺序即对话探查顺序。
-# 与 4.4 固定 6 知识点雷达「并存、互不替换」（key 稳定，后端可扩展更多维度）。
-PORTRAIT_DIMENSIONS: list[tuple[str, str]] = [
-    ("knowledge_base", "知识基础"),
-    ("prior_experience", "先验经验"),
-    ("learning_goal", "学习目标"),
-    ("cognitive_style", "认知风格"),
-    ("learning_pace", "学习节奏"),
-    ("error_preference", "易错点偏好"),
-]
-_PORTRAIT_LABELS: dict[str, str] = dict(PORTRAIT_DIMENSIONS)
-_PORTRAIT_KEYS: tuple[str, ...] = tuple(k for k, _ in PORTRAIT_DIMENSIONS)
-# source 枚举（17.1 防幻觉约束）：dialogue 明确陈述 / manual 显式填写 / inferred 间接推断
-# diagnostic 诊断微测「测」出（行为反推，非自陈）——能力维度专用，带依据 basis。
-_PORTRAIT_SOURCES: tuple[str, ...] = ("dialogue", "manual", "inferred", "diagnostic")
-# inferred（推断）维度 confidence 上限（17.1：inferred 须给较低 confidence）
-_INFERRED_CONFIDENCE_CAP: float = 0.6
-
-# ── 画像三分类（C2 重构：能力靠测、偏好归类型、主观靠对话） ──────────────────
-# 把 17.2 六维严格分为三类，各用各的测法，杜绝「把能力与偏好混进同一 0-100 轴」：
-#   ability    能力维：可打分(0-100)，由「诊断微测」行为反推，带依据 basis，不靠自陈；
-#   preference 偏好维：只有类型、无高低，由「偏好选择题」归类，禁止打分/上 0-100 轴；
-#   subjective 主观维：描述性，对话自然采集，不强行打分。
-PORTRAIT_DIM_KINDS: dict[str, str] = {
-    "knowledge_base": "ability",
-    "prior_experience": "subjective",
-    "learning_goal": "subjective",
-    "cognitive_style": "preference",
-    "learning_pace": "preference",
-    "error_preference": "preference",
-}
-ABILITY_DIM_KEYS: tuple[str, ...] = tuple(
-    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "ability"
-)
-PREFERENCE_DIM_KEYS: tuple[str, ...] = tuple(
-    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "preference"
-)
-SUBJECTIVE_DIM_KEYS: tuple[str, ...] = tuple(
-    k for k, v in PORTRAIT_DIM_KINDS.items() if v == "subjective"
-)
-_PORTRAIT_KINDS: tuple[str, ...] = ("ability", "preference", "subjective")
-
-# 偏好选择题选项库（17.5）：每个偏好维一组「二/三选一」，选项只归类型不打分。
-# 结构：dim_key -> {prompt, options:[{optionKey, label, hint}]}；optionKey 为稳定类型码。
-PREFERENCE_QUESTIONS: dict[str, dict[str, Any]] = {
-    "cognitive_style": {
-        "prompt": "遇到一个全新的概念，你更想先看到哪一种？",
-        "options": [
-            {"optionKey": "visual", "label": "图像型", "hint": "先看一张示意图/结构图"},
-            {"optionKey": "textual", "label": "文字型", "hint": "先读一段准确的定义"},
-            {"optionKey": "example", "label": "案例型", "hint": "先看一个具体的例子"},
-        ],
-    },
-    "learning_pace": {
-        "prompt": "拿到一章新内容，你更倾向怎么推进？",
-        "options": [
-            {"optionKey": "overview", "label": "快速概览型", "hint": "先快速过一遍全局，再回头补细节"},
-            {"optionKey": "deepdive", "label": "稳步细钻型", "hint": "从头逐点稳稳钻透再往下"},
-        ],
-    },
-    "error_preference": {
-        "prompt": "回想以往做错的题，最常见的原因是哪一类？",
-        "options": [
-            {"optionKey": "concept", "label": "概念混淆", "hint": "概念记混 / 理解有偏差"},
-            {"optionKey": "calculation", "label": "计算粗心", "hint": "看错条件 / 算错一步"},
-            {"optionKey": "coding", "label": "代码卡壳", "hint": "思路对但实现 / 代码写不对"},
-        ],
-    },
-}
-# optionKey -> 类型中文标签（偏好维 value 取此，呈现为类型标签而非分数）
-_PREFERENCE_LABELS: dict[str, dict[str, str]] = {
-    dim: {o["optionKey"]: o["label"] for o in q["options"]}
-    for dim, q in PREFERENCE_QUESTIONS.items()
-}
 
 # mock 讲义的 RAG 来源（接口文档 8.2 sources；type∈教材|论文|文档|课程，confidence 0-1）。
 # B5 接入真实 RAG 后由检索命中切片回填，此处为确定性占位。
@@ -219,141 +159,6 @@ _TUTOR_SYSTEM = (
 # Mock 苏格拉底回复与按需补救建议由 llm_tutor_mock 提供；真实模式 Prompt 仍由本层编排。
 # ---- 外部资源·联网搜索聚合（接口文档 8.6 增量，C-fix 批3-bonus） ----------------
 _AGG_TYPES: tuple[str, ...] = ("视频", "论文", "文档", "课程")
-# ---- 对话式画像诊断（接口文档 17.1 / 17.2，C1-b） ------------------------------
-
-
-def _sanitize_portrait_updates(updates: Any) -> list[dict[str, Any]]:
-    """画像维度增量契约清洗（17.1/17.2 防幻觉约束，mock 与 deepseek 共用）。
-
-    - key 必须取自固定维度集（PORTRAIT_DIMENSIONS），未知 key 丢弃（不编造维度）；
-    - label 回正为该 key 的中文名；value 必须非空字符串；
-    - score（可选）截断 0-100 整数；confidence 截断 0-1；
-    - source ∈ dialogue|manual|inferred（非法回落 inferred）；
-    - inferred（推断）维度 confidence 上限 0.6（17.1：推断须给较低 confidence）；
-    - 同 key 去重（后者覆盖，保持稳定顺序）。
-    """
-    if not isinstance(updates, list):
-        return []
-    by_key: dict[str, dict[str, Any]] = {}
-    for item in updates:
-        if not isinstance(item, dict):
-            continue
-        key = item.get("key")
-        if key not in _PORTRAIT_KEYS:
-            continue  # 防幻觉：不接受固定维度集之外的 key
-        value = str(item.get("value") or "").strip()
-        if not value:
-            continue
-        source = item.get("source")
-        if source not in _PORTRAIT_SOURCES:
-            source = "inferred"
-        try:
-            confidence = float(item.get("confidence"))
-        except (TypeError, ValueError):
-            confidence = 0.5
-        confidence = max(0.0, min(1.0, confidence))
-        if source == "inferred":
-            confidence = min(confidence, _INFERRED_CONFIDENCE_CAP)
-        kind = PORTRAIT_DIM_KINDS.get(key, "subjective")
-        cleaned: dict[str, Any] = {
-            "key": key,
-            "label": _PORTRAIT_LABELS[key],
-            "kind": kind,
-            "value": value,
-            "confidence": round(confidence, 2),
-            "source": source,
-        }
-        # score 仅能力维有意义（偏好/主观维严禁打分、不上 0-100 轴）；非能力维一律剥离 score
-        score = item.get("score")
-        if kind == "ability" and isinstance(score, (int, float)) and not isinstance(score, bool):
-            cleaned["score"] = max(0, min(100, int(score)))
-        basis = item.get("basis")  # 能力维「依据」：分数来自哪几道题/哪些作答（可解释、防臆造）
-        if isinstance(basis, str) and basis.strip():
-            cleaned["basis"] = basis.strip()
-        # 偏好维类型码：归类到 PREFERENCE_QUESTIONS 的某个 optionKey（只记类型、不打分）
-        option_key = item.get("optionKey")
-        if kind == "preference" and isinstance(option_key, str) and option_key.strip():
-            cleaned["optionKey"] = option_key.strip()
-        by_key[key] = cleaned
-    return list(by_key.values())
-
-
-# 关键词 → 画像维度的确定性抽取规则（mock 模式；deepseek 走真实抽取）。
-# 仅在文本出现明确信号时产出维度，无信号不编造（17.1 防幻觉）。
-def _mock_extract_portrait(
-    message: str, context: dict[str, Any] | None, first_turn: bool
-) -> list[dict[str, Any]]:
-    """确定性画像抽取（mock）：命中关键词产出维度增量，无信号则不产出。"""
-    text = message or ""
-    low = text.lower()
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def add(key: str, value: str, confidence: float, source: str, score: int | None = None) -> None:
-        if key in seen:
-            return
-        seen.add(key)
-        item: dict[str, Any] = {"key": key, "value": value, "confidence": confidence, "source": source}
-        if score is not None:
-            item["score"] = score
-        out.append(item)
-
-    # 先验经验
-    if "爬虫" in text:
-        add("prior_experience", "有Python工程实践(爬虫)", 0.8, "dialogue")
-    elif "python" in low and any(k in text for k in ("做过", "项目", "开发", "工程", "实践")):
-        add("prior_experience", "有Python工程实践经验", 0.8, "dialogue")
-    elif any(k in text for k in ("项目", "实践", "做过", "工作", "经验", "开发", "实习")):
-        add("prior_experience", "有相关项目/工程实践经验", 0.75, "dialogue")
-    # 知识基础（含可量化 score）
-    if any(k in text for k in ("精通", "扎实", "很熟", "熟练")):
-        add("knowledge_base", "扎实", 0.7, "dialogue", score=85)
-    elif any(k in text for k in ("零基础", "没学过", "不会", "没接触", "薄弱", "刚入门", "不熟")):
-        add("knowledge_base", "薄弱", 0.7, "dialogue", score=30)
-    elif any(k in text for k in ("本科", "硕士", "博士", "学过", "了解", "科班", "计算机")):
-        add("knowledge_base", "一般", 0.7, "dialogue", score=65)
-    # 学习目标
-    if any(k in text for k in ("转", "求职", "找工作", "岗位", "工程师", "职业", "入职", "面试")):
-        if "大模型" in text:
-            add("learning_goal", "转大模型应用方向", 0.9, "dialogue")
-        else:
-            add("learning_goal", "职业转型/求职", 0.9, "dialogue")
-    elif any(k in text for k in ("考试", "认证", "考研", "考证")):
-        add("learning_goal", "考试/认证", 0.85, "dialogue")
-    elif "兴趣" in text:
-        add("learning_goal", "兴趣学习", 0.8, "dialogue")
-    # 认知风格
-    if any(k in text for k in ("动手", "实践", "代码", "做项目", "上手")) or "爬虫" in text:
-        add("cognitive_style", "偏实践/动手型", 0.6, "dialogue")
-    elif any(k in text for k in ("理论", "原理", "推导", "数学", "公式", "证明")):
-        add("cognitive_style", "偏理论/推导型", 0.6, "dialogue")
-    # 学习节奏
-    if any(k in text for k in ("时间紧", "快速", "突破", "尽快", "赶")):
-        add("learning_pace", "偏快(集中突破)", 0.6, "dialogue")
-    elif any(k in text for k in ("充裕", "稳", "扎实", "慢慢", "系统")):
-        add("learning_pace", "稳扎稳打", 0.6, "dialogue")
-    elif "适中" in text:
-        add("learning_pace", "适中", 0.6, "dialogue")
-    # 易错点偏好（多为推断，低 confidence）
-    if any(k in text for k in ("概念", "混淆", "记不住")):
-        add("error_preference", "概念易混淆", 0.5, "inferred")
-    elif any(k in text for k in ("推导", "公式", "计算题")):  # 避开「计算机」误命中
-        add("error_preference", "计算/推导易错", 0.5, "inferred")
-    elif any(k in text for k in ("代码", "实现", "编程", "调试", "报错")):
-        add("error_preference", "代码实现易卡壳", 0.5, "inferred")
-
-    # 首轮已知上下文（表单显式填写 → source=manual）：仅补对话未覆盖的维度
-    if first_turn and context:
-        goal = str(context.get("goal") or "").strip()
-        if goal:
-            add("learning_goal", goal, 0.9, "manual")
-        major = str(context.get("major") or "").strip()
-        if major:
-            add("knowledge_base", f"{major}专业背景", 0.6, "manual", score=65)
-
-    return _sanitize_portrait_updates(out)
-
-
 # Mermaid 知识图解模板（接口文档 8.5；mock 与 deepseek 兜底共用）。
 # 图解丰富化：不同知识点选用贴合其内容结构的不同图型——
 #   nn/ml/dl 训练回路用横向流程图（flowchart LR，含反馈边）；
