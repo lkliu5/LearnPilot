@@ -66,6 +66,12 @@ from app.core.llm_tutor_mock import (
     identify_problem as _mock_identify_problem,
     tutor_reply as _mock_tutor_reply,
 )
+from app.core.llm_workflow_mock import (
+    diagnose as _mock_workflow_diagnosis,
+    generate as _mock_workflow_generation,
+    review as _mock_workflow_critic,
+    set_force_critic_low,
+)
 
 logger = logging.getLogger("app.core.llm")
 
@@ -2656,39 +2662,7 @@ class LLMClient:
         - 诊断依据（reasoning）引用该用户画像摘要与掌握度计数，不同用户 / 不同掌握度
           → 文案不同，不再是全局同一句模板。
         """
-        target_kp = variables.get("kpId") or "attention"
-        target_name = variables.get("kpName") or target_kp
-        profile_summary = (variables.get("profileSummary") or "").strip()
-        try:
-            mastery_map = json.loads(variables.get("masteryStatus") or "{}")
-            if not isinstance(mastery_map, dict):
-                mastery_map = {}
-        except (ValueError, TypeError):
-            mastery_map = {}
-
-        not_passed = [
-            k for k, v in mastery_map.items() if v != "passed" and k != target_kp
-        ]
-        weak = [target_kp] + not_passed
-        for fallback in ("transformer", "finetune"):
-            if len(weak) >= 3:
-                break
-            if fallback not in weak:
-                weak.append(fallback)
-        weak = weak[:3]
-
-        passed_n = sum(1 for v in mastery_map.values() if v == "passed")
-        pending_n = sum(1 for v in mastery_map.values() if v != "passed")
-        basis = profile_summary[:60] if profile_summary else "画像尚未采集（按通用基线）"
-        reasoning = (
-            f"依据该用户画像（{basis}）与掌握度（已通过 {passed_n} 项、待巩固 "
-            f"{pending_n} 项）：「{target_name}」等 {len(weak)} 处为当前薄弱点。"
-        )
-        return {
-            "weakKpIds": weak,
-            "summary": f"检测到 {len(weak)} 处薄弱点，建议优先学习「{target_name}」",
-            "reasoning": reasoning,
-        }
+        return _mock_workflow_diagnosis(variables)
 
     def _mock_generation(self, variables: dict[str, Any]) -> dict[str, Any]:
         """生成 Agent mock：确定性递进讲义产出（按 kpName/难度 + 画像能力档 depthTier）。
@@ -2696,44 +2670,12 @@ class LLMClient:
         depthTier 由工作流 generation_node 依当前用户画像派生（advanced/beginner/basic）；
         直出 /resource/lecture 不传 → tier=None 走难度基线（与 B5b/B10 契约一致）。
         """
-        kp_name = variables.get("kpName") or "神经网络"
-        difficulty = variables.get("difficulty") or "初级"
-        tier = variables.get("depthTier") or None
-        return {
-            "markdown": self._lecture_markdown(
-                kp_name, difficulty, variables.get("description", ""), tier
-            ),
-        }
+        return _mock_workflow_generation(variables, self._lecture_markdown)
 
     @staticmethod
     def _mock_critic(variables: dict[str, Any]) -> dict[str, Any]:
         """审核 Agent mock：默认通过；测试钩子可强制低分（验证重试/降级路径）。"""
-        if _force_critic_low:
-            return {
-                "passed": False,
-                "validationScore": 0.42,
-                "hallucinationRate": 0.18,
-                "issues": ["第 2 段「梯度直觉」未在检索上下文中找到接地来源（测试钩子注入）"],
-            }
-        return {
-            "passed": True,
-            "validationScore": 0.93,
-            "hallucinationRate": _LECTURE_HALLUCINATION_RATE,
-            "issues": [],
-        }
-
-
-# ---- 测试钩子：强制 critic 返回低分（B5-a 验证重试→降级路径） -----------------
-_force_critic_low: bool = False
-
-
-def set_force_critic_low(enabled: bool) -> None:
-    """测试钩子：True 时 mock critic 恒返回低分（validationScore=0.42）。
-
-    仅影响 mock provider；pytest 用例 finally/fixture 中必须复位 False。
-    """
-    global _force_critic_low
-    _force_critic_low = bool(enabled)
+        return _mock_workflow_critic(variables, _LECTURE_HALLUCINATION_RATE)
 
 
 # 内容安全中心钝化点：类定义完成后统一注册全部生成出口，不改变公共方法签名。
