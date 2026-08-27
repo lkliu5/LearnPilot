@@ -51,6 +51,10 @@ from app.core.llm_feynman import (
     clean_feynman as _clean_feynman_payload,
     evaluate_mock as _mock_feynman_evaluation,
 )
+from app.core.llm_flashcards import (
+    clean_flashcards as _clean_flashcards_payload,
+    generate_mock_flashcards as _generate_mock_flashcards,
+)
 from app.core.llm_output import (
     clean_mermaid as _clean_mermaid,
     extract_json as _extract_json,
@@ -822,24 +826,7 @@ class LLMClient:
         source_title: str, contexts: list[str], count: int
     ) -> list[dict[str, str]]:
         """确定性闪卡：取文档要点句，正面设问、背面即该句原文（内容严格来自文档）。"""
-        sentences = _doc_key_sentences(contexts, max_n=count)
-        cards: list[dict[str, str]] = []
-        for i, sent in enumerate(sentences, start=1):
-            topic = sent[:14].rstrip("，,。.；;：: ") or f"要点 {i}"
-            cards.append(
-                {
-                    "front": f"关于「{topic}」，《{source_title}》是怎么讲的？",
-                    "back": sent,
-                }
-            )
-        if not cards:  # 文档无可用文本 → 单张兜底卡（不臆造内容）
-            cards.append(
-                {
-                    "front": f"《{source_title}》的核心内容是什么？",
-                    "back": "该文档暂未解析到可用于生成闪卡的正文内容，请检查文档是否为纯文本可抽取格式。",
-                }
-            )
-        return cards
+        return _generate_mock_flashcards(source_title, contexts, count)
 
     def _deepseek_flashcards(
         self, source_title: str, contexts: list[str], count: int
@@ -852,15 +839,8 @@ class LLMClient:
         )
         joined = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts) if c)[:6000]
         prompt = f"文档标题：{source_title}\n文档片段：\n{joined or source_title}"
-        data = _extract_json(llm_transport.chat(prompt, system=system))
-        raw_cards = data.get("cards") if isinstance(data, dict) else None
-        cards: list[dict[str, str]] = []
-        for c in raw_cards or []:
-            if isinstance(c, dict) and str(c.get("front") or "").strip() and str(c.get("back") or "").strip():
-                cards.append({"front": str(c["front"]).strip(), "back": str(c["back"]).strip()})
-        if not cards:
-            raise LLMGenerationError("闪卡输出无法解析为契约 JSON")
-        return cards[:count]
+        raw = llm_transport.chat(prompt, system=system)
+        return _clean_flashcards_payload(raw, count)
 
     # ---- 文档学习：文档概览（NotebookLM 式速读，复用双模 + 内容安全 + 防幻觉） ----
     def generate_overview(self, source_title: str, contexts: list[str]) -> dict[str, Any]:
