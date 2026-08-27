@@ -88,6 +88,12 @@ from app.core.llm_tutor_mock import (
     identify_problem as _mock_identify_problem,
     tutor_reply as _mock_tutor_reply,
 )
+from app.core.llm_video_script import (
+    VIDEO_SCRIPT_NN as _VIDEO_SCRIPT_NN,
+    clean_video_script as _clean_video_script_payload,
+    generate_mock_video_script as _generate_mock_video_script,
+    video_scene as _build_video_scene,
+)
 from app.core.llm_workflow_mock import (
     diagnose as _mock_workflow_diagnosis,
     generate as _mock_workflow_generation,
@@ -138,35 +144,6 @@ _LECTURE_SOURCES: list[dict[str, Any]] = [
 # B5 替换为 15.3 逐句接地校验口径（未接地句数/总句数）；mock 阶段确定性返回。
 _LECTURE_HALLUCINATION_RATE: float = 0.021
 
-# 神经网络分镜脚本（接口文档 8.3 scenes）：与前端 LectureVideo 原 5 场景逐字对齐，
-# narration 与原 NARRATION 一致——保证 nn 视频不回归；其余知识点按相同结构参数化生成。
-_VIDEO_SCRIPT_NN: list[dict[str, Any]] = [
-    {
-        "title": "课程导入 · 神经网络基础",
-        "points": ["三步运算：求和 → 偏置 → 激活", "前向传播与反向传播", "由领域知识生成智能体定制"],
-        "narration": "欢迎学习神经网络基础。本视频由领域知识生成智能体为你定制。",
-    },
-    {
-        "title": "神经元的三步运算",
-        "points": ["① 加权求和 Σ wᵢ·xᵢ", "② 加上偏置 + b", "③ 激活函数 ReLU(z)"],
-        "narration": "一个神经元完成三步运算：加权求和、加上偏置、再经过激活函数输出。",
-    },
-    {
-        "title": "前向传播",
-        "points": ["输入与权重相乘求和", "加偏置得到 z", "ReLU 激活得到输出 a"],
-        "narration": "前向传播时，输入与权重相乘求和，加偏置得到 z，再用 ReLU 激活得到输出。",
-    },
-    {
-        "title": "常见激活函数",
-        "points": ["ReLU：max(0,x)，最常用", "Sigmoid：压缩到 (0,1)", "Tanh：范围 (-1,1)，零均值"],
-        "narration": "常见激活函数有 ReLU、Sigmoid 和 Tanh，其中 ReLU 计算快、最常用。",
-    },
-    {
-        "title": "学习闭环",
-        "points": ["神经元 → 前向传播", "激活 → 反向传播更新", "完成测验巩固理解"],
-        "narration": "神经元、前向传播、激活、反向传播更新，构成了神经网络学习的完整闭环。",
-    },
-]
 
 # 关键词 → 维度索引，用于在 mock 中「读到」材料文本时小幅抬升对应维度，
 # 体现解析的可解释性；未命中则用基线值（不编造、不随机）。
@@ -719,44 +696,13 @@ class LLMClient:
 
     @staticmethod
     def _video_scene(title: str, points: list[str], narration: str) -> dict[str, Any]:
-        return {"title": title, "points": points, "narration": narration}
+        return _build_video_scene(title, points, narration)
 
     def _mock_video_script(
         self, kp_id: str, kp_name: str, difficulty: str, description: str
     ) -> dict[str, Any]:
         """确定性主题分镜脚本（mock / deepseek 兜底共用）。"""
-        if kp_id == "nn":
-            return {"title": "神经网络基础", "scenes": [dict(s) for s in _VIDEO_SCRIPT_NN]}
-        desc = (description or "").strip()
-        desc_point = desc[:18] if desc else f"{kp_name}的核心要点"
-        scenes = [
-            self._video_scene(
-                f"课程导入 · {kp_name}",
-                [f"按「{difficulty}」难度定制", desc_point, "建立整体认知框架"],
-                f"欢迎学习{kp_name}。本视频由领域知识生成智能体按「{difficulty}」难度为你定制。",
-            ),
-            self._video_scene(
-                f"{kp_name}的核心构成",
-                [f"拆解{kp_name}的关键概念", "理清各部分之间的关系", "形成整体认知框架"],
-                f"我们先拆解{kp_name}的核心构成，建立整体认知框架。",
-            ),
-            self._video_scene(
-                f"{kp_name}在实践中如何运作",
-                [f"一个{difficulty}难度的典型示例", "跟随流程逐步理解", "对照输入与输出"],
-                f"接着通过一个{difficulty}难度的典型示例，看看{kp_name}在实践中如何运作。",
-            ),
-            self._video_scene(
-                "常见方法与适用场景",
-                [f"对比{kp_name}的相关方法", "明确各自适用场景", "避开典型误区"],
-                f"再对比{kp_name}相关的常见方法与适用场景，避免典型误区。",
-            ),
-            self._video_scene(
-                "要点回顾",
-                [f"回顾{kp_name}的核心要点", "纳入完整学习闭环", "建议完成测验巩固"],
-                f"最后回顾要点，把{kp_name}纳入完整的学习闭环。建议完成测验巩固理解。",
-            ),
-        ]
-        return {"title": kp_name, "scenes": scenes}
+        return _generate_mock_video_script(kp_id, kp_name, difficulty, description)
 
     def _deepseek_video_script(
         self, kp_name: str, difficulty: str, description: str
@@ -782,28 +728,7 @@ class LLMClient:
     @staticmethod
     def _clean_video_script(data: dict[str, Any], kp_name: str) -> dict[str, Any]:
         """分镜脚本契约清洗：场景数 3-5、每场景要点 1-4 条、标题/旁白非空。"""
-        raw_scenes = data.get("scenes")
-        if not isinstance(raw_scenes, list):
-            raise LLMGenerationError("视频分镜脚本缺 scenes 数组")
-        scenes: list[dict[str, Any]] = []
-        for s in raw_scenes:
-            if not isinstance(s, dict):
-                continue
-            title = str(s.get("title") or "").strip()
-            narration = str(s.get("narration") or "").strip()
-            points = [
-                str(p).strip()
-                for p in (s.get("points") or [])
-                if isinstance(p, (str, int, float)) and str(p).strip()
-            ][:4]  # 每场景最多 4 条要点
-            if not title or not narration or not points:
-                continue
-            scenes.append({"title": title, "points": points, "narration": narration})
-        if len(scenes) < 3:
-            raise LLMGenerationError(f"视频分镜有效场景不足 3 个（得到 {len(scenes)}）")
-        scenes = scenes[:5]  # 截断到 5 个场景（契约 3-5）
-        title = str(data.get("title") or "").strip() or kp_name
-        return {"title": title, "scenes": scenes}
+        return _clean_video_script_payload(data, kp_name)
 
     # ---- Mermaid 知识图解（接口文档 8.5，与讲义/视频同口径经 LLMClient 生成） ----
     def generate_diagram(
