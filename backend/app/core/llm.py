@@ -40,6 +40,12 @@ from app.core.llm_output import (
     strip_markdown_fence as _strip_md_fence,
 )
 from app.core.llm_practice import audit_practice
+from app.core.llm_scoring import (
+    character_bigrams as _char_bigrams,
+    clamp_score as _clamp_score,
+    credibility_score as _credibility_of,
+    point_coverage as _point_coverage,
+)
 from app.core.llm_tutor_mock import (
     REMEDIAL_TYPES,
     build_remedial_suggestions as _build_remedial_suggestions,
@@ -213,31 +219,6 @@ _TUTOR_SYSTEM = (
 # Mock 苏格拉底回复与按需补救建议由 llm_tutor_mock 提供；真实模式 Prompt 仍由本层编排。
 # ---- 外部资源·联网搜索聚合（接口文档 8.6 增量，C-fix 批3-bonus） ----------------
 _AGG_TYPES: tuple[str, ...] = ("视频", "论文", "文档", "课程")
-# 来源可信度启发式（critic 评分兜底口径）：命中关键词 → 基础可信分
-_CREDIBILITY_HINTS: list[tuple[tuple[str, ...], int]] = [
-    (("arxiv", "nature", "acm", "ieee", "openreview"), 97),
-    (("stanford", "cs231n", "cs224n", ".edu", "mit", "deeplearningbook", "harvard"), 95),
-    (("pytorch", "tensorflow", "huggingface", "developers.google", "scikit-learn"), 93),
-    (("coursera", "3blue1brown", "bilibili", "youtube", "jalammar"), 90),
-]
-
-
-def _credibility_of(source: str, url: str) -> int:
-    """据来源域名/URL 估可信度（mock critic 评分兜底）。"""
-    s = f"{source} {url}".lower()
-    for keys, score in _CREDIBILITY_HINTS:
-        if any(k in s for k in keys):
-            return score
-    return 82
-
-
-def _clamp_score(value: Any, default: int = 0) -> int:
-    try:
-        return max(0, min(100, int(value)))
-    except (TypeError, ValueError):
-        return default
-
-
 # ---- 对话式画像诊断（接口文档 17.1 / 17.2，C1-b） ------------------------------
 
 
@@ -693,20 +674,6 @@ def _generic_diagram(kp_name: str, description: str) -> str:
 # 简答题型（C-fix 批2，9.1 扩展）：options 为空，correct_answer 存参考要点列表，
 # explanation 存参考答案；判分经 LLMClient.score_short_answer（mock 确定性兜底）。
 SHORT_ANSWER_TYPE = "short_answer"
-
-
-def _char_bigrams(text: str) -> set[str]:
-    """字符二元组集合（简答评分用，确定性、语言无关，无需分词/Key）。"""
-    t = re.sub(r"\s+", "", (text or "").lower())
-    return {t[i : i + 2] for i in range(len(t) - 1)}
-
-
-def _point_coverage(point: str, answer: str) -> float:
-    """单个参考要点被作答覆盖的程度（0-1，字符二元组召回）。"""
-    pb = _char_bigrams(point)
-    if not pb:
-        return 0.0
-    return len(pb & _char_bigrams(answer)) / len(pb)
 
 
 # ---- 文档问答（「和文档对话」严格基于文档 + 溯源，mock 兜底） ----------------
