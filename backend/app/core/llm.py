@@ -30,6 +30,10 @@ from typing import Any
 from app.core import content_safety, generation_provenance, llm_transport
 from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
+from app.core.llm_document_mock import (
+    answer_document_question as _mock_doc_answer,
+    extract_key_sentences as _doc_key_sentences,
+)
 from app.core.llm_output import (
     clean_mermaid as _clean_mermaid,
     extract_json as _extract_json,
@@ -705,28 +709,6 @@ def _point_coverage(point: str, answer: str) -> float:
     return len(pb & _char_bigrams(answer)) / len(pb)
 
 
-_DOC_SENT_SPLIT = re.compile(r"(?<=[。！？!?；;\n])")
-
-
-def _doc_key_sentences(contexts: list[str], *, max_n: int, min_chars: int = 8) -> list[str]:
-    """从文档检索切片中抽取要点句（确定性、去重、限长）——供文档闪卡/练习题 mock 兜底。
-
-    只用文档内容（防幻觉：不引入外部知识），按出现顺序取前 max_n 条有效句子。
-    """
-    out: list[str] = []
-    seen: set[str] = set()
-    for ctx in contexts or []:
-        for raw in _DOC_SENT_SPLIT.split(ctx or ""):
-            sent = raw.strip()
-            if len(sent) < min_chars or sent in seen:
-                continue
-            seen.add(sent)
-            out.append(sent[:120])
-            if len(out) >= max_n:
-                return out
-    return out
-
-
 # ---- 文档问答（「和文档对话」严格基于文档 + 溯源，mock 兜底） ----------------
 _DOC_CHAT_SYSTEM = (
     "你是「文档问答」助手，只依据用户提供的《{source_title}》文档片段回答问题，目标是帮助用户"
@@ -734,26 +716,6 @@ _DOC_CHAT_SYSTEM = (
     "文档片段里没有答案时，明确回答「文档中未提及该内容」。在引用具体内容处以 [n] 标注对应"
     "文档片段序号（n 从 1 起，对应给定片段顺序），便于溯源。简体中文，条理清晰、简洁作答。"
 )
-
-
-def _mock_doc_answer(source_title: str, contexts: list[str], message: str) -> str:
-    """确定性文档问答回答：由文档要点句合成、带 [n] 溯源标记（严格来自文档、不臆造）。
-
-    无检索片段 → 明确「文档中未提及」（防幻觉）；否则给出 lead-in + 逐条要点（每条挂 [n] 溯源），
-    与下方来源列表一一对应。逐字流式由调用方 char stream 完成。
-    """
-    q = (message or "").strip().replace("\n", " ")
-    focus = (q[:40] + "…") if len(q) > 40 else (q or "这个问题")
-    sentences = _doc_key_sentences(contexts, max_n=4)
-    if not sentences:
-        return (
-            f"关于「{focus}」，当前文档《{source_title}》中未提及相关内容。"
-            "（本回答严格基于你上传的文档，不做文档之外的推测。）"
-        )
-    lead = f"根据你上传的《{source_title}》，就「{focus}」，文档中相关的内容如下："
-    body = "\n".join(f"{i}. {sent}[{i}]" for i, sent in enumerate(sentences[:3], start=1))
-    tail = "以上要点均出自文档原文（见下方「来源」标注）。若需更系统的梳理，可在右侧生成讲义或图解。"
-    return f"{lead}\n{body}\n{tail}"
 
 
 # 错题强化预置库（接口文档 9.2，B6 mock）：nn 三题与前端 WeakPointReinforce.tsx
