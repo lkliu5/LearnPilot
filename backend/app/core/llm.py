@@ -35,6 +35,7 @@ from app.core.llm_output import (
     extract_json as _extract_json,
     strip_markdown_fence as _strip_md_fence,
 )
+from app.core.llm_practice import audit_practice
 from app.core.llm_tutor_mock import (
     REMEDIAL_TYPES,
     build_remedial_suggestions as _build_remedial_suggestions,
@@ -685,7 +686,6 @@ def _generic_diagram(kp_name: str, description: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-_QUESTION_TYPES = ("single", "multiple", "boolean")
 # 简答题型（C-fix 批2，9.1 扩展）：options 为空，correct_answer 存参考要点列表，
 # explanation 存参考答案；判分经 LLMClient.score_short_answer（mock 确定性兜底）。
 SHORT_ANSWER_TYPE = "short_answer"
@@ -754,36 +754,6 @@ def _mock_doc_answer(source_title: str, contexts: list[str], message: str) -> st
     body = "\n".join(f"{i}. {sent}[{i}]" for i, sent in enumerate(sentences[:3], start=1))
     tail = "以上要点均出自文档原文（见下方「来源」标注）。若需更系统的梳理，可在右侧生成讲义或图解。"
     return f"{lead}\n{body}\n{tail}"
-
-
-def audit_practice(practice: dict[str, Any]) -> list[str]:
-    """critic 审核：练习题（QuizQuestion 结构）答案自洽性校验，返回问题清单。
-
-    口径（B6 验收标准）：correct_answer 必须存在于 options 的 option_id 中
-    （multiple 为全部存在且非空数组），explanation 非空；另查结构基本面
-    （题型枚举、≥2 个选项、option_id 不重复、题干非空）。
-    """
-    issues: list[str] = []
-    if practice.get("question_type") not in _QUESTION_TYPES:
-        issues.append(f"question_type 非法：{practice.get('question_type')}")
-    if not str(practice.get("question_text") or "").strip():
-        issues.append("question_text 为空")
-    option_ids = [o.get("option_id") for o in (practice.get("options") or [])]
-    if len(option_ids) < 2:
-        issues.append("options 少于 2 个")
-    if len(set(option_ids)) != len(option_ids):
-        issues.append("option_id 重复")
-    correct = practice.get("correct_answer")
-    if isinstance(correct, list):
-        if practice.get("question_type") != "multiple":
-            issues.append("correct_answer 为数组但题型不是 multiple")
-        if not correct or not all(c in option_ids for c in correct):
-            issues.append(f"correct_answer {correct} 未全部出现在 options 中")
-    elif correct not in option_ids:
-        issues.append(f"correct_answer {correct!r} 不在 options 中")
-    if not str(practice.get("explanation") or "").strip():
-        issues.append("explanation 为空")
-    return issues
 
 
 # 错题强化预置库（接口文档 9.2，B6 mock）：nn 三题与前端 WeakPointReinforce.tsx
