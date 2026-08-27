@@ -27,7 +27,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from app.core import generation_provenance, llm_transport
+from app.core import content_safety, generation_provenance, llm_transport
 from app.core.config import settings
 from app.core.llm_deepseek import LLMGenerationError  # 路由层从本模块导入（re-export）
 from app.core.llm_output import (
@@ -3122,42 +3122,8 @@ def set_force_critic_low(enabled: bool) -> None:
     _force_critic_low = bool(enabled)
 
 
-# ---- 内容安全过滤：中心钝化点（统一包裹全部生成方法的返回，覆盖所有生成器） ------
-# 所有面向学习者的 LLM 生成文本都经 LLMClient 公共方法返回，这里在一个集中点把它们
-# 统一过一道内容安全过滤（讲义/对话/费曼/苏格拉底/线索/图解/视频/路径理由/画像叙述/
-# 错题强化全覆盖），避免在各路由/服务分散重复。仅在输出环节加过滤，不改任何方法签名。
-_GUARDED_METHODS: tuple[str, ...] = (
-    "extract_profile",       # 4.1 画像抽取
-    "generate_narrative",    # 4.2 画像叙述
-    "generate_lecture",      # 8.2 讲义（mock 直出）
-    "generate_video_script",  # 8.3 视频脚本
-    "generate_diagram",      # 8.5 知识图解
-    "generate_flashcards",   # 20.7 文档学习·闪卡
-    "generate_doc_quiz",     # 20.6 文档学习·练习题
-    "generate_overview",     # 20.8 文档学习·文档概览（NotebookLM 式速读）
-    "generate_reinforcement",  # 9.2 错题强化
-    "tutor_chat",            # 8.7 苏格拉底（JSON）
-    "tutor_suggestions",     # 15.4 苏格拉底快捷建议
-    "generate_cornell_cues",  # 18.1 康奈尔线索
-    "feynman_eval",          # 18.2 费曼评估
-    "extract_portrait",      # 17.1 对话画像抽取
-    "plan_path",             # 6.2 学习路径理由
-    "complete",              # B5-a Agent 通用补全（讲义生成 / 诊断）
-)
-
-
-def _install_content_guard() -> None:
-    """在类定义后一次性包裹全部生成方法（含流式 tutor），实现单一中心钝化点。"""
-    from app.core import content_safety
-
-    for name in _GUARDED_METHODS:
-        setattr(LLMClient, name, content_safety.guarded(getattr(LLMClient, name)))
-    LLMClient.tutor_chat_stream = content_safety.guarded_stream(  # type: ignore[assignment]
-        LLMClient.tutor_chat_stream
-    )
-
-
-_install_content_guard()
+# 内容安全中心钝化点：类定义完成后统一注册全部生成出口，不改变公共方法签名。
+content_safety.install_llm_client_guard(LLMClient)
 
 
 _client: LLMClient | None = None

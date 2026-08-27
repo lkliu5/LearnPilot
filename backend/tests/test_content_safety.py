@@ -225,3 +225,12 @@ def test_mock_safe_content_unchanged():
     assert "神经网络" in lec["markdown"]
     cues = mock.generate_cornell_cues("nn", "神经网络", "初级", "")
     assert len(cues["cues"]) >= 5
+
+
+def test_all_declared_llm_client_outputs_are_guarded():
+    """注册清单中的同步生成出口及流式出口均经过安全装饰器。"""
+    from app.core.llm import LLMClient
+
+    for name in cs.LLM_CLIENT_GUARDED_METHODS:
+        assert hasattr(getattr(LLMClient, name), "__wrapped__"), name
+    assert hasattr(LLMClient.tutor_chat_stream, "__wrapped__")

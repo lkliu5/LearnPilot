@@ -5,7 +5,7 @@
 本模块管「有没有违规」（政治红线 / 色情低俗 / 暴恐违法 / 辱骂歧视）。
 
 中心钝化点设计：唯一入口 `LLMClient`（app/core/llm.py）的全部公共生成方法，
-在 llm.py 末尾用 `guarded` / `guarded_stream` 统一包裹其返回值，避免各接口分散
+由本模块 `install_llm_client_guard` 用 `guarded` / `guarded_stream` 统一包裹返回值，避免各接口分散
 重复（讲义/对话/费曼/苏格拉底/线索/图解/视频/路径理由/画像叙述/错题强化全覆盖）。
 
 判定策略（**宁可漏判边缘也不错杀正常讲义**，教育场景是第一约束）：
@@ -108,8 +108,8 @@ _ACADEMIC_WHITELIST: tuple[str, ...] = (
 )
 
 # ---- 教育性「提及/拒答/防御/史论」语境标记（共现规则的上下文豁免，治本而非枚举词） -----
-# 设计：本模块只处置「平台自身基于 RAG 生成的教育文本」（绝不流经用户输入，见 llm.py
-# _install_content_guard 仅包裹 LLMClient 生成方法）。对这类可信来源的教学内容，双用途
+# 设计：本模块只处置「平台自身基于 RAG 生成的教育文本」（绝不流经用户输入，
+# install_llm_client_guard 仅包裹 LLMClient 生成方法）。对这类可信来源的教学内容，双用途
 # 共现命中若所在句子带有「拒答/防御/识别/举例/史论」等框架，说明危险短语是被「讨论/引用为
 # 应拒绝的对象」而非「被指导实施」——按上下文豁免，而不是去枚举无穷的学术词。
 # 真实有害指导（如「教你如何制造炸弹，材料如下」）不含这类框架 → 仍被拦截。
@@ -411,6 +411,35 @@ def guarded_stream(fn: Callable[..., Iterator[str]]) -> Callable[..., Iterator[s
         yield from _guard_stream(source, where=fn.__name__)
 
     return wrapper
+
+
+# LLMClient 中所有面向学习者的生成出口。注册职责归属于内容安全模块，调用方只需
+# 在类定义完成后安装一次；方法名保持显式清单，新增生成出口时必须主动纳入审查。
+LLM_CLIENT_GUARDED_METHODS: tuple[str, ...] = (
+    "extract_profile",
+    "generate_narrative",
+    "generate_lecture",
+    "generate_video_script",
+    "generate_diagram",
+    "generate_flashcards",
+    "generate_doc_quiz",
+    "generate_overview",
+    "generate_reinforcement",
+    "tutor_chat",
+    "tutor_suggestions",
+    "generate_cornell_cues",
+    "feynman_eval",
+    "extract_portrait",
+    "plan_path",
+    "complete",
+)
+
+
+def install_llm_client_guard(client_type: type[Any]) -> None:
+    """统一包裹 LLMClient 生成出口，包括增量辅导流。"""
+    for name in LLM_CLIENT_GUARDED_METHODS:
+        setattr(client_type, name, guarded(getattr(client_type, name)))
+    client_type.tutor_chat_stream = guarded_stream(client_type.tutor_chat_stream)
 
 
 # 滑窗保留长度：≥最长共现规则跨度（规则用 [^。！？\n]{0,12} 限制，实测最长约 22 字）。
