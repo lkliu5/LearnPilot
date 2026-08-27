@@ -13,18 +13,86 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.llm import get_llm
-from app.models.entities import ExternalResource
+from app.core.config import settings
+from app.models.entities import ExternalResource, ExternalResourceCache
 from app.services import knowledge_catalog
 from app.services import mastery as mastery_service
 from app.services import resource as resource_service
 from app.services import web_search
 
 logger = logging.getLogger("app.services.resource_search")
+
+
+def _utcnow_naive() -> datetime:
+    """SQLite DateTime 统一使用 UTC naive，避免本地时区与 aware 比较混用。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _cache_key(kp_id: str, provider: str, query: str) -> str:
+    raw = f"{kp_id}\0{provider}\0{query}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _decode_cached(row: ExternalResourceCache | None) -> list[dict[str, Any]]:
+    if row is None:
+        return []
+    try:
+        value = json.loads(row.items_json)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _find_cache(
+    db: Session, kp_id: str, provider: str, query: str
+) -> tuple[list[dict[str, Any]], bool]:
+    """返回 (items, fresh)。精确缓存优先；否则复用该知识点最近一次真实搜索结果。"""
+    row = db.get(ExternalResourceCache, _cache_key(kp_id, provider, query))
+    if row is None:
+        row = (
+            db.query(ExternalResourceCache)
+            .filter(ExternalResourceCache.kp_id == kp_id)
+            .order_by(ExternalResourceCache.fetched_at.desc())
+            .first()
+        )
+    items = _decode_cached(row)
+    fresh = bool(items and row and row.expires_at > _utcnow_naive())
+    return items, fresh
+
+
+def _save_cache(
+    db: Session,
+    kp_id: str,
+    provider: str,
+    query: str,
+    items: list[dict[str, Any]],
+) -> None:
+    if not items:
+        return
+    now = _utcnow_naive()
+    key = _cache_key(kp_id, provider, query)
+    row = db.get(ExternalResourceCache, key)
+    if row is None:
+        row = ExternalResourceCache(cache_key=key, kp_id=kp_id, provider=provider, query=query)
+        db.add(row)
+    row.items_json = json.dumps(items, ensure_ascii=False)
+    row.fetched_at = now
+    row.expires_at = now + timedelta(seconds=max(60, settings.external_resource_cache_ttl_seconds))
+    try:
+        db.commit()
+    except Exception:  # noqa: BLE001 缓存是增强项，不能让已取得的真实结果失败
+        db.rollback()
+        logger.warning("外部资源缓存写入失败（kp=%s provider=%s）", kp_id, provider, exc_info=True)
 
 
 def _derive_weak_points(db: Session, user_id: str, kp_id: str) -> list[str]:
@@ -93,9 +161,30 @@ def aggregate(
     search_query = (query or "").strip() or f"{kp.name} {' '.join(weak[:3])} 教程 讲解 论文".strip()
 
     provider = web_search.get_provider()
-    hits = provider.search(search_query, max_results=8) if provider.online else []
+    cached_items, cache_fresh = _find_cache(db, kp_id, provider.name, search_query)
+    if provider.online and cache_fresh:
+        return {
+            "kpId": kp.id,
+            "kpName": kp.name,
+            "provider": provider.name,
+            "online": True,
+            "items": cached_items,
+        }
+
+    hits = provider.search(
+        search_query, max_results=settings.search_max_results
+    ) if provider.online else []
     online = bool(hits)
-    if not hits:  # 无联网能力 / 联网失败 → 种子兜底候选池
+    if not hits and cached_items:
+        # 当前联网失败/无 Provider：优先返回最近真实结果，online=false 明示本次未联网。
+        return {
+            "kpId": kp.id,
+            "kpName": kp.name,
+            "provider": provider.name,
+            "online": False,
+            "items": cached_items,
+        }
+    if not hits:  # 无联网能力 / 联网失败且无缓存 → 种子兜底候选池
         hits = _seed_candidates(db, kp_id)
     elif not any(h.get("type") == "视频" for h in hits):
         # 视频保底（候选池层）：联网命中无视频（通用搜索常不返回视频站点）→
@@ -115,6 +204,8 @@ def aggregate(
             logger.info("外部资源聚合：联网命中与精选库均无视频候选，视频保底降级（kp=%s）", kp_id)
 
     items = get_llm().aggregate_resources(kp.name, weak, hits)
+    if online:
+        _save_cache(db, kp_id, provider.name, search_query, items)
     return {
         "kpId": kp.id,
         "kpName": kp.name,

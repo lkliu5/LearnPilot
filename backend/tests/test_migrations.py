@@ -10,18 +10,19 @@ def test_migration_upgrade_downgrade_and_reupgrade(tmp_path):
     try:
         assert applied_versions(db_engine) == []
 
-        assert upgrade(db_engine) == [1]
+        assert upgrade(db_engine) == [1, 2]
         assert upgrade(db_engine) == []
-        assert applied_versions(db_engine) == [1]
+        assert applied_versions(db_engine) == [1, 2]
         assert "async_tasks" in inspect(db_engine).get_table_names()
+        assert "external_resource_cache" in inspect(db_engine).get_table_names()
 
-        assert downgrade(db_engine, target=0) == [1]
+        assert downgrade(db_engine, target=0) == [2, 1]
         assert downgrade(db_engine, target=0) == []
         assert applied_versions(db_engine) == []
         assert "async_tasks" not in inspect(db_engine).get_table_names()
 
-        assert upgrade(db_engine) == [1]
-        assert applied_versions(db_engine) == [1]
+        assert upgrade(db_engine) == [1, 2]
+        assert applied_versions(db_engine) == [1, 2]
     finally:
         db_engine.dispose()
 

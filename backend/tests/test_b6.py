@@ -92,7 +92,9 @@ def test_job_hot_list_contract_order(client, learner_headers):
     assert body["data"][0]["name"] == "大模型应用工程师"
 
 
-def test_job_snapshot_contract_fields(client, learner_headers):
+def test_job_snapshot_contract_fields(client, learner_headers, monkeypatch):
+    # 本用例只验证正常态字段；陈旧快照降级由 TASK-006-G 专项覆盖。
+    monkeypatch.setattr(settings, "job_market_max_age_hours", 24 * 365 * 10)
     res = client.get("/api/v1/job-market/llm-app", headers=learner_headers)
     assert res.status_code == 200
     body = res.json()
@@ -149,21 +151,21 @@ def test_graph_structure_12_nodes_14_links(client, learner_headers):
 
 def test_graph_category_derived_from_mastery(client, learner_headers, clean_mastery):
     """mastery 联动：passed→0/100；learning→1/min(值,60)；未开始按种子值推导。"""
-    # 未开始基线：nn 高种子值 → 待学习(2)；transformer 种子 15 → 盲区(3)
+    # 未测知识点不再使用虚构基线分：统一待学习(2) / value=0。
     nodes = {
         n["id"]: n
         for n in client.get("/api/v1/knowledge-graph", headers=learner_headers)
         .json()["data"]["nodes"]
     }
-    assert (nodes["nn"]["category"], nodes["nn"]["value"]) == (2, 85)
-    assert (nodes["transformer"]["category"], nodes["transformer"]["value"]) == (3, 15)
+    assert (nodes["nn"]["category"], nodes["nn"]["value"]) == (2, 0)
+    assert (nodes["transformer"]["category"], nodes["transformer"]["value"]) == (2, 0)
 
     # nn 置 passed → category 0 / value 100
     assert (
         client.post("/api/v1/mastery/nn/pass", headers=learner_headers).status_code
         == 200
     )
-    # dl 置 pending-check → category 1 / value min(65, 60)=60
+    # dl 置 pending-check 但尚无实测分 → category 1 / value 0
     assert (
         client.post("/api/v1/mastery/dl/check", headers=learner_headers).status_code
         == 200
@@ -174,7 +176,7 @@ def test_graph_category_derived_from_mastery(client, learner_headers, clean_mast
         .json()["data"]["nodes"]
     }
     assert (nodes["nn"]["category"], nodes["nn"]["value"]) == (0, 100)
-    assert (nodes["dl"]["category"], nodes["dl"]["value"]) == (1, 60)
+    assert (nodes["dl"]["category"], nodes["dl"]["value"]) == (1, 0)
 
 
 def test_derive_node_boundaries():

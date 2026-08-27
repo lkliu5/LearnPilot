@@ -362,6 +362,20 @@ class ExternalResource(Base):
     reason: Mapped[str] = mapped_column(Text, default="")
 
 
+class ExternalResourceCache(Base):
+    """联网资源聚合结果缓存；保留真实 URL 与评分，联网失败时可降级复用。"""
+
+    __tablename__ = "external_resource_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kp_id: Mapped[str] = mapped_column(String(32), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    query: Mapped[str] = mapped_column(String(512))
+    items_json: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class LearningStepProgress(Base):
     """学习步骤进度（接口文档 18.3，C2）。单用户单知识点下各过程步骤完成标记。
 

@@ -126,6 +126,12 @@ class Settings(BaseSettings):
     # job_market_offline=True 模拟「实时数据源不可用」→ /job-market/{id} 走 2002 降级
     job_market_dir: str = "../frontend/public/data/job-market"
     job_market_offline: bool = False
+    # 超过 12 小时的岗位快照仍返回，但必须按 code=2002/offline=true 明示陈旧。
+    job_market_max_age_hours: float = 12.0
+    # 可选可信采集器 JSON feed；仅由显式刷新命令调用，应用启动不主动联网。
+    job_market_feed_url: str = ""
+    job_market_feed_token: str = ""
+    job_market_timeout_seconds: float = 12.0
 
     # 外部资源联网搜索（接口文档 8.6 增量，C-fix 批3-bonus）：可插拔搜索 provider。
     # - search_provider：none（无搜索能力，走种子兜底/offline）| tavily（Tavily Web Search API）；
@@ -137,6 +143,7 @@ class Settings(BaseSettings):
     search_base_url: str = "https://api.tavily.com"
     search_timeout_seconds: float = 12.0
     search_max_results: int = 8
+    external_resource_cache_ttl_seconds: int = 12 * 60 * 60
 
     # 讲义真实配图「图片搜索 provider」（app/services/image_search.py）：与上面的文本搜索
     # （Tavily 等）解耦，专走**免版权、URL 稳定、可标注来源**的图源，替换掉之前 Tavily 图片那条

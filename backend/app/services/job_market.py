@@ -8,11 +8,16 @@
   - 降级（15.5）：实时数据源不可用（settings.job_market_offline 模拟故障开关）→
     返回最近快照并置 code 2002 / data.offline=true（HTTP 200），对齐前端
     JobMarketResult.offline「离线快照」标记；
-  - 生产路径：离线采集管线（聚合 BOSS直聘/拉勾/智联公开 JD 样本 + LLM 抽取
-    技能频率与雷达维度）定期刷新 JobSnapshot，接口签名不变（写 README，不在 demo 实现）。
+  - TASK-006-G：支持可信采集器 HTTP feed / 本地目录刷新、严格契约校验和只新不旧；
+    快照过期时如实标记 offline，不把历史样本冒充实时数据。
 """
 from __future__ import annotations
 
+import argparse
+import json
+import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -26,6 +31,134 @@ from app.services import profile as profile_service
 
 class UnknownJob(Exception):
     """岗位不存在（→ code 1004 / 404）。"""
+
+
+_JOB_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
+_HEAT_VALUES = {"极高", "高", "中"}
+
+
+def _parse_time(value: Any) -> datetime:
+    raw = str(value or "").strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(f"fetchedAt 不是 ISO-8601 时间: {value}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("fetchedAt 必须携带时区")
+    return parsed.astimezone(timezone.utc)
+
+
+def validate_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+    """严格校验采集器输出，防止脏数据覆盖最近可信快照。"""
+    required = {
+        "id", "name", "salaryRange", "salaryMedian", "heat", "heatPct",
+        "openings", "source", "fetchedAt", "skills", "radar",
+    }
+    missing = required - set(payload)
+    if missing:
+        raise ValueError(f"岗位快照缺字段: {sorted(missing)}")
+    extra = set(payload) - required
+    if extra:
+        raise ValueError(f"岗位快照含未定义字段: {sorted(extra)}")
+    job_id = str(payload["id"]).strip()
+    if not _JOB_ID_RE.fullmatch(job_id):
+        raise ValueError(f"岗位 id 非法: {job_id}")
+    if not str(payload["name"]).strip() or not str(payload["source"]).strip():
+        raise ValueError("岗位名称和真实来源不能为空")
+    if payload["heat"] not in _HEAT_VALUES:
+        raise ValueError(f"岗位热度枚举非法: {payload['heat']}")
+    if not isinstance(payload["heatPct"], int) or not 0 <= payload["heatPct"] <= 100:
+        raise ValueError("heatPct 必须是 0-100 整数")
+    if not isinstance(payload["openings"], int) or payload["openings"] < 0:
+        raise ValueError("openings 必须是非负整数")
+    _parse_time(payload["fetchedAt"])
+    if not isinstance(payload["skills"], list) or not payload["skills"]:
+        raise ValueError("skills 必须是非空数组")
+    for skill in payload["skills"]:
+        if (
+            not isinstance(skill, dict)
+            or not str(skill.get("name") or "").strip()
+            or not isinstance(skill.get("freqPct"), int)
+            or not 0 <= skill["freqPct"] <= 100
+        ):
+            raise ValueError("skills 项必须包含 name 与 0-100 整数 freqPct")
+    radar = payload["radar"]
+    if not isinstance(radar, dict) or set(radar) != set(ABILITY_DIMENSIONS):
+        raise ValueError("radar 必须严格包含固定 6 个能力维度")
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 100
+        for value in radar.values()
+    ):
+        raise ValueError("radar 能力值必须是 0-100 整数")
+    return dict(payload)
+
+
+def refresh_snapshots(db: Session, payloads: list[dict[str, Any]]) -> dict[str, int]:
+    """原子校验并刷新较新的岗位快照；旧数据不会覆盖新数据。"""
+    validated = [validate_snapshot(payload) for payload in payloads]
+    updated = 0
+    skipped = 0
+    max_order = max((row.sort_order for row in db.query(JobSnapshot).all()), default=-1)
+    for payload in validated:
+        job_id = payload["id"]
+        incoming_at = _parse_time(payload["fetchedAt"])
+        row = db.get(JobSnapshot, job_id)
+        if row is not None:
+            current_raw = (row.payload or {}).get("fetchedAt")
+            if current_raw and _parse_time(current_raw) >= incoming_at:
+                skipped += 1
+                continue
+        else:
+            max_order += 1
+            row = JobSnapshot(id=job_id, name=payload["name"], payload={}, sort_order=max_order)
+            db.add(row)
+        row.name = payload["name"]
+        row.payload = payload
+        row.fetched_at = incoming_at.replace(tzinfo=None)
+        updated += 1
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "total": len(validated)}
+
+
+def refresh_from_directory(db: Session, directory: str | Path) -> dict[str, int]:
+    source_dir = Path(directory)
+    payloads = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(source_dir.glob("*.json"))
+    ]
+    if not payloads:
+        raise ValueError(f"岗位快照目录为空: {source_dir}")
+    if not all(isinstance(item, dict) for item in payloads):
+        raise ValueError("岗位快照文件根节点必须是对象")
+    return refresh_snapshots(db, payloads)
+
+
+def refresh_from_feed(db: Session, url: str, token: str = "") -> dict[str, int]:
+    """从显式配置的可信采集器 feed 拉取 JSON；应用启动不会自动联网。"""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("岗位 feed URL 必须使用 http/https")
+    import requests
+
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    response = requests.get(url, headers=headers, timeout=settings.job_market_timeout_seconds)
+    response.raise_for_status()
+    raw = response.json()
+    payloads = raw.get("snapshots") if isinstance(raw, dict) and "snapshots" in raw else raw
+    if isinstance(payloads, dict):
+        payloads = [payloads]
+    if not isinstance(payloads, list) or not all(isinstance(item, dict) for item in payloads):
+        raise ValueError("岗位 feed 必须返回快照对象、对象数组或 {snapshots: [...]} ")
+    return refresh_snapshots(db, payloads)
+
+
+def _is_fresh(payload: dict[str, Any]) -> bool:
+    try:
+        fetched_at = _parse_time(payload.get("fetchedAt"))
+    except ValueError:
+        return False
+    max_age = timedelta(hours=max(0.0, settings.job_market_max_age_hours))
+    age = datetime.now(timezone.utc) - fetched_at
+    return -timedelta(minutes=5) <= age <= max_age
 
 
 # KP → 岗位雷达能力维（与 planner_agent._KP_TO_ABILITY 同口径）：掌握度并入对标
@@ -72,11 +205,31 @@ def get_snapshot(db: Session, job_id: str) -> tuple[dict[str, Any], bool]:
     if row is None:
         raise UnknownJob(job_id)
     payload = dict(row.payload)
-    if settings.job_market_offline:
+    if settings.job_market_offline or not _is_fresh(payload):
         # 最近快照 + 离线标记（payload.fetchedAt 不变，前端 timeAgo 显示快照年龄）
         payload["offline"] = True
         return payload, True
     return payload, False
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser(description="刷新岗位市场可信快照")
+    parser.add_argument("--directory", default="")
+    parser.add_argument("--url", default="")
+    args = parser.parse_args()
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        if args.url or settings.job_market_feed_url:
+            result = refresh_from_feed(
+                db, args.url or settings.job_market_feed_url, settings.job_market_feed_token
+            )
+        else:
+            result = refresh_from_directory(db, args.directory or settings.job_market_dir)
+        print(json.dumps(result, ensure_ascii=False))
+    finally:
+        db.close()
 
 
 def _user_ability(db: Session, user_id: str) -> dict[str, int]:
@@ -178,3 +331,7 @@ def match_job(
         "gaps": gaps,
         "radar": {"dimensions": list(ABILITY_DIMENSIONS), "values": values, "demand": demand},
     }
+
+
+if __name__ == "__main__":
+    _main()

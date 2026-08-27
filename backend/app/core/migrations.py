@@ -42,6 +42,25 @@ MIGRATIONS = (
         ),
         downgrade_sql=("DROP TABLE async_tasks",),
     ),
+    Migration(
+        version=2,
+        name="external_resource_search_cache",
+        upgrade_sql=(
+            """
+            CREATE TABLE external_resource_cache (
+                cache_key VARCHAR(64) PRIMARY KEY,
+                kp_id VARCHAR(32) NOT NULL,
+                provider VARCHAR(32) NOT NULL,
+                query VARCHAR(512) NOT NULL,
+                items_json TEXT NOT NULL,
+                fetched_at DATETIME NOT NULL,
+                expires_at DATETIME NOT NULL
+            )
+            """,
+            "CREATE INDEX ix_external_resource_cache_kp_id ON external_resource_cache(kp_id)",
+        ),
+        downgrade_sql=("DROP TABLE external_resource_cache",),
+    ),
 )
 
 

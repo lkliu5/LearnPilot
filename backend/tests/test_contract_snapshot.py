@@ -63,12 +63,22 @@ shared: dict[str, Any] = {}
 @pytest.fixture(scope="module")
 def client():
     """TestClient（触发 lifespan 建表+种子）；演示延迟归零提速。"""
-    original = (settings.workflow_step_delay_ms, settings.tutor_stream_delay_ms)
+    original = (
+        settings.workflow_step_delay_ms,
+        settings.tutor_stream_delay_ms,
+        settings.job_market_max_age_hours,
+    )
     settings.workflow_step_delay_ms = 0
     settings.tutor_stream_delay_ms = 0
+    # 契约快照验证正常态字段；陈旧数据 2002 降级由 TASK-006-G 专项覆盖。
+    settings.job_market_max_age_hours = 24 * 365 * 10
     with TestClient(app) as c:
         yield c
-    settings.workflow_step_delay_ms, settings.tutor_stream_delay_ms = original
+    (
+        settings.workflow_step_delay_ms,
+        settings.tutor_stream_delay_ms,
+        settings.job_market_max_age_hours,
+    ) = original
 
 
 @pytest.fixture(scope="module", autouse=True)
