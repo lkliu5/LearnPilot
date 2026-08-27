@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
+from app.core.migrations import upgrade
 from app.core.security import hash_password
 from app.models.entities import (  # noqa: F401  确保所有表在 create_all 前注册
     Document,
@@ -650,6 +651,8 @@ def _migrate_learning_event_protocol() -> None:
 
 def init_db() -> None:
     """建表 + 幂等种子。"""
+    # 版本化迁移先于 create_all：现有库可升级，新库由迁移显式建立受管表。
+    upgrade()
     _migrate_b6()
     _migrate_b9()
     _migrate_path_plan()

@@ -50,6 +50,7 @@ from app.core.init_db import init_db
 from app.core.logging import setup_logging
 from app.core.openapi_contract import install_openapi_contract
 from app.core.security import UserContextMiddleware
+from app.core.tasks import recover_tasks
 from app.rag.embeddings import get_embedder
 
 logger = logging.getLogger("app.main")
@@ -60,6 +61,12 @@ async def lifespan(app: FastAPI):
     # 启动：装脱敏过滤器 + 建表灌种子（幂等）
     setup_logging()
     init_db()
+    task_recovery = recover_tasks()
+    logger.info(
+        "task_recovery restored=%s interrupted=%s",
+        task_recovery["restored"],
+        task_recovery["interrupted"],
+    )
     embedding_status = get_embedder().status(load=True)
     logger.info(
         "embedding_runtime mode=%s provider=%s model=%s dimension=%s fallbackAllowed=%s loadFailed=%s",

@@ -33,6 +33,20 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class AsyncTaskRecord(Base):
+    """异步任务持久化快照；对外仍使用既有 Task 契约。"""
+
+    __tablename__ = "async_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    progress: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class User(Base):
     """用户（含 role 双角色）。对应登录响应 user 对象（接口文档 3.1 / 15.1）。"""
 
