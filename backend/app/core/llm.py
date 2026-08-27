@@ -71,6 +71,11 @@ from app.core.llm_portrait import (
     sanitize_portrait_updates as _sanitize_portrait_updates,
 )
 from app.core.llm_practice import audit_practice
+from app.core.llm_reinforcement import (
+    REINFORCE_BANK as _REINFORCE_BANK,
+    clean_reinforcement as _clean_reinforcement_payload,
+    generate_mock_card as _generate_mock_reinforce_card,
+)
 from app.core.llm_scoring import (
     character_bigrams as _char_bigrams,
     clamp_score as _clamp_score,
@@ -198,61 +203,6 @@ _DOC_CHAT_SYSTEM = (
 )
 
 
-# 错题强化预置库（接口文档 9.2，B6 mock）：nn 三题与前端 WeakPointReinforce.tsx
-# 演示内容对齐（question_id 按种子题库 nn_q*，practice id 按契约「{qid}-r」）。
-_REINFORCE_BANK: dict[str, dict[str, Any]] = {
-    "nn_q1": {
-        "point": "神经元运算顺序",
-        "recap": "记忆口诀：**先乘后加再激活** —— ① 输入×权重求和 → ② 加偏置 b → "
-        "③ 激活函数。顺序不能颠倒，因为激活必须作用在「加权和+偏置」的结果上。",
-        "practice": {
-            "question_id": "nn_q1-r",
-            "question_type": "single",
-            "question_text": "【强化】若把激活函数放到加权求和之前，会发生什么？",
-            "options": [
-                {"option_id": "a", "option_text": "结果不变，顺序无所谓"},
-                {"option_id": "b", "option_text": "失去对「加权和」整体的非线性变换，等价于线性模型"},
-                {"option_id": "c", "option_text": "会让网络收敛更快"},
-            ],
-            "correct_answer": "b",
-            "explanation": "激活必须作用于加权和+偏置的结果，提前激活会破坏非线性表达能力。",
-        },
-    },
-    "nn_q2": {
-        "point": "激活函数辨析",
-        "recap": "激活函数 = 给神经元引入**非线性**的函数。常见三个：**ReLU**（max(0,x)）、"
-        "**Sigmoid**、**Tanh**。注意「梯度 Gradient」是反向传播里的概念，**不是**激活函数。",
-        "practice": {
-            "question_id": "nn_q2-r",
-            "question_type": "multiple",
-            "question_text": "【强化】下列关于激活函数，正确的有？（多选）",
-            "options": [
-                {"option_id": "a", "option_text": "ReLU 在正区间梯度恒为 1"},
-                {"option_id": "b", "option_text": "Sigmoid 输出范围是 (0,1)"},
-                {"option_id": "c", "option_text": "Gradient 是一种激活函数"},
-                {"option_id": "d", "option_text": "Tanh 输出零均值，范围 (-1,1)"},
-            ],
-            "correct_answer": ["a", "b", "d"],
-            "explanation": "ReLU/Sigmoid/Tanh 描述均正确；Gradient（梯度）不是激活函数。",
-        },
-    },
-    "nn_q3": {
-        "point": "ReLU 与梯度消失",
-        "recap": "**ReLU** 在正区间导数恒为 1，反向传播时梯度不会被反复压缩，因此能"
-        "**缓解梯度消失**；而 Sigmoid/Tanh 在饱和区导数趋近 0，深层网络易梯度消失。",
-        "practice": {
-            "question_id": "nn_q3-r",
-            "question_type": "boolean",
-            "question_text": "【强化】Sigmoid 在深层网络中比 ReLU 更容易引起梯度消失。",
-            "options": [
-                {"option_id": "true", "option_text": "正确"},
-                {"option_id": "false", "option_text": "错误"},
-            ],
-            "correct_answer": "true",
-            "explanation": "Sigmoid 两端饱和、导数趋零，深层叠加后梯度迅速衰减，比 ReLU 更易梯度消失。",
-        },
-    },
-}
 
 
 _KEYWORD_TO_DIM: dict[str, int] = {
@@ -1156,30 +1106,7 @@ class LLMClient:
     @staticmethod
     def _mock_reinforce_card(question: dict[str, Any]) -> dict[str, Any]:
         """单题确定性强化卡。命中预置库用精写内容，否则确定性变式兜底。"""
-        qid = question["question_id"]
-        bank = _REINFORCE_BANK.get(qid)
-        if bank is not None:
-            card = {"questionId": qid, **bank}
-            card["practice"] = {**bank["practice"], "question_id": f"{qid}-r"}
-            return card
-        # 兜底变式：题干前缀【强化·变式】+ 选项确定性轮转一位（option_id 随选项移动，
-        # correct_answer 不变仍指向原选项，答案自洽）。
-        options = list(question.get("options") or [])
-        rotated = options[1:] + options[:1] if len(options) > 1 else options
-        point = str(question.get("question_text") or "").rstrip("？?。.")[:24]
-        return {
-            "questionId": qid,
-            "point": point,
-            "recap": f"回顾：{question.get('explanation') or '请重读讲义对应小节。'}",
-            "practice": {
-                "question_id": f"{qid}-r",
-                "question_type": question["question_type"],
-                "question_text": f"【强化·变式】{question['question_text']}",
-                "options": rotated,
-                "correct_answer": question["correct_answer"],
-                "explanation": question.get("explanation") or "",
-            },
-        }
+        return _generate_mock_reinforce_card(question)
 
     def _deepseek_reinforcement(
         self, kp_name: str, wrong_questions: list[dict[str, Any]]
@@ -1217,52 +1144,7 @@ class LLMClient:
         raw: str, wrong_questions: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], list[str]]:
         """解析 + 契约清洗 + critic 自洽审核。返回 (cards, issues)；issues 非空即不通过。"""
-        data = _extract_json(raw)
-        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
-            return [], ["输出无法解析为契约 JSON（缺 items 数组）"]
-
-        wrong_ids = [q["question_id"] for q in wrong_questions]
-        cards: list[dict[str, Any]] = []
-        issues: list[str] = []
-        items = data["items"][: len(wrong_ids)]
-        if len(items) < len(wrong_ids):
-            issues.append(f"items 数量 {len(items)} 少于错题数 {len(wrong_ids)}")
-        for idx, item in enumerate(items):
-            if not isinstance(item, dict) or not isinstance(item.get("practice"), dict):
-                issues.append(f"items[{idx}] 缺 practice 对象")
-                continue
-            qid = item.get("questionId")
-            if qid not in wrong_ids:
-                qid = wrong_ids[idx]  # questionId 漂移 → 按输入顺序回正
-            practice = item["practice"]
-            options = [
-                {
-                    "option_id": str(o.get("option_id")),
-                    "option_text": str(o.get("option_text") or ""),
-                }
-                for o in (practice.get("options") or [])
-                if isinstance(o, dict) and o.get("option_id")
-            ]
-            cleaned = {
-                "question_id": str(practice.get("question_id") or f"{qid}-r"),
-                "question_type": practice.get("question_type"),
-                "question_text": str(practice.get("question_text") or ""),
-                "options": options,
-                "correct_answer": practice.get("correct_answer"),
-                "explanation": str(practice.get("explanation") or ""),
-            }
-            issues.extend(
-                f"items[{idx}]({qid}) {msg}" for msg in audit_practice(cleaned)
-            )
-            cards.append(
-                {
-                    "questionId": qid,
-                    "point": str(item.get("point") or ""),
-                    "recap": str(item.get("recap") or ""),
-                    "practice": cleaned,
-                }
-            )
-        return cards, issues
+        return _clean_reinforcement_payload(raw, wrong_questions)
 
     # ---- 苏格拉底辅导（接口文档 8.7 / 15.4，B7-a） --------------------------
     def tutor_chat(
