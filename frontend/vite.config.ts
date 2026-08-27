@@ -19,6 +19,21 @@ export default defineConfig({
       'remotion', '@remotion/player',
     ],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 只切分命中的依赖本身，避免 Rollup 将 React 等公共运行时吸入懒加载 vendor，
+        // 进而把重包通过入口 HTML 提前 preload。
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/echarts/') || id.includes('/zrender/')) return 'vendor-echarts'
+          if (id.includes('/@remotion/') || id.includes('/remotion/')) return 'vendor-remotion'
+          return undefined
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     proxy: {

@@ -1,28 +1,36 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './components/Sidebar'
 import ScrollToTop from './components/ScrollToTop'
 import PageErrorBoundary from './components/PageErrorBoundary'
-import GlobalTutorLayer from './components/GlobalTutorLayer'
-import Dashboard from './pages/Dashboard'
-import ProfileBuilder from './pages/ProfileBuilder'
-import LearningPath from './pages/LearningPath'
-import AgentWorkflow from './pages/AgentWorkflow'
-import LearningResource from './pages/LearningResource'
-import DocumentLearning from './pages/DocumentLearning'
-import MyResourceLibrary from './pages/MyResourceLibrary'
-import KnowledgeGraph from './pages/KnowledgeGraph'
-import ModelManagement from './pages/ModelManagement'
-import AdminKB from './pages/admin/AdminKB'
-import AdminPrompts from './pages/admin/AdminPrompts'
-import AdminMetrics from './pages/admin/AdminMetrics'
-import AdminUsers from './pages/admin/AdminUsers'
-import Login from './pages/Login'
-import WelcomePage from './pages/WelcomePage'
 import { getUser, clearAuth, getToken, isTokenExpired, USE_REAL_API } from './services/api'
 import { useJourney } from './store/journey'
 import { useMastery } from './store/mastery'
 import './styles/App.css'
+
+// 页面级代码分割：保留现有状态路由结构，只把页面实现移出首屏入口包。
+const GlobalTutorLayer = lazy(() => import('./components/GlobalTutorLayer'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const ProfileBuilder = lazy(() => import('./pages/ProfileBuilder'))
+const LearningPath = lazy(() => import('./pages/LearningPath'))
+const AgentWorkflow = lazy(() => import('./pages/AgentWorkflow'))
+const LearningResource = lazy(() => import('./pages/LearningResource'))
+const DocumentLearning = lazy(() => import('./pages/DocumentLearning'))
+const MyResourceLibrary = lazy(() => import('./pages/MyResourceLibrary'))
+const KnowledgeGraph = lazy(() => import('./pages/KnowledgeGraph'))
+const ModelManagement = lazy(() => import('./pages/ModelManagement'))
+const AdminKB = lazy(() => import('./pages/admin/AdminKB'))
+const AdminPrompts = lazy(() => import('./pages/admin/AdminPrompts'))
+const AdminMetrics = lazy(() => import('./pages/admin/AdminMetrics'))
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
+const Login = lazy(() => import('./pages/Login'))
+const WelcomePage = lazy(() => import('./pages/WelcomePage'))
+
+const PageLoading = () => (
+  <div className="app__page-loading" role="status" aria-live="polite">
+    页面加载中…
+  </div>
+)
 
 export type PageType =
   | 'dashboard'
@@ -170,13 +178,19 @@ function App() {
   }
 
   if (stage === 'landing') {
-    return <WelcomePage onEnter={() => setStage('login')} />
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <WelcomePage onEnter={() => setStage('login')} />
+      </Suspense>
+    )
   }
 
   if (stage === 'login') {
     return (
       <AnimatePresence mode="wait">
-        <Login key="login" onLogin={handleLogin} />
+        <Suspense fallback={<PageLoading />}>
+          <Login key="login" onLogin={handleLogin} />
+        </Suspense>
       </AnimatePresence>
     )
   }
@@ -217,14 +231,18 @@ function App() {
           transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="app__content"
         >
-          <PageErrorBoundary resetKey={currentPage}>{renderPage()}</PageErrorBoundary>
+          <PageErrorBoundary resetKey={currentPage}>
+            <Suspense fallback={<PageLoading />}>{renderPage()}</Suspense>
+          </PageErrorBoundary>
         </motion.div>
       </main>
 
       {/* 全局即时辅导层（B-2 全局化）：正文内容页选中即问 + 常驻辅导 dock，一次接入全站可用。
           仅学习内容页挂载，避免管理端 / 落地页出现无关入口。 */}
       {!isAdmin && (currentPage === 'learning-resource' || currentPage === 'document-learning') && (
-        <GlobalTutorLayer />
+        <Suspense fallback={null}>
+          <GlobalTutorLayer />
+        </Suspense>
       )}
     </div>
   )
