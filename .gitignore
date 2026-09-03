@@ -78,6 +78,17 @@ docs/.pptx-build/
 frontend/video-demo/.render-fast/
 frontend/video-demo/realtime-*/
 frontend/video-demo/public/screens/
+frontend/video-demo/public/audio/
 frontend/video-demo/generated-scenes.json
 frontend/video-demo/*.mp4
 frontend/video-demo/*.png
+
+# Generated documentation previews
+docs/tmp.html
+docs/welcome-knowledge-space.html
+docs/欢迎页-*.html
+docs/文档学习-*.html
+
+# Unrelated local QA helpers
+/tools/audit_gis_docx.py
+/tools/build_gis_report.py
