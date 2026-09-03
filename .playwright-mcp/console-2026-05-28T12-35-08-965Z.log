@@ -1,2 +1,0 @@
-[      58ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3001/src/pages/Dashboard.tsx?t=1779971696893:0
-[    2032ms] [ERROR] Failed to load resource: net::ERR_PROXY_CONNECTION_FAILED @ https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap:0

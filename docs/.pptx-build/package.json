@@ -1,1 +1,0 @@
-{"name":"ppt-build","private":true,"dependencies":{"playwright":"^1.61.0","pptxgenjs":"^4.0.1","sharp":"^0.35.2"}}

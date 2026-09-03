@@ -1,8 +1,0 @@
-[     489ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-UXDD7MME.js?v=52758216:21550
-[  166115ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/node_modules/.vite/deps/chunk-DJGCMINP.js?v=52758216:746
-[  342881ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/node_modules/.vite/deps/chunk-DJGCMINP.js?v=52758216:721
-[  627261ms] [WARNING] Note: Some companies are required to obtain a license to use Remotion. See: https://remotion.dev/license
-Pass the `acknowledgeRemotionLicense` prop to `<Player />` function to make this message disappear. @ http://localhost:3000/node_modules/.vite/deps/chunk-IFLNGKIO.js?v=52758216:932
-[ 1814886ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:3000/@vite/client:559
-[ 2098118ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3000/:0
-[ 2107842ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3000/node_modules/.vite/deps/chunk-UXDD7MME.js?v=52758216:21550

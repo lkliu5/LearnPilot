@@ -1,4 +1,0 @@
-[    2970ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3009/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
-[    9859ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3009/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:746
-[   13997ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3009/node_modules/.vite/deps/chunk-DJGCMINP.js?v=c26035a4:721
-[   19654ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:3009/node_modules/.vite/deps/chunk-UXDD7MME.js?v=c26035a4:21550
