@@ -1,5 +1,9 @@
 # 智学中枢 —— 领域知识个性化资源生成与多智能体系统（软件杯）
 
+> 继续开发前请先阅读 [`docs/README.md`](docs/README.md) 和
+> [`docs/维护/当前工程状态.md`](docs/维护/当前工程状态.md)。前者定义文档权威顺序，
+> 后者记录当前实现、Mock/真实边界、已知风险和下一步。
+
 面向「画像诊断 → 学习路径 → 资源生成 → 检验闭环」的个性化学习平台：
 
 - **frontend/**：React 18 + TypeScript + Vite + Zustand + Framer Motion + GSAP + ECharts

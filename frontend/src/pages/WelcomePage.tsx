@@ -1,9 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './WelcomePage.css'
 
 interface WelcomePageProps {
   onEnter: () => void
 }
+
+/** 演示视频路径（放入 frontend/public/demo.mp4 后「观看演示」按钮自动出现） */
+const DEMO_VIDEO_SRC = '/demo.mp4'
 
 /* ============================================================
    落地页演示数据（固定常量）——未登录展示用，非真实用户数据，
@@ -60,6 +63,45 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
   const logStateRef = useRef<HTMLSpanElement>(null)
   const insightRef = useRef<HTMLDivElement>(null)
   const insightTextRef = useRef<HTMLSpanElement>(null)
+
+  /* ===== 演示视频弹层 ===== */
+  const [demoReady, setDemoReady] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
+
+  // 探测 public/demo.mp4 是否就绪：未就绪时按钮不渲染，避免"点了没反应"。
+  // Range 只取 1 字节防止拉全量视频；Accept: text/html 让 dev/生产的 SPA
+  // 回退返回 index.html（200）而非 404，控制台保持 0 报错，再按
+  // content-type 区分真视频与回退页。
+  useEffect(() => {
+    let cancelled = false
+    fetch(DEMO_VIDEO_SRC, { headers: { Accept: 'text/html', Range: 'bytes=0-0' } })
+      .then((res) => {
+        const type = res.headers.get('content-type') ?? ''
+        res.body?.cancel().catch(() => {})
+        if (!cancelled) setDemoReady(res.ok && !type.includes('text/html'))
+      })
+      .catch(() => {
+        if (!cancelled) setDemoReady(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 弹层打开时：ESC 关闭 + 锁定页面滚动
+  useEffect(() => {
+    if (!demoOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDemoOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [demoOpen])
 
   /* ===== AI Knowledge Core 初始化序列（等效移植原型原生 JS） ===== */
   useEffect(() => {
@@ -320,8 +362,8 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
       <nav>
         <div className="nav-in">
           <div className="brand">
-            <div className="logo" />
-            <div>
+            <img className="logo" src="/logo/logo-mark.png" alt="智学中枢" />
+            <div className="brand-text">
               智学中枢<small>AI LEARNING PLATFORM</small>
             </div>
           </div>
@@ -362,7 +404,11 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
             <button className="btn btn-primary" onClick={onEnter}>
               开始个性化学习
             </button>
-            <button className="btn btn-ghost">▶ 观看演示</button>
+            {demoReady && (
+              <button className="btn btn-ghost" onClick={() => setDemoOpen(true)}>
+                ▶ 观看演示
+              </button>
+            )}
           </div>
 
           <div className="kcore-shell" ref={shellRef}>
@@ -425,23 +471,53 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
           </div>
           <div className="matrix">
             <div className="cell c-3 r-2 reveal">
-              <span className="num-badge">01 · 个性化</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">01 · 个性化</span>
+                  <h3>行为实测画像 · 双驱动路径</h3>
+                </div>
               </div>
-              <h3>行为实测画像 · 双驱动路径</h3>
               <p>用做题反推真实能力（而非自我报告），能力定"学什么"、偏好定"怎么学"，配学习时间线——真因材施教。</p>
               <div className="flow">
-                <b>对话</b>
-                <em>+</em>
-                <b>诊断微测</b>
-                <em>+</em>
-                <b>偏好</b>
+                <b>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z" />
+                  </svg>
+                  对话
+                </b>
                 <em>→</em>
-                <b>专属路径</b>
+                <b>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                    <rect x="9" y="3" width="6" height="4" rx="1" />
+                    <path d="M9 14l2 2 4-4" />
+                  </svg>
+                  诊断微测
+                </b>
+                <em>→</em>
+                <b>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 8h8M18 8h2M4 16h2M12 16h8" />
+                    <circle cx="15" cy="8" r="2.5" />
+                    <circle cx="9" cy="16" r="2.5" />
+                  </svg>
+                  偏好
+                </b>
+                <em>→</em>
+                <b>
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="6" cy="19" r="2" />
+                    <circle cx="18" cy="5" r="2" />
+                    <path d="M8 19h8a4 4 0 000-8H8a4 4 0 010-8h8" />
+                  </svg>
+                  专属路径
+                </b>
               </div>
               <div className="foot">
                 <span>三段式画像</span>
@@ -450,27 +526,72 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
               </div>
             </div>
             <div className="cell c-3 r-2 reveal d1">
-              <span className="num-badge">03 · 技术架构</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="6" cy="6" r="2.5" />
-                  <circle cx="18" cy="6" r="2.5" />
-                  <circle cx="12" cy="18" r="2.5" />
-                  <path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5v2" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="6" cy="6" r="2.5" />
+                    <circle cx="18" cy="6" r="2.5" />
+                    <circle cx="12" cy="18" r="2.5" />
+                    <path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5v2" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">02 · 技术架构</span>
+                  <h3>真实多智能体协同</h3>
+                </div>
               </div>
-              <h3>真实多智能体协同</h3>
               <p>基于 LangGraph 的五节点工作流——诊断→检索→生成→审核→决策，各专家 Agent 分工协作、真实编排。平台自身即多智能体最佳实践。</p>
-              <div className="flow">
-                <b>诊断</b>
+              <div className="flow flow-lg">
+                <span className="flow-node">
+                  <i className="fn-ico">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M3 12h4l3-8 4 16 3-8h4" />
+                    </svg>
+                  </i>
+                  <span>诊断</span>
+                </span>
                 <em>→</em>
-                <b>检索</b>
+                <span className="flow-node">
+                  <i className="fn-ico">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="11" cy="11" r="6" />
+                      <path d="M20 20l-4.5-4.5" />
+                    </svg>
+                  </i>
+                  <span>检索</span>
+                </span>
                 <em>→</em>
-                <b>生成</b>
+                <span className="flow-node">
+                  <i className="fn-ico">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 4l1.8 4.6 4.2 1.8-4.2 1.8L12 17l-1.8-4.8L6 10.4l4.2-1.8L12 4z" />
+                      <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+                    </svg>
+                  </i>
+                  <span>生成</span>
+                </span>
                 <em>→</em>
-                <b>审核</b>
+                <span className="flow-node">
+                  <i className="fn-ico">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z" />
+                      <path d="M9 12l2 2 4-4" />
+                    </svg>
+                  </i>
+                  <span>审核</span>
+                </span>
                 <em>→</em>
-                <b>决策</b>
+                <span className="flow-node">
+                  <i className="fn-ico">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="6" cy="6" r="2.5" />
+                      <circle cx="6" cy="18" r="2.5" />
+                      <circle cx="18" cy="6" r="2.5" />
+                      <path d="M6 8.5v7M18 8.5a9 9 0 01-9 9" />
+                    </svg>
+                  </i>
+                  <span>决策</span>
+                </span>
               </div>
               <div className="foot">
                 <span>五层架构</span>
@@ -479,47 +600,63 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
               </div>
             </div>
             <div className="cell c-2 reveal">
-              <span className="num-badge">01</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 3L2 8l10 5 10-5-10-5zM4 10v6c0 1 3.5 3 8 3s8-2 8-3v-6" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 3L2 8l10 5 10-5-10-5zM4 10v6c0 1 3.5 3 8 3s8-2 8-3v-6" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">03</span>
+                  <h3>科学学习方法论</h3>
+                </div>
               </div>
-              <h3>科学学习方法论</h3>
               <p>苏格拉底/费曼/康奈尔/掌握式，教育方法论工程化。</p>
             </div>
             <div className="cell c-2 reveal d1">
-              <span className="num-badge">04</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z" />
-                  <path d="M9 12l2 2 4-4" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z" />
+                    <path d="M9 12l2 2 4-4" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">04</span>
+                  <h3>可信防幻觉</h3>
+                </div>
               </div>
-              <h3>可信防幻觉</h3>
               <p>逐句接地、真算幻觉率、来源可溯源，幻觉率 &lt;5%。</p>
             </div>
             <div className="cell c-2 reveal d2">
-              <span className="num-badge">05</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="7" height="7" rx="2" />
-                  <rect x="14" y="3" width="7" height="7" rx="2" />
-                  <rect x="8.5" y="14" width="7" height="7" rx="2" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="7" height="7" rx="2" />
+                    <rect x="14" y="3" width="7" height="7" rx="2" />
+                    <rect x="8.5" y="14" width="7" height="7" rx="2" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">05</span>
+                  <h3>78 点知识图谱</h3>
+                </div>
               </div>
-              <h3>78 点知识图谱</h3>
               <p>7 大板块带先修依赖，AI 按需生成零手工成本。</p>
             </div>
             <div className="cell c-4 reveal">
-              <span className="num-badge">05 · 对标 NotebookLM</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <path d="M6 3h9l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" />
-                  <path d="M14 3v5h5M8 13h8M8 17h5" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6 3h9l4 4v14a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" />
+                    <path d="M14 3v5h5M8 13h8M8 17h5" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">06 · 对标 NotebookLM</span>
+                  <h3>文档学习 · 基于你自己的资料</h3>
+                </div>
               </div>
-              <h3>文档学习 · 基于你自己的资料</h3>
               <p>上传任意资料 → 与文档即问即答（基于文档、标注出处）→ 一键生成六类多模态学习资源。突破预置知识库局限。</p>
               <div className="foot">
                 <span>多文件上传</span>
@@ -528,13 +665,17 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
               </div>
             </div>
             <div className="cell c-2 reveal d1">
-              <span className="num-badge">01</span>
-              <div className="cell-ico">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z" />
-                </svg>
+              <div className="cell-head">
+                <div className="cell-ico">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M21 12a8 8 0 01-8 8H5l-2 2V6a3 3 0 013-3h8a8 8 0 017 9z" />
+                  </svg>
+                </div>
+                <div className="cell-head-txt">
+                  <span className="num-badge">07</span>
+                  <h3>苏格拉底即时辅导</h3>
+                </div>
               </div>
-              <h3>苏格拉底即时辅导</h3>
               <p>卡住就能问、选中即问，追问引导你想通。</p>
             </div>
           </div>
@@ -642,6 +783,17 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
       <footer>
         <div className="wrap">智学中枢 · AI Learning Platform ｜ 中国软件杯 2026 · A 赛题</div>
       </footer>
+
+      {demoOpen && (
+        <div className="demo-modal" role="dialog" aria-modal="true" aria-label="产品演示视频" onClick={() => setDemoOpen(false)}>
+          <div className="demo-player" onClick={(e) => e.stopPropagation()}>
+            <button className="demo-close" aria-label="关闭演示视频" onClick={() => setDemoOpen(false)}>
+              ✕
+            </button>
+            <video src={DEMO_VIDEO_SRC} controls autoPlay playsInline />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

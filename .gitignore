@@ -58,3 +58,26 @@ frontend/probe-remotion/run*.log
 /*.png
 /*.jpg
 backend/uvicorn-8000.log
+
+# Local tooling and runtime state
+.runtime-logs/
+.pytest_cache/
+.codegraph/
+
+# Generated exports, review artifacts, and handoff copies
+/output/
+/deliverables/
+/qa/
+/GPT项目接手包/
+*.zip
+*.exe
+~$*
+
+# Presentation and video render intermediates
+docs/.pptx-build/
+frontend/video-demo/.render-fast/
+frontend/video-demo/realtime-*/
+frontend/video-demo/public/screens/
+frontend/video-demo/generated-scenes.json
+frontend/video-demo/*.mp4
+frontend/video-demo/*.png

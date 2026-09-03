@@ -125,40 +125,12 @@ export default function Login({ onLogin }: LoginProps) {
           <span className="login__ghost" aria-hidden="true">AI</span>
 
           <motion.div
-            className="login__eyebrow"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-          >
-            <span className="login__brand-dot" />
-            智学中枢 · 智能学习中枢
-          </motion.div>
-
-          <motion.div
             className="login__logo"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
           >
-            <svg viewBox="0 0 40 40" fill="none">
-              <defs>
-                <linearGradient id="login-logo-grad" x1="0" y1="0" x2="40" y2="40">
-                  <stop style={{ stopColor: 'var(--primary)' }} />
-                  <stop offset="0.5" style={{ stopColor: 'var(--primary-d)' }} />
-                  <stop offset="1" style={{ stopColor: 'var(--accent)' }} />
-                </linearGradient>
-              </defs>
-              <circle cx="20" cy="20" r="18" stroke="url(#login-logo-grad)" strokeWidth="1.5" opacity="0.5" />
-              <circle cx="20" cy="20" r="16" stroke="url(#login-logo-grad)" strokeWidth="2" />
-              <circle cx="20" cy="14" r="4" fill="url(#login-logo-grad)">
-                <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="12" cy="26" r="3" fill="url(#login-logo-grad)" opacity="0.7" />
-              <circle cx="28" cy="26" r="3" fill="url(#login-logo-grad)" opacity="0.7" />
-              <line x1="20" y1="18" x2="12" y2="23" stroke="url(#login-logo-grad)" strokeWidth="1.5" opacity="0.7" />
-              <line x1="20" y1="18" x2="28" y2="23" stroke="url(#login-logo-grad)" strokeWidth="1.5" opacity="0.7" />
-              <path d="M12 26 Q20 30 28 26" stroke="url(#login-logo-grad)" strokeWidth="1" fill="none" opacity="0.4" />
-            </svg>
+            <img src="/logo/logo-full-tagline.png" alt="智学中枢 · 多智能体协同 · 科学学习管家" />
           </motion.div>
 
           {/* talizen 签名：选择性渐变大标题 */}

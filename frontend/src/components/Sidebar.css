@@ -50,36 +50,39 @@
   gap: 12px;
 }
 
-.sidebar__logo-icon {
-  width: 40px;
-  height: 40px;
+/* 图标 + 真实文字组合：图标够大，文字矢量渲染永远锐利 */
+.sidebar__logo-mark {
+  height: 44px;
+  width: auto;
+  display: block;
   flex-shrink: 0;
   filter: drop-shadow(0 0 10px rgba(var(--sb-accent-light), 0.35));
-}
-
-.sidebar__logo-icon svg {
-  width: 100%;
-  height: 100%;
 }
 
 .sidebar__logo-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .sidebar__logo-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--sidebar-title);
   letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .sidebar__logo-subtitle {
   font-size: 10px;
+  font-weight: 500;
   color: var(--sidebar-desc);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  /* 0.12em：给右侧折叠按钮留出余量，260px 侧边栏内不顶格 */
+  letter-spacing: 0.12em;
+  white-space: nowrap;
 }
 
 /* ========== 折叠按钮 ========== */
@@ -514,9 +517,12 @@
   transform: translate(-50%, -50%);
 }
 
-.sidebar--collapsed .sidebar__logo-icon {
-  width: 36px;
+.sidebar--collapsed .sidebar__logo-mark {
   height: 36px;
+}
+
+.sidebar--collapsed .sidebar__logo-text {
+  display: none;
 }
 
 .sidebar--collapsed .sidebar__toggle {
@@ -576,6 +582,10 @@
     padding-bottom: 0;
     border-bottom: none;
     padding-right: 14px;
+  }
+
+  .sidebar__logo-mark {
+    height: 36px;
   }
 
   .sidebar__logo-text {

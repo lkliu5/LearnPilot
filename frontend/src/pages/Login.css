@@ -87,30 +87,17 @@
   user-select: none;
 }
 
-/* 品牌 eyebrow */
-.login__eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--gray-500);
-}
-
-.login__brand-dot {
-  width: 9px; height: 9px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--sb-grad-a), var(--sb-grad-b));
-  box-shadow: 0 0 10px rgba(var(--sb-accent), 0.6);
-}
-
+/* 品牌主视觉：横版全标（含 tagline），只在此类大空间使用 */
 .login__logo {
-  width: 54px;
-  height: 54px;
+  height: 80px;
   margin-top: 4px;
   filter: drop-shadow(0 0 16px rgba(var(--sb-accent), 0.35));
+}
+
+.login__logo img {
+  height: 100%;
+  width: auto;
+  display: block;
 }
 
 /* talizen 签名：选择性渐变大标题 */

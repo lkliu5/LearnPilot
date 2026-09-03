@@ -397,41 +397,11 @@ export default function Sidebar({ currentPage, onPageChange, collapsed, onToggle
           className="sidebar__logo"
           whileHover={{ scale: 1.02 }}
         >
-          <div className="sidebar__logo-icon">
-            <svg viewBox="0 0 40 40" fill="none">
-              <defs>
-                <linearGradient id="logo-grad" x1="0" y1="0" x2="40" y2="40">
-                  <stop style={{ stopColor: 'var(--primary)' }} />
-                  <stop offset="0.5" style={{ stopColor: 'var(--primary-d)' }} />
-                  <stop offset="1" style={{ stopColor: 'var(--accent)' }} />
-                </linearGradient>
-                <linearGradient id="logo-glow" x1="0" y1="0" x2="40" y2="40">
-                  <stop style={{ stopColor: 'var(--primary)', stopOpacity: 0.4 }} />
-                  <stop offset="1" style={{ stopColor: 'var(--accent)', stopOpacity: 0.2 }} />
-                </linearGradient>
-              </defs>
-              <circle cx="20" cy="20" r="18" stroke="url(#logo-glow)" strokeWidth="1.5" opacity="0.5" />
-              <circle cx="20" cy="20" r="16" stroke="url(#logo-grad)" strokeWidth="2" />
-              <circle cx="20" cy="14" r="4" fill="url(#logo-grad)">
-                <animate attributeName="opacity" values="1;0.7;1" dur="2s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="12" cy="26" r="3" fill="url(#logo-grad)" opacity="0.7" />
-              <circle cx="28" cy="26" r="3" fill="url(#logo-grad)" opacity="0.7" />
-              <line x1="20" y1="18" x2="12" y2="23" stroke="url(#logo-grad)" strokeWidth="1.5" opacity="0.7" />
-              <line x1="20" y1="18" x2="28" y2="23" stroke="url(#logo-grad)" strokeWidth="1.5" opacity="0.7" />
-              <path d="M12 26 Q20 30 28 26" stroke="url(#logo-grad)" strokeWidth="1" fill="none" opacity="0.4" />
-            </svg>
+          <img className="sidebar__logo-mark" src="/logo/logo-mark.png" alt="智学中枢" />
+          <div className="sidebar__logo-text">
+            <span className="sidebar__logo-title">智学中枢</span>
+            <span className="sidebar__logo-subtitle">AI Learning Platform</span>
           </div>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="sidebar__logo-text"
-            >
-              <span className="sidebar__logo-title">智学中枢</span>
-              <span className="sidebar__logo-subtitle">AI Learning Platform</span>
-            </motion.div>
-          )}
         </motion.div>
 
         <button className="sidebar__toggle" onClick={onToggle} aria-label="折叠侧边栏">
