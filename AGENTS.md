@@ -1,8 +1,8 @@
-# AGENTS.md — 智学中枢（软件杯）项目约定
+# AGENTS.md — 智学中枢（LearnPilot）项目约定
 
 ## 项目概述
 
-「软件杯」赛题：领域知识个性化资源生成与多智能体系统。
+LearnPilot 是面向领域知识个性化资源生成与多智能体协同的学习平台。
 - `frontend/`：React 18 + TS + Vite + Zustand + Framer Motion + GSAP + ECharts，**已完成**，当前全部由 mock 数据驱动，运行 `npm run dev`（端口 3001）。
 - `backend/`：FastAPI + LangGraph + Chroma + SQLite，**按 docs/后端开发执行方案-v1.1.md 分阶段开发中**。
 - `docs/`：需求与方案文档，所有开发依据均在此目录。

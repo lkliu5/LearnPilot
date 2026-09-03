@@ -5,8 +5,8 @@
   "productionMutation": false,
   "inputs": {
     "shadowMetrics": "evaluation/trusted_rag_shadow_e3a_frozen.json",
-    "faultResults": "F:\\软件杯\\backend\\evaluation\\trusted_rag_fault_results.json",
-    "rerankResults": "F:\\软件杯\\backend\\evaluation\\rerank_blind_results.json",
+    "faultResults": "F:\\LearnPilot\\backend\\evaluation\\trusted_rag_fault_results.json",
+    "rerankResults": "F:\\LearnPilot\\backend\\evaluation\\rerank_blind_results.json",
     "qualityResults": "evaluation/trusted_rag_quality_e3b.json"
   },
   "quality_pass": false,

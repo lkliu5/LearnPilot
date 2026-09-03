@@ -239,7 +239,7 @@ export default function Login({ onLogin }: LoginProps) {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.1 }}
       >
-        软件杯 · 领域知识个性化资源生成和多智能体系统
+        LearnPilot · 领域知识个性化资源生成和多智能体系统
       </motion.p>
     </div>
   )

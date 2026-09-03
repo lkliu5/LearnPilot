@@ -781,7 +781,7 @@ export default function WelcomePage({ onEnter }: WelcomePageProps) {
       </section>
 
       <footer>
-        <div className="wrap">智学中枢 · AI Learning Platform ｜ 中国软件杯 2026 · A 赛题</div>
+        <div className="wrap">智学中枢 · AI Learning Platform ｜ LearnPilot 2026</div>
       </footer>
 
       {demoOpen && (
