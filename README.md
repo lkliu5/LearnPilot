@@ -1,14 +1,12 @@
 # 智学中枢 —— 领域知识个性化资源生成与多智能体系统
 
-> 继续开发前请先阅读 [`docs/README.md`](docs/README.md) 和
-> [`docs/维护/当前工程状态.md`](docs/维护/当前工程状态.md)。前者定义文档权威顺序，
-> 后者记录当前实现、Mock/真实边界、已知风险和下一步。
+> 项目需求、接口契约、架构设计和部署说明见 [`docs/README.md`](docs/README.md)。
 
 面向「画像诊断 → 学习路径 → 资源生成 → 检验闭环」的个性化学习平台：
 
 - **frontend/**：React 18 + TypeScript + Vite + Zustand + Framer Motion + GSAP + ECharts
 - **backend/**：FastAPI + LangGraph（诊断 / 生成 / 审核三 Agent）+ Chroma + SQLite + bge 本地模型
-- **docs/**：需求文档、接口文档（30 接口 + 管理端 6 接口）、阶段进度（B0–B8）、量化指标报告
+- **docs/**：需求文档、接口契约、算法与架构设计、部署说明
 
 ```
 浏览器 ── Vite dev(:3001, /api 代理) ──► FastAPI(:8000)
